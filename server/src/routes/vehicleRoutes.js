@@ -20,6 +20,9 @@ router.get('/', authenticateToken, async (req, res, next) => {
       ...v,
       purchasePrice: v.purchase?.purchasePrice || 0,
       totalPurchaseCost: v.purchase?.totalPurchaseCost || 0,
+      inspectionCost: v.purchase?.inspectionCost || 0,
+      registrationCost: v.purchase?.registrationCost || 0,
+      transportCost: v.purchase?.transportCost || 0,
       repairCost: v.repairs.reduce((sum, r) => sum + r.partsCost + r.laborCost, 0),
       documentBase64: v.purchase?.documentBase64 || null,
     }));

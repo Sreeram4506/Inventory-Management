@@ -125,15 +125,84 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
           </div>
         </DialogHeader>
 
-        <Tabs defaultValue="repairs" className="mt-6">
-          <TabsList className="bg-secondary/20 border border-border/50 p-1 rounded-xl h-auto">
-            <TabsTrigger value="repairs" className="data-[state=active]:bg-profit data-[state=active]:text-zinc-950 px-6 py-2 rounded-lg font-black uppercase text-xs tracking-widest gap-2 transition-all">
-              <Receipt className="w-4 h-4" /> Repairs
+        <Tabs defaultValue="financials" className="mt-6">
+          <TabsList className="bg-secondary/20 border border-border/50 p-1 rounded-xl h-auto flex flex-wrap gap-1">
+            <TabsTrigger value="financials" className="data-[state=active]:bg-profit data-[state=active]:text-zinc-950 px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
+              <Receipt className="w-3.5 h-3.5" /> Financials
             </TabsTrigger>
-            <TabsTrigger value="ads" className="data-[state=active]:bg-profit data-[state=active]:text-zinc-950 px-6 py-2 rounded-lg font-black uppercase text-xs tracking-widest gap-2 transition-all">
-              <Megaphone className="w-4 h-4" /> Advertising
+            <TabsTrigger value="repairs" className="data-[state=active]:bg-profit data-[state=active]:text-zinc-950 px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
+              <Pencil className="w-3.5 h-3.5" /> Manage Repairs
+            </TabsTrigger>
+            <TabsTrigger value="ads" className="data-[state=active]:bg-profit data-[state=active]:text-zinc-950 px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
+              <Megaphone className="w-3.5 h-3.5" /> Advertising
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="financials" className="animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <div className="bg-secondary/10 border border-border/40 rounded-xl p-4 space-y-3">
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-profit">Purchase Breakdown</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Purchase Price</span>
+                    <span className="font-bold text-white">${vehicle.purchasePrice.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Transport</span>
+                    <span className="font-bold text-white">${vehicle.transportCost.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Inspection</span>
+                    <span className="font-bold text-white">${vehicle.inspectionCost.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Registration</span>
+                    <span className="font-bold text-white">${vehicle.registrationCost.toLocaleString()}</span>
+                  </div>
+                  <div className="pt-2 border-t border-border/40 flex justify-between text-sm">
+                    <span className="font-black uppercase tracking-widest text-[10px] text-profit">Initial Total</span>
+                    <span className="font-black text-profit">${vehicle.totalPurchaseCost.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-secondary/10 border border-border/40 rounded-xl p-4 space-y-3">
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-profit">Maintenance & Other</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Repair Total</span>
+                    <span className="font-bold text-white">${(vehicle.repairs?.reduce((acc, r) => acc + r.partsCost + r.laborCost, 0) || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-xs border-t border-border/20 pt-2 mt-2">
+                    <span className="text-muted-foreground font-bold">Total Investment</span>
+                    <span className="font-black text-white text-base">
+                      ${(vehicle.totalPurchaseCost + (vehicle.repairs?.reduce((acc, r) => acc + r.partsCost + r.laborCost, 0) || 0)).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {vehicle.repairs && vehicle.repairs.length > 0 && (
+              <div className="mt-4 bg-secondary/5 border border-border/20 rounded-xl p-4">
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3">Recent Repair History</h4>
+                <div className="space-y-2 max-h-[150px] overflow-y-auto pr-2 custom-scrollbar">
+                  {vehicle.repairs.map((repair) => (
+                    <div key={repair.id} className="flex justify-between items-center text-[11px] bg-black/20 p-2 rounded-lg border border-white/5">
+                      <div>
+                        <p className="font-bold text-white">{repair.repairShop}</p>
+                        <p className="text-muted-foreground italic">{repair.description}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-black text-profit">${(repair.partsCost + repair.laborCost).toLocaleString()}</p>
+                        <p className="text-[9px] text-muted-foreground uppercase">{new Date(repair.repairDate).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </TabsContent>
 
           <TabsContent value="repairs" className="animate-in fade-in slide-in-from-top-2 duration-300">
             <div className="bg-secondary/10 border border-border/40 rounded-xl p-5 mt-4 space-y-4">

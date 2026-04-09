@@ -22,6 +22,7 @@ export interface Vehicle {
   status: VehicleStatus;
   daysInInventory: number;
   documentBase64?: string | null;
+  repairs?: Repair[];
 }
 
 export interface ExtractedVehicleDocumentInfo extends Partial<Vehicle> {
@@ -72,4 +73,14 @@ export interface BusinessExpense {
   amount: number;
   date: string;
   notes?: string;
+}
+
+export interface Repair {
+  id: string;
+  vehicleId: string;
+  repairShop: string;
+  partsCost: number;
+  laborCost: number;
+  description?: string;
+  repairDate: string;
 }

@@ -70,8 +70,8 @@ export default function Inventory() {
         {/* Stats Grid - Horizontal Scroll on Mobile */}
         <div className="flex md:grid md:grid-cols-4 gap-4 overflow-x-auto pb-4 md:pb-0 -mx-5 px-5 md:mx-0 md:px-0 scrollbar-hide">
           <div className="stat-card min-w-[200px] md:min-w-0 flex-shrink-0 bg-secondary/30 border-border/50">
-            <p className="stat-label uppercase text-[10px] tracking-widest font-bold text-muted-foreground/80">Inventory Value</p>
-            <p className="stat-value text-xl md:text-2xl mt-1 text-foreground">${vehicles.filter(v => v.status !== 'Sold').reduce((s, v) => s + (v.totalPurchaseCost || 0), 0).toLocaleString()}</p>
+            <p className="stat-label uppercase text-[10px] tracking-widest font-bold text-muted-foreground/80">Total Investment</p>
+            <p className="stat-value text-xl md:text-2xl mt-1 text-foreground">${vehicles.filter(v => v.status !== 'Sold').reduce((s, v) => s + (v.totalPurchaseCost || 0) + (v.repairCost || 0), 0).toLocaleString()}</p>
           </div>
           <div className="stat-card min-w-[200px] md:min-w-0 flex-shrink-0 bg-secondary/30 border-border/50">
             <p className="stat-label uppercase text-[10px] tracking-widest font-bold text-muted-foreground/80">Avg Purchase</p>
@@ -121,8 +121,8 @@ export default function Inventory() {
 
                 <div className="flex justify-between items-center mt-2">
                   <div>
-                    <p className="text-[10px] uppercase text-muted-foreground font-bold mb-0.5 tracking-wider">Total Cost</p>
-                    <p className="text-xl font-display font-bold text-profit">${vehicle.totalPurchaseCost.toLocaleString()}</p>
+                    <p className="text-[10px] uppercase text-muted-foreground font-bold mb-0.5 tracking-wider">Total Investment</p>
+                    <p className="text-xl font-display font-bold text-profit">${((vehicle.totalPurchaseCost || 0) + (vehicle.repairCost || 0)).toLocaleString()}</p>
                   </div>
                   <Button variant="outline" size="sm" className="gap-2 h-10 border-border/50 text-xs font-bold uppercase tracking-widest">
                     Manage Cost
@@ -144,8 +144,8 @@ export default function Inventory() {
                   <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Vehicle</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">VIN</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Year</th>
-                  <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Purchase</th>
-                  <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Cost</th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Initial Purchase</th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Investment</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Days</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Manage</th>
                 </tr>
@@ -166,7 +166,7 @@ export default function Inventory() {
                     <td className="px-6 py-4 text-sm text-muted-foreground font-mono tracking-tight">{vehicle.vin.slice(-8)}</td>
                     <td className="px-6 py-4 text-sm text-foreground font-medium">{vehicle.year}</td>
                     <td className="px-6 py-4 text-sm font-semibold text-foreground">${vehicle.purchasePrice.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-sm font-bold text-profit">${vehicle.totalPurchaseCost.toLocaleString()}</td>
+                    <td className="px-6 py-4 text-sm font-bold text-profit">${((vehicle.totalPurchaseCost || 0) + (vehicle.repairCost || 0)).toLocaleString()}</td>
                     <td className="px-6 py-4">
                       <span className={cn("text-sm font-bold", vehicle.daysInInventory >= 60 ? "text-warning" : "text-foreground")}>
                         {vehicle.daysInInventory}
