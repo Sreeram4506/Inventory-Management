@@ -6,6 +6,9 @@ import { useExpenses } from '@/hooks/useExpenses';
 import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import QueryErrorState from '@/components/QueryErrorState';
+import { useState } from 'react';
+import VehicleDetailDialog from '@/components/VehicleDetailDialog';
+import { Vehicle } from '@/types/inventory';
 
 interface CashFlowProps {
   isSubpage?: boolean;
@@ -16,6 +19,7 @@ export default function CashFlow({ isSubpage = false }: CashFlowProps) {
   const { vehicles, isLoading: invLoading, isError: inventoryError } = useInventory();
   const { ads, isLoading: adsLoading, isError: adsError } = useAdvertising();
   const { expenses, isLoading: expLoading, isError: expensesError } = useExpenses();
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
 
   if (salesLoading || invLoading || adsLoading || expLoading) {
     return <div className="p-8 text-center text-muted-foreground">Loading cash flow...</div>;
@@ -43,11 +47,12 @@ export default function CashFlow({ isSubpage = false }: CashFlowProps) {
       type: 'income' as const, 
       label: `Sale: ${vehicles.find(v => v.id === s.vehicleId)?.make || 'Unknown'} ${vehicles.find(v => v.id === s.vehicleId)?.model || ''}`, 
       amount: s.salePrice, 
-      date: s.saleDate 
+      date: s.saleDate,
+      vehicle: null
     })),
-    ...vehicles.map(v => ({ type: 'expense' as const, label: `Purchase: ${v.make} ${v.model}`, amount: v.totalPurchaseCost, date: v.purchaseDate })),
-    ...expenses.map(e => ({ type: 'expense' as const, label: e.category, amount: e.amount, date: e.date })),
-    ...ads.map(a => ({ type: 'expense' as const, label: `Ad: ${a.campaignName}`, amount: a.amountSpent, date: a.startDate })),
+    ...vehicles.map(v => ({ type: 'expense' as const, label: `Purchase: ${v.make} ${v.model}`, amount: v.totalPurchaseCost, date: v.purchaseDate, vehicle: v })),
+    ...expenses.map(e => ({ type: 'expense' as const, label: e.category, amount: e.amount, date: e.date, vehicle: null })),
+    ...ads.map(a => ({ type: 'expense' as const, label: `Ad: ${a.campaignName}`, amount: a.amountSpent, date: a.startDate, vehicle: null })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const content = (
@@ -82,7 +87,14 @@ export default function CashFlow({ isSubpage = false }: CashFlowProps) {
         </div>
         <div className="divide-y divide-border">
           {transactions.map((tx, i) => (
-            <div key={i} className="flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors group">
+            <div 
+              key={i} 
+              onClick={() => tx.vehicle && setSelectedVehicle(tx.vehicle)}
+              className={cn(
+                "flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors group",
+                tx.vehicle && "cursor-pointer"
+              )}
+            >
               <div className="flex items-center gap-4">
                 <div className={cn(
                   "w-10 h-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110",
@@ -95,8 +107,12 @@ export default function CashFlow({ isSubpage = false }: CashFlowProps) {
                   )}
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-foreground">{tx.label}</p>
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">{new Date(tx.date).toLocaleDateString()}</p>
+                  <p className={cn("text-sm font-bold text-foreground", tx.vehicle && "group-hover:text-profit transition-colors")}>
+                    {tx.label}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                    {new Date(tx.date).toLocaleDateString()} {tx.vehicle && "• View Breakdown"}
+                  </p>
                 </div>
               </div>
               <span className={cn("font-display font-bold text-lg", tx.type === 'income' ? 'text-profit' : 'text-loss')}>
@@ -106,6 +122,12 @@ export default function CashFlow({ isSubpage = false }: CashFlowProps) {
           ))}
         </div>
       </div>
+      
+      <VehicleDetailDialog 
+        vehicle={selectedVehicle} 
+        open={!!selectedVehicle} 
+        onOpenChange={(open) => !open && setSelectedVehicle(null)} 
+      />
     </div>
   );
 
