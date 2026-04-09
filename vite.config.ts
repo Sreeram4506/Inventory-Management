@@ -17,39 +17,15 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "react": path.resolve(__dirname, "./node_modules/react"),
-      "react-dom": path.resolve(__dirname, "./node_modules/react-dom"),
     },
     dedupe: ["react", "react-dom"],
   },
   build: {
     rollupOptions: {
       output: {
-        manualChunks: (id) => {
-          // Separate vendor chunks for better caching
-          if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
-              return 'react-vendor';
-            }
-            if (id.includes('recharts')) {
-              return 'charts-vendor';
-            }
-            if (id.includes('@tanstack/react-query')) {
-              return 'query-vendor';
-            }
-            if (id.includes('date-fns') || id.includes('zod') || id.includes('react-hook-form')) {
-              return 'utils-vendor';
-            }
-            // Group all other node_modules together
-            return 'vendor';
-          }
-          // Separate large page components
-          if (id.includes('pages/Inventory') || id.includes('pages/Sales')) {
-            return 'data-pages';
-          }
-          if (id.includes('pages/Index')) {
-            return 'dashboard';
-          }
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui-vendor': ['lucide-react', '@radix-ui/react-tooltip', 'recharts'],
         },
       },
     },
