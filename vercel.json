@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/(api|auth|vehicles|sales|repairs|expenses|advertising)/:path*",
+      "destination": "https://auto-profit-hub-server.onrender.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
