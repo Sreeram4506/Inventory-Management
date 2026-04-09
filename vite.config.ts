@@ -5,12 +5,9 @@ import path from "path";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
+    host: true, // Listen on all network interfaces
     port: 8081,
-    strictPort: true,
-    hmr: {
-      host: "localhost",
-      protocol: "ws",
-    },
+    strictPort: false, // Allow fallback ports if 8081 is blocked
   },
   plugins: [react()].filter(Boolean),
   resolve: {
