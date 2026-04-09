@@ -397,7 +397,7 @@ Critical rules:
             role: "user",
             content: [
               { type: "text", text: prompt },
-              { type: "image_url", image_url: { url: \`data:\${queryMimeType};base64,\${base64Image}\` } }
+              { type: "image_url", image_url: { url: `data:${queryMimeType};base64,${base64Image}` } }
             ]
           }
         ],
@@ -408,10 +408,10 @@ Critical rules:
 
     const data = await response.json();
     if (data.error) {
-      throw new Error(`NVIDIA Vision Error: \${data.error.message || JSON.stringify(data.error)}`);
+      throw new Error(`NVIDIA Vision Error: ${data.error.message || JSON.stringify(data.error)}`);
     }
     const resultText = data.choices[0].message.content;
-    const jsonMatch = resultText.match(/\\{[\\s\\S]*\\}/);
+    const jsonMatch = resultText.match(/\{[\s\S]*\}/);
     const jsonStr = jsonMatch ? jsonMatch[0] : resultText;
     return JSON.parse(jsonStr);
   } catch (err) {
