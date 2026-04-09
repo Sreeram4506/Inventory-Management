@@ -44,6 +44,11 @@ app.use('/api/', apiLimiter);
 // Body parser
 app.use(express.json({ limit: '10mb' }));
 
+// Health Check
+app.get('/', (req, res) => {
+  res.json({ message: 'Auto Profit Hub API is running' });
+});
+
 // Mount routers
 app.use('/api/auth', authRoutes);
 app.use('/api/vehicles', vehicleRoutes);
