@@ -21,22 +21,7 @@ export default defineConfig(({ mode }) => ({
     dedupe: ["react", "react-dom"],
   },
   build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'ui-vendor': ['lucide-react', '@radix-ui/react-tooltip', 'recharts'],
-        },
-      },
-    },
     chunkSizeWarningLimit: 1000,
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: mode === 'production',
-        drop_debugger: mode === 'production',
-      },
-    },
   },
   optimizeDeps: {
     include: [
@@ -44,13 +29,6 @@ export default defineConfig(({ mode }) => ({
       'react-dom',
       'react-router-dom',
       '@tanstack/react-query',
-      'lucide-react',
-      '@radix-ui/react-tooltip',
-      '@radix-ui/react-slot',
-      '@radix-ui/react-navigation-menu',
-      '@radix-ui/react-dropdown-menu',
-      'clsx',
-      'tailwind-merge',
     ],
   },
 }));
