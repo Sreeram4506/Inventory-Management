@@ -14,12 +14,19 @@
 
     <!-- Critical modules will be loaded via Vite bundle -->
 
-    <!-- Service Worker -->
+    <!-- Unregister stale service worker and clear caches to prevent white screen -->
     <script>
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js');
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          registrations.forEach(function(registration) {
+            registration.unregister();
+          });
         });
+        if ('caches' in window) {
+          caches.keys().then(function(names) {
+            names.forEach(function(name) { caches.delete(name); });
+          });
+        }
       }
     </script>
 
