@@ -1,0 +1,235 @@
+import { useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Vehicle } from '@/types/inventory';
+import { useRepairs } from '@/hooks/useRepairs';
+import { useAdvertising } from '@/hooks/useAdvertising';
+import { toast } from '@/components/ui/toast-utils';
+import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download } from 'lucide-react';
+
+interface VehicleDetailDialogProps {
+  vehicle: Vehicle | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: VehicleDetailDialogProps) {
+  const { addRepair } = useRepairs();
+  const { addAd } = useAdvertising();
+  
+  const [repairForm, setRepairForm] = useState({
+    shop: '',
+    parts: '',
+    labor: '',
+    desc: '',
+  });
+
+  const [adForm, setAdForm] = useState({
+    name: '',
+    platform: 'Facebook',
+    amount: '',
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
+  });
+
+  if (!vehicle) return null;
+
+  const downloadDocument = () => {
+    if (!vehicle.documentBase64) return;
+    
+    try {
+      const binary = window.atob(vehicle.documentBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Document_${vehicle.make}_${vehicle.model}_${vehicle.vin.slice(-4)}.pdf`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success('Opening original document...');
+    } catch (e) {
+      toast.error('Failed to process document data');
+    }
+  };
+
+  const handleRepairSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await addRepair({
+        vehicleId: vehicle.id,
+        repairShop: repairForm.shop,
+        partsCost: parseFloat(repairForm.parts),
+        laborCost: parseFloat(repairForm.labor),
+        description: repairForm.desc,
+      });
+      toast.success('Repair cost added to vehicle inventory');
+      setRepairForm({ shop: '', parts: '', labor: '', desc: '' });
+    } catch (err) {
+      toast.error('Failed to add repair cost');
+    }
+  };
+
+  const handleAdSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await addAd({
+        campaignName: adForm.name,
+        platform: adForm.platform,
+        amountSpent: parseFloat(adForm.amount),
+        startDate: adForm.startDate,
+        endDate: adForm.endDate,
+        linkedVehicleId: vehicle.id,
+      });
+      toast.success('Advertising campaign linked to vehicle');
+      setAdForm({ ...adForm, name: '', amount: '' });
+    } catch (err) {
+      toast.error('Failed to link advertising campaign');
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl bg-zinc-950 border-zinc-900 text-foreground">
+        <DialogHeader>
+          <div className="flex items-start justify-between">
+            <DialogTitle className="flex items-center gap-3 text-2xl font-black font-display tracking-tight text-white">
+              <span className="p-2 bg-profit/10 rounded-lg"><Info className="text-profit" /></span>
+              {vehicle.year} {vehicle.make} {vehicle.model}
+            </DialogTitle>
+            {vehicle.documentBase64 && (
+              <Button 
+                onClick={downloadDocument}
+                variant="outline" 
+                size="sm" 
+                className="gap-2 border-profit/30 text-profit hover:bg-profit/10 h-9 font-bold uppercase tracking-widest text-[10px]"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                View Original doc
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-4 mt-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground bg-secondary/30 px-3 py-1 rounded-full">
+              VIN: {vehicle.vin}
+            </span>
+            <span className="text-xs font-bold uppercase tracking-widest text-white/90 bg-profit/80 px-3 py-1 rounded-full">
+               Total Cost: ${vehicle.totalPurchaseCost.toLocaleString()}
+            </span>
+          </div>
+        </DialogHeader>
+
+        <Tabs defaultValue="repairs" className="mt-6">
+          <TabsList className="bg-secondary/20 border border-border/50 p-1 rounded-xl h-auto">
+            <TabsTrigger value="repairs" className="data-[state=active]:bg-profit data-[state=active]:text-zinc-950 px-6 py-2 rounded-lg font-black uppercase text-xs tracking-widest gap-2 transition-all">
+              <Receipt className="w-4 h-4" /> Repairs
+            </TabsTrigger>
+            <TabsTrigger value="ads" className="data-[state=active]:bg-profit data-[state=active]:text-zinc-950 px-6 py-2 rounded-lg font-black uppercase text-xs tracking-widest gap-2 transition-all">
+              <Megaphone className="w-4 h-4" /> Advertising
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="repairs" className="animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="bg-secondary/10 border border-border/40 rounded-xl p-5 mt-4 space-y-4">
+              <h4 className="text-sm font-black uppercase tracking-widest text-profit">Add Post-Purchase Repair</h4>
+              <form onSubmit={handleRepairSubmit} className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Repair Shop</Label>
+                  <Input 
+                    value={repairForm.shop} 
+                    onChange={e => setRepairForm({...repairForm, shop: e.target.value})}
+                    placeholder="e.g. Master Auto" required className="bg-zinc-900 border-zinc-800"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Parts Cost ($)</Label>
+                  <Input 
+                    type="number" value={repairForm.parts} 
+                    onChange={e => setRepairForm({...repairForm, parts: e.target.value})}
+                    placeholder="0.00" required className="bg-zinc-900 border-zinc-800"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Labor Cost ($)</Label>
+                  <Input 
+                    type="number" value={repairForm.labor} 
+                    onChange={e => setRepairForm({...repairForm, labor: e.target.value})}
+                    placeholder="0.00" required className="bg-zinc-900 border-zinc-800"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Description</Label>
+                  <Input 
+                    value={repairForm.desc} 
+                    onChange={e => setRepairForm({...repairForm, desc: e.target.value})}
+                    placeholder="Brief description" required className="bg-zinc-900 border-zinc-800"
+                  />
+                </div>
+                <Button className="col-span-2 bg-profit text-zinc-950 font-black h-11 uppercase" type="submit">
+                  <Plus className="w-4 h-4 mr-2" /> Record Repair Cost
+                </Button>
+              </form>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="ads" className="animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="bg-secondary/10 border border-border/40 rounded-xl p-5 mt-4 space-y-4">
+              <h4 className="text-sm font-black uppercase tracking-widest text-profit">Link Advertising Campaign</h4>
+              <form onSubmit={handleAdSubmit} className="grid grid-cols-2 gap-4">
+                <div className="space-y-2 col-span-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Campaign Name</Label>
+                  <Input 
+                    value={adForm.name} 
+                    onChange={e => setAdForm({...adForm, name: e.target.value})}
+                    placeholder="e.g. FB Ad for Honda Civic" required className="bg-zinc-900 border-zinc-800"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Platform</Label>
+                  <Input 
+                    value={adForm.platform} 
+                    onChange={e => setAdForm({...adForm, platform: e.target.value})}
+                    placeholder="Facebook / Google" required className="bg-zinc-900 border-zinc-800"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Spend Amount ($)</Label>
+                  <Input 
+                    type="number" value={adForm.amount} 
+                    onChange={e => setAdForm({...adForm, amount: e.target.value})}
+                    placeholder="0.00" required className="bg-zinc-900 border-zinc-800"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Start Date</Label>
+                  <Input 
+                    type="date" value={adForm.startDate} 
+                    onChange={e => setAdForm({...adForm, startDate: e.target.value})}
+                    required className="bg-zinc-900 border-zinc-800"
+                  />
+                </div>
+                 <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">End Date</Label>
+                  <Input 
+                    type="date" value={adForm.endDate} 
+                    onChange={e => setAdForm({...adForm, endDate: e.target.value})}
+                    required className="bg-zinc-900 border-zinc-800"
+                  />
+                </div>
+                <Button className="col-span-2 bg-profit text-zinc-950 font-black h-11 uppercase" type="submit">
+                  <Plus className="w-4 h-4 mr-2" /> Link Ad Campaign
+                </Button>
+              </form>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  );
+}

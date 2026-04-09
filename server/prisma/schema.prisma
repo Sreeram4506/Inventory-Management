@@ -1,0 +1,110 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("STAFF") // ADMIN, STAFF
+  createdAt DateTime @default(now())
+}
+
+model Vehicle {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  vin               String   @unique
+  make              String
+  model             String
+  year              Int
+  mileage           Int
+  color             String
+  purchaseDate      DateTime
+  status            String   @default("Available")
+  daysInInventory   Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relations
+  purchase          Purchase?
+  repairs           Repair[]
+  sale              Sale?
+}
+
+model Purchase {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  vehicle           Vehicle  @relation(fields: [vehicleId], references: [id])
+  vehicleId         String   @unique @db.ObjectId
+  sellerName        String
+  purchasePrice     Float
+  buyerFee          Float    @default(0)
+  transportCost     Float    @default(0)
+  inspectionCost    Float    @default(0)
+  registrationCost  Float    @default(0)
+  totalPurchaseCost Float
+  purchaseDate      DateTime
+  paymentMethod     String
+  documentBase64    String?
+  createdAt         DateTime @default(now())
+}
+
+model Repair {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  vehicle         Vehicle  @relation(fields: [vehicleId], references: [id])
+  vehicleId       String   @db.ObjectId
+  repairShop      String
+  partsCost       Float
+  laborCost       Float
+  description     String?
+  repairDate      DateTime @default(now())
+  createdAt       DateTime @default(now())
+}
+
+model Sale {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  vehicle        Vehicle  @relation(fields: [vehicleId], references: [id])
+  vehicleId      String   @unique @db.ObjectId
+  customerName   String
+  phone          String
+  address        String
+  driverLicense  String?
+  saleDate       DateTime
+  salePrice      Float
+  paymentMethod  String
+  profit         Float
+  
+  // Flattened Loan Details
+  financeCompany String?
+  downPayment   Float?
+  loanAmount     Float?
+  interestRate   Float?
+  loanTerm       Int?
+  monthlyPayment Float?
+
+  createdAt      DateTime @default(now())
+}
+
+model AdvertisingExpense {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  campaignName    String
+  platform        String
+  startDate       DateTime
+  endDate         DateTime
+  amountSpent     Float
+  linkedVehicleId String?   @db.ObjectId
+  createdAt       DateTime  @default(now())
+}
+
+model BusinessExpense {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  category String
+  amount   Float
+  date     DateTime
+  notes    String?
+  createdAt DateTime @default(now())
+}

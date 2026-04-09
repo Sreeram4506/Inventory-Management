@@ -1,0 +1,144 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 220 25% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 10%;
+
+    --primary: 224 71% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 94%;
+    --secondary-foreground: 220 25% 14%;
+
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 11% 40%;
+
+    --accent: 220 14% 94%;
+    --accent-foreground: 220 25% 14%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 220 14% 90%;
+    --input: 220 14% 90%;
+    --ring: 224 71% 45%;
+
+    --radius: 0.75rem;
+
+    /* Professional custom tokens */
+    --profit: 158 75% 35%;
+    --profit-foreground: 158 75% 10%;
+    --loss: 0 84% 60%;
+    --loss-foreground: 0 84% 15%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+
+    --sidebar-background: 220 33% 12%;
+    --sidebar-foreground: 220 15% 90%;
+    --sidebar-primary: 158 75% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 33% 18%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 220 33% 18%;
+    --sidebar-ring: 158 75% 45%;
+    --sidebar-muted: 220 15% 65%;
+
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
+  }
+
+  .dark {
+    --background: 220 33% 4%;
+    --foreground: 220 15% 96%;
+    --card: 220 33% 7%;
+    --card-foreground: 220 15% 96%;
+    --popover: 220 33% 7%;
+    --popover-foreground: 220 15% 96%;
+    --primary: 158 75% 45%;
+    --primary-foreground: 220 33% 7%;
+    --secondary: 220 25% 12%;
+    --secondary-foreground: 220 15% 96%;
+    --muted: 220 25% 12%;
+    --muted-foreground: 220 15% 70%;
+    --accent: 220 25% 12%;
+    --accent-foreground: 220 15% 96%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 25% 14%;
+    --input: 220 25% 14%;
+    --ring: 158 75% 45%;
+    
+    --sidebar-background: 220 40% 5%;
+    --sidebar-foreground: 158 10% 80%;
+    --sidebar-primary: 158 75% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 30% 10%;
+    --sidebar-accent-foreground: 158 75% 55%;
+    --sidebar-border: 220 30% 12%;
+    --sidebar-ring: 158 75% 45%;
+    --sidebar-muted: 220 15% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+  }
+}
+
+@layer components {
+  .stat-card {
+    @apply bg-card rounded-xl border border-border p-6 shadow-sm transition-shadow hover:shadow-md;
+  }
+
+  .stat-value {
+    font-family: var(--font-display);
+    @apply text-3xl font-bold text-foreground;
+  }
+
+  .stat-label {
+    @apply text-sm font-medium text-muted-foreground;
+  }
+
+  .status-available {
+    @apply bg-profit/10 text-profit;
+  }
+
+  .status-reserved {
+    @apply bg-warning/10 text-warning;
+  }
+
+  .status-sold {
+    @apply bg-info/10 text-info;
+  }
+
+  .profit-positive {
+    @apply text-profit font-semibold;
+  }
+
+  .profit-negative {
+    @apply text-loss font-semibold;
+  }
+}
