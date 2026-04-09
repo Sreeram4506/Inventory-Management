@@ -16,6 +16,7 @@ const ocrLangPath = path.dirname(
 );
 
 export async function extractVehicleInfo(fileBuffer, mimetype) {
+  // First, see if Vision API can handle it (images, or we'll convert PDF first page if scanned)
   const aiInfo = await parseVehicleInfoFromDocument(fileBuffer, mimetype);
   if (aiInfo) {
     return normalizeVehicleInfo(aiInfo);
@@ -23,6 +24,13 @@ export async function extractVehicleInfo(fileBuffer, mimetype) {
 
   if (mimetype === 'application/pdf') {
     const { pages, combinedText } = await extractPdfTextPages(fileBuffer);
+    
+    // If we have native text and NVIDIA is enabled, use the fast Text LLM
+    if (combinedText.replace(/\s/g, '').length >= 40 && hasNvidiaKey) {
+       const textAiInfo = await parseVehicleInfo(combinedText);
+       if (textAiInfo && textAiInfo.vin) return textAiInfo;
+    }
+
     const pageCandidates = (pages.length ? pages : [combinedText]).map((pageText) => {
       const info = normalizeVehicleInfo(mockExtraction(pageText));
       return {
@@ -38,6 +46,13 @@ export async function extractVehicleInfo(fileBuffer, mimetype) {
   }
 
   const text = await extractText(fileBuffer, mimetype);
+  
+  // Last resort: use Text LLM if previously skipped, otherwise mock extraction
+  if (hasNvidiaKey && text.replace(/\s/g, '').length >= 40) {
+      const finalTry = await parseVehicleInfo(text);
+      if (finalTry && finalTry.vin) return finalTry;
+  }
+  
   return normalizeVehicleInfo(mockExtraction(text));
 }
 
@@ -130,7 +145,7 @@ ${text}`
     return normalizeVehicleInfo(JSON.parse(jsonStr));
   } catch (err) {
     console.error('NVIDIA Text Extraction failed:', err);
-    return normalizeVehicleInfo(mockExtraction(text));
+    return null;
   }
 }
 
@@ -297,18 +312,50 @@ function mockExtraction(text) {
 }
 
 async function parseVehicleInfoFromDocument(fileBuffer, mimetype) {
-  if (!hasNvidiaKey || !(mimetype === 'application/pdf' || mimetype.startsWith('image/'))) {
+  if (!hasNvidiaKey) return null;
+
+  let base64Image = '';
+  let queryMimeType = mimetype;
+
+  if (mimetype === 'application/pdf') {
+    try {
+      // Load PDF and check if it has text layer
+      const loadingTask = getDocument({ data: new Uint8Array(fileBuffer), useSystemFonts: true, disableFontFace: true });
+      const document = await loadingTask.promise;
+      const page = await document.getPage(1);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item) => ('str' in item ? item.str : '')).join(' ').trim();
+      
+      // If native text exists, handle via text LLM later
+      if (pageText.length > 40) {
+        return null; 
+      }
+
+      // NO NATIVE TEXT: Render first page directly to PNG for ultra-fast Vision AI
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvasFactory = createCanvasFactory();
+      const { canvas, context } = canvasFactory.create(
+        Math.ceil(viewport.width),
+        Math.ceil(viewport.height)
+      );
+
+      await page.render({ canvasContext: context, viewport, canvasFactory }).promise;
+      base64Image = canvas.toBuffer('image/png').toString('base64');
+      queryMimeType = 'image/png';
+      canvasFactory.destroy({ canvas, context });
+    } catch (err) {
+      console.warn('PDF to Image conversion failed:', err);
+      return null;
+    }
+  } else if (mimetype.startsWith('image/')) {
+    base64Image = fileBuffer.toString('base64');
+  } else {
     return null;
   }
 
-  // Vision capabilities are typically for images. For PDF, we often extract text first unless using a doc-AI model.
-  // NVIDIA NIM meta/llama-3.2-11b-vision-instruct supports image input.
-  if (mimetype === 'application/pdf') {
-    return null; // Fallback to extractText + parseVehicleInfo
-  }
+  if (!base64Image) return null;
 
   try {
-    const base64Image = fileBuffer.toString('base64');
     const prompt = `You are a precise vehicle document data extractor. Analyze this vehicle purchase document image and return ONLY a valid JSON object with NO extra text.
 
 Required keys (use null when not found):
@@ -350,7 +397,7 @@ Critical rules:
             role: "user",
             content: [
               { type: "text", text: prompt },
-              { type: "image_url", image_url: { url: `data:${mimetype};base64,${base64Image}` } }
+              { type: "image_url", image_url: { url: \`data:\${queryMimeType};base64,\${base64Image}\` } }
             ]
           }
         ],
@@ -361,10 +408,10 @@ Critical rules:
 
     const data = await response.json();
     if (data.error) {
-      throw new Error(`NVIDIA Vision Error: ${data.error.message || JSON.stringify(data.error)}`);
+      throw new Error(`NVIDIA Vision Error: \${data.error.message || JSON.stringify(data.error)}`);
     }
     const resultText = data.choices[0].message.content;
-    const jsonMatch = resultText.match(/\{[\s\S]*\}/);
+    const jsonMatch = resultText.match(/\\{[\\s\\S]*\\}/);
     const jsonStr = jsonMatch ? jsonMatch[0] : resultText;
     return JSON.parse(jsonStr);
   } catch (err) {
@@ -420,55 +467,22 @@ async function extractPdfTextPages(fileBuffer, options = {}) {
   const document = await loadingTask.promise;
   const pages = [];
 
-  if (!options.forceOcr) {
-    for (let index = 1; index <= document.numPages; index += 1) {
-      const page = await document.getPage(index);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((item) => ('str' in item ? item.str : ''))
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      pages.push(pageText);
-    }
-
-    const combinedText = pages.join('\n').trim();
-    if (combinedText.replace(/\s/g, '').length >= 40) {
-      return { pages, combinedText };
-    }
+  for (let index = 1; index <= document.numPages; index += 1) {
+    const page = await document.getPage(index);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items
+      .map((item) => ('str' in item ? item.str : ''))
+      .join(' ')
+      .replace(/\\s+/g, ' ')
+      .trim();
+    pages.push(pageText);
   }
 
-  const worker = await createOcrWorker();
-  const ocrPages = [];
-
-  try {
-    for (let index = 1; index <= document.numPages; index += 1) {
-      const page = await document.getPage(index);
-      const viewport = page.getViewport({ scale: 2 });
-      const canvasFactory = createCanvasFactory();
-      const { canvas, context } = canvasFactory.create(
-        Math.ceil(viewport.width),
-        Math.ceil(viewport.height)
-      );
-
-      await page.render({
-        canvasContext: context,
-        viewport,
-        canvasFactory,
-      }).promise;
-
-      const imageBuffer = canvas.toBuffer('image/png');
-      const {
-        data: { text },
-      } = await worker.recognize(imageBuffer);
-      ocrPages.push(text);
-      canvasFactory.destroy({ canvas, context });
-    }
-  } finally {
-    await worker.terminate();
-  }
-
-  return { pages: ocrPages, combinedText: ocrPages.join('\n') };
+  const combinedText = pages.join('\\n').trim();
+  
+  // Return early, skipping slow Tesseract OCR.
+  // Vision LLM has already covered scanned documents.
+  return { pages, combinedText };
 }
 
 function createOcrWorker() {
