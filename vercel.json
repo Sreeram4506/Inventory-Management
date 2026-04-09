@@ -5,7 +5,7 @@
       "destination": "https://auto-profit-hub-server.onrender.com/api/:path*"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!assets/|.*\\..*).*)",
       "destination": "/index.html"
     }
   ]
