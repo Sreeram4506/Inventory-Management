@@ -75,25 +75,43 @@ export async function parseVehicleInfo(text) {
         model: "meta/llama-3.1-405b-instruct",
         messages: [
           {
+            role: "system",
+            content: "You are a precise vehicle document data extractor. You ONLY output valid JSON with no extra text, markdown, or explanation. Every field must be present in the output."
+          },
+          {
             role: "user",
-            content: `
-              Extract vehicle information from the following text and return it as a pure JSON object.
-              The output MUST be a JSON object with these EXACT keys (use null if not found):
-              vin, make, model, year (number), color, mileage (number), purchasedFrom, purchasePrice (number), purchaseDate (ISO string), paymentMethod, usedVehicleSourceAddress, usedVehicleSourceCity, usedVehicleSourceState, usedVehicleSourceZipCode, transportCost (number), repairCost (number), inspectionCost (number), registrationCost (number).
+            content: `Extract vehicle information from the text below. Return ONLY a JSON object.
 
-              IMPORTANT FORMATTING RULES:
-              - Extract text exactly as it appears in the document
-              - Preserve original formatting and spacing where relevant
-              - For addresses, keep full address format
-              - For dates, convert to ISO format (YYYY-MM-DDTHH:mm:ss.sssZ)
-              - For monetary values, extract as numbers without currency symbols
-              - For VIN, extract 17-character alphanumeric code
-              - If information spans multiple lines, combine them properly
-              - Look for seller information, bill of sale details, and vehicle specifications
+Required keys (use null when not found):
+- vin (string, exactly 17 alphanumeric chars, letters I/O/Q are never valid in VINs)
+- make (string, e.g. "Honda", "Toyota", "Ford")
+- model (string, e.g. "Civic", "Camry", "F-150")
+- year (number, 4-digit year)
+- color (string)
+- mileage (number, odometer reading)
+- purchasedFrom (string, the SELLER name, auction house, or dealership)
+- purchasePrice (number, the dollar amount paid)
+- purchaseDate (string, ISO 8601 format YYYY-MM-DDTHH:mm:ss.sssZ)
+- paymentMethod (string, e.g. "Cash", "Check", "Bank Transfer")
+- usedVehicleSourceAddress (string, seller street address)
+- usedVehicleSourceCity (string)
+- usedVehicleSourceState (string, 2-letter state code)
+- usedVehicleSourceZipCode (string, 5-digit zip)
+- transportCost (number)
+- repairCost (number)
+- inspectionCost (number)
+- registrationCost (number)
 
-              Text:
-              ${text}
-            `
+Rules:
+1. VIN must be exactly 17 characters. Remove spaces/dashes. Never include letters I, O, or Q.
+2. All monetary values must be plain numbers (no $ or commas). Example: 15000 not $15,000.
+3. "purchasedFrom" is the SELLER of the vehicle, NOT the buyer/purchaser.
+4. Look for "Bill of Sale", "Seller:", "Obtained From", "Sold By" to find the seller.
+5. Look for "Selling Price", "Purchase Price", "Sale Price", "Total" for the price.
+6. Dates: convert any format (MM/DD/YYYY, DD-MON-YYYY, etc.) to ISO 8601.
+
+Document text:
+${text}`
           }
         ],
         temperature: 0.1,
@@ -160,6 +178,8 @@ function mockExtraction(text) {
       .trim();
 
   const vehicleLine =
+    condensedText.match(/(?:Mfrs\.?\s*)?(?:Model\s*)?Year\s*:?\s*(\d{4})\s+Make\s*:?\s*(.+?)\s+Model\s*:?\s*(.+?)(?=\s+(?:VIN|Color|Stock|Ident))/is) ||
+    flattenedText.match(/(?:Mfrs\.?\s*)?(?:Model\s*)?Year\s*:?\s*(\d{4})\s+Make\s*:?\s*(.+?)\s+Model\s*:?\s*(.+?)(?=\s+(?:VIN|Color|Stock|Ident))/is) ||
     condensedText.match(/Year\s+(\d{4})\s+Make\s+(.+?)\s+Model\s+(.+?)(?=\s+VIN|\s+Color|\s+Stock Number)/is) ||
     flattenedText.match(/Year\s+(\d{4})\s+Make\s+(.+?)\s+Model\s+(.+?)(?=\s+VIN|\s+Color|\s+Stock Number)/is) ||
     // Alternative patterns for different document formats
@@ -167,11 +187,14 @@ function mockExtraction(text) {
     flattenedText.match(/(?:Vehicle|Car|Auto).*?(\d{4})\s+(.+?)\s+(.+?)(?=\s+VIN|\s+Color|\s+Mileage)/is);
 
   // Enhanced VIN extraction with better pattern matching
+  // Try multiple patterns from most specific to least specific
   const vinMatch =
-    condensedText.match(/VIN\s*[:#]?\s*([A-HJ-NPR-Z0-9\s-]{17,24})/i) ||
-    flattenedText.match(/VIN\s*[:#]?\s*([A-HJ-NPR-Z0-9\s-]{17,24})/i) ||
-    condensedText.match(/(?:Vehicle Identification Number|VIN).*?([A-HJ-NPR-Z0-9\s-]{17,24})/i) ||
-    flattenedText.match(/(?:Vehicle Identification Number|VIN).*?([A-HJ-NPR-Z0-9\s-]{17,24})/i);
+    condensedText.match(/(?:Vehicle\s*Ident(?:ification)?\s*N(?:o|umber)\.?)\s*[:#]?\s*([A-HJ-NPR-Z0-9][A-HJ-NPR-Z0-9\s-]{15,23})/i) ||
+    flattenedText.match(/(?:Vehicle\s*Ident(?:ification)?\s*N(?:o|umber)\.?)\s*[:#]?\s*([A-HJ-NPR-Z0-9][A-HJ-NPR-Z0-9\s-]{15,23})/i) ||
+    condensedText.match(/VIN\s*[:#]?\s*([A-HJ-NPR-Z0-9][A-HJ-NPR-Z0-9\s-]{15,23})/i) ||
+    flattenedText.match(/VIN\s*[:#]?\s*([A-HJ-NPR-Z0-9][A-HJ-NPR-Z0-9\s-]{15,23})/i) ||
+    // Standalone 17-char alphanumeric (likely a VIN)
+    flattenedText.match(/\b([A-HJ-NPR-Z0-9]{17})\b/i);
   const normalizedVin = vinMatch
     ? vinMatch[1].replace(/[^A-HJ-NPR-Z0-9]/gi, '').slice(0, 17).toUpperCase()
     : '';
@@ -185,9 +208,12 @@ function mockExtraction(text) {
     flattenedText.match(/(?:Sold By|Seller|From):\s*(.+?)(?:\s+(?:Address|Location):\s*(.+?))?(?:\s+(?:City|State):\s*(.+?),\s*([A-Z]{2}))?(?:\s+(\d{5}))?/i);
 
   const dateText = getFirstMatch([
-    /dated\s+([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i,
+    /(?:Transaction Date|Date of Sale|Date Sold|Dated)[:\s]*([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/i,
+    /dated\s+([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/i,
+    /(?:Date)[:\s]*([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/i,
     /\b([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})\b/i,
     /\b([0-9]{2}-[A-Z]{3}-[0-9]{4})\b/i,
+    /\b([A-Z][a-z]{2,8}\s+\d{1,2},?\s+\d{4})\b/,
   ]);
 
   return {
@@ -213,15 +239,18 @@ function mockExtraction(text) {
     mileage: cleanNumber(
       getFirstMatch([
         /now reads\s+([0-9,]{3,8})\b/i,
-        /Odometer(?: In| Out)?\.?\s*[:#]?\s*([0-9,]{3,8})\b/i,
+        /Odometer\s*(?:In|Out|Reading)?\.?\s*[:#]?\s*([0-9,]{3,8})\b/i,
         /Mileage[:\s]+([0-9,]{3,8})\b/i,
+        /(?:Miles|MI)[:\s]+([0-9,]{3,8})\b/i,
       ], '0')
     ),
     purchasePrice: cleanMoney(
       getFirstMatch([
-        /(?:selling price|purchase price|sale price)\s*[:$~©]*\s*\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/i,
+        /(?:selling\s*price|purchase\s*price|sale\s*price|total\s*price|amount\s*paid)\s*[:$~©]*\s*\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/i,
         /(?:sellingprice|selling price).*?\$([0-9][0-9.,]{3,})/i,
         /(?:seilingprice|sellingprice|selling price)[^0-9$]{0,20}\$?\s*([0-9][0-9.,]{3,})/i,
+        /\$\s*([0-9][0-9,]*\.?[0-9]{0,2})\s*(?:dollars|paid|total)/i,
+        /(?:for the sum of|sum of|amount of)\s*\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/i,
       ], '0')
     ),
     purchaseDate: parseDateToIso(dateText) || new Date().toISOString(),
@@ -280,19 +309,33 @@ async function parseVehicleInfoFromDocument(fileBuffer, mimetype) {
 
   try {
     const base64Image = fileBuffer.toString('base64');
-    const prompt = `
-      Extract vehicle information from this vehicle purchase document image and return only pure JSON.
-      Use these exact keys:
-      vin, make, model, year, color, mileage, purchasedFrom, purchasePrice, purchaseDate, paymentMethod, usedVehicleSourceAddress, usedVehicleSourceCity, usedVehicleSourceState, usedVehicleSourceZipCode, transportCost, repairCost, inspectionCost, registrationCost.
-      Rules:
-      - year and mileage must be numbers.
-      - purchasePrice, transportCost, repairCost, inspectionCost, registrationCost must be numbers.
-      - purchaseDate must be an ISO 8601 string if present.
-      - If a field is missing, return null for that field.
-      - purchasedFrom should be the seller/source of the vehicle, not the buyer.
-      - Look for additional costs like transport, shipping, repair, inspection, registration fees.
-      - Extract complete address information when available.
-    `;
+    const prompt = `You are a precise vehicle document data extractor. Analyze this vehicle purchase document image and return ONLY a valid JSON object with NO extra text.
+
+Required keys (use null when not found):
+- vin: string, exactly 17 alphanumeric characters (no I, O, or Q)
+- make: string (e.g. "Honda")
+- model: string (e.g. "Civic")
+- year: number (4-digit)
+- color: string
+- mileage: number (odometer reading)
+- purchasedFrom: string (SELLER name — look for "Seller:", "Obtained From", "Sold By")
+- purchasePrice: number (dollar amount, no $ sign)
+- purchaseDate: string (ISO 8601 format)
+- paymentMethod: string
+- usedVehicleSourceAddress: string (seller street address)
+- usedVehicleSourceCity: string
+- usedVehicleSourceState: string (2-letter code)
+- usedVehicleSourceZipCode: string (5-digit)
+- transportCost: number
+- repairCost: number
+- inspectionCost: number
+- registrationCost: number
+
+Critical rules:
+1. VIN is exactly 17 characters. Remove any spaces or dashes. Never include I, O, or Q.
+2. "purchasedFrom" is the SELLER, not the buyer.
+3. All dollar amounts as plain numbers (15000 not $15,000).
+4. Read every single character carefully — OCR errors are common.`;
 
     const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
       method: "POST",
