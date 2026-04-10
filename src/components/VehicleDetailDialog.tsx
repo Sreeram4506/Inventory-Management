@@ -7,8 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Vehicle } from '@/types/inventory';
 import { useRepairs } from '@/hooks/useRepairs';
 import { useAdvertising } from '@/hooks/useAdvertising';
+import { useSales } from '@/hooks/useSales';
 import { toast } from '@/components/ui/toast-utils';
-import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download } from 'lucide-react';
+import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download, ShoppingCart } from 'lucide-react';
 
 interface VehicleDetailDialogProps {
   vehicle: Vehicle | null;
@@ -19,6 +20,7 @@ interface VehicleDetailDialogProps {
 export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: VehicleDetailDialogProps) {
   const { addRepair } = useRepairs();
   const { addAd } = useAdvertising();
+  const { addSale } = useSales();
   
   const [repairForm, setRepairForm] = useState({
     shop: '',
@@ -33,6 +35,15 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
     amount: '',
     startDate: new Date().toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
+  });
+
+  const [saleForm, setSaleForm] = useState({
+    customerName: '',
+    phone: '',
+    address: '',
+    salePrice: '',
+    saleDate: new Date().toISOString().split('T')[0],
+    paymentMethod: 'Cash',
   });
 
   if (!vehicle) return null;
@@ -94,6 +105,25 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
     }
   };
 
+  const handleSaleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await addSale({
+        vehicleId: vehicle.id,
+        customerName: saleForm.customerName,
+        phone: saleForm.phone,
+        address: saleForm.address,
+        saleDate: saleForm.saleDate,
+        salePrice: parseFloat(saleForm.salePrice),
+        paymentMethod: saleForm.paymentMethod,
+      });
+      toast.success('Vehicle marked as sold!');
+      onOpenChange(false);
+    } catch (err) {
+      toast.error('Failed to record sale');
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl bg-zinc-950 border-zinc-900 text-foreground">
@@ -136,6 +166,11 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
             <TabsTrigger value="ads" className="data-[state=active]:bg-profit data-[state=active]:text-zinc-950 px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
               <Megaphone className="w-3.5 h-3.5" /> Advertising
             </TabsTrigger>
+            {vehicle.status !== 'Sold' && (
+              <TabsTrigger value="sale" className="data-[state=active]:bg-info data-[state=active]:text-zinc-950 px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
+                <ShoppingCart className="w-3.5 h-3.5" /> Record Sale
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="financials" className="animate-in fade-in slide-in-from-top-2 duration-300">
@@ -297,6 +332,73 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
               </form>
             </div>
           </TabsContent>
+
+          {vehicle.status !== 'Sold' && (
+            <TabsContent value="sale" className="animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="bg-secondary/10 border border-border/40 rounded-xl p-5 mt-4 space-y-4">
+                <h4 className="text-sm font-black uppercase tracking-widest text-info">Process Vehicle Sale</h4>
+                <form onSubmit={handleSaleSubmit} className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2 col-span-2 md:col-span-1">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Customer Name</Label>
+                    <Input 
+                      value={saleForm.customerName} 
+                      onChange={e => setSaleForm({...saleForm, customerName: e.target.value})}
+                      placeholder="e.g. John Doe" required className="bg-zinc-900 border-zinc-800"
+                    />
+                  </div>
+                  <div className="space-y-2 col-span-2 md:col-span-1">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Phone Number</Label>
+                    <Input 
+                      value={saleForm.phone} 
+                      onChange={e => setSaleForm({...saleForm, phone: e.target.value})}
+                      placeholder="e.g. 555-0199" required className="bg-zinc-900 border-zinc-800"
+                    />
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Customer Address</Label>
+                    <Input 
+                      value={saleForm.address} 
+                      onChange={e => setSaleForm({...saleForm, address: e.target.value})}
+                      placeholder="123 Main St, Springfield" required className="bg-zinc-900 border-zinc-800"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Sale Price ($)</Label>
+                    <Input 
+                      type="number" value={saleForm.salePrice} 
+                      onChange={e => setSaleForm({...saleForm, salePrice: e.target.value})}
+                      placeholder="0.00" required className="bg-zinc-900 border-zinc-800"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Sale Date</Label>
+                    <Input 
+                      type="date" value={saleForm.saleDate} 
+                      onChange={e => setSaleForm({...saleForm, saleDate: e.target.value})}
+                      required className="bg-zinc-900 border-zinc-800"
+                    />
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Payment Method</Label>
+                    <select
+                      value={saleForm.paymentMethod}
+                      onChange={e => setSaleForm({...saleForm, paymentMethod: e.target.value})}
+                      className="flex h-10 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-profit/50 disabled:cursor-not-allowed disabled:opacity-50"
+                      required
+                    >
+                      <option value="Cash">Cash</option>
+                      <option value="Bank Transfer">Bank Transfer</option>
+                      <option value="Loan">Loan / Finance</option>
+                      <option value="Check">Check</option>
+                    </select>
+                  </div>
+                  <Button className="col-span-2 bg-info text-zinc-950 hover:bg-info/90 font-black h-11 uppercase mt-2" type="submit">
+                    <ShoppingCart className="w-4 h-4 mr-2" /> Mark as Sold
+                  </Button>
+                </form>
+              </div>
+            </TabsContent>
+          )}
         </Tabs>
       </DialogContent>
     </Dialog>
