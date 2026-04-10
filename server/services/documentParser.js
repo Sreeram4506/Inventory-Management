@@ -473,12 +473,12 @@ async function extractPdfTextPages(fileBuffer, options = {}) {
     const pageText = textContent.items
       .map((item) => ('str' in item ? item.str : ''))
       .join(' ')
-      .replace(/\\s+/g, ' ')
+      .replace(/\s+/g, ' ')
       .trim();
     pages.push(pageText);
   }
 
-  const combinedText = pages.join('\\n').trim();
+  const combinedText = pages.join('\n').trim();
   
   // Return early, skipping slow Tesseract OCR.
   // Vision LLM has already covered scanned documents.
@@ -509,9 +509,17 @@ function parseDateToIso(value) {
 }
 
 function normalizeVehicleInfo(info) {
+  let rawVin = sanitizeString(info?.vin).toUpperCase();
+  // Map common OCR mistakes in VINs
+  rawVin = rawVin.replace(/[IOQ]/g, match => {
+    if (match === 'I') return '1';
+    if (match === 'O' || match === 'Q') return '0';
+    return match;
+  });
+
   const normalized = {
     ...info,
-    vin: sanitizeString(info?.vin).replace(/[^A-HJ-NPR-Z0-9]/gi, '').slice(0, 17).toUpperCase(),
+    vin: rawVin.replace(/[^A-HJ-NPR-Z0-9]/g, '').slice(0, 17),
     make: sanitizeString(info?.make),
     model: sanitizeString(info?.model),
     color: sanitizeString(info?.color),
