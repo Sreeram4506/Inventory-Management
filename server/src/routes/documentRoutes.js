@@ -51,61 +51,8 @@ router.post(
 
       const info = await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype);
       
-      // Automatic Inventory Addition
-      let vehicleId = null;
-      if (info.vin && info.vin.length >= 11) {
-        const existingVehicle = await prisma.vehicle.findUnique({
-          where: { vin: info.vin },
-          select: { id: true }
-        });
-
-        if (!existingVehicle) {
-          const totalPurchaseCost = (info.purchasePrice || 0) + 
-                                  (info.transportCost || 0) + 
-                                  (info.inspectionCost || 0) + 
-                                  (info.registrationCost || 0);
-
-          const newVehicle = await prisma.vehicle.create({
-            data: {
-              vin: info.vin,
-              make: info.make || 'Unknown',
-              model: info.model || 'Unknown',
-              year: info.year || new Date().getFullYear(),
-              mileage: info.mileage || 0,
-              color: info.color || 'Unknown',
-              purchaseDate: info.purchaseDate ? new Date(info.purchaseDate) : new Date(),
-              status: 'Available',
-              purchase: {
-                create: {
-                  sellerName: info.purchasedFrom || 'Automated Scan',
-                  purchasePrice: info.purchasePrice || 0,
-                  transportCost: info.transportCost || 0,
-                  inspectionCost: info.inspectionCost || 0,
-                  registrationCost: info.registrationCost || 0,
-                  totalPurchaseCost,
-                  purchaseDate: info.purchaseDate ? new Date(info.purchaseDate) : new Date(),
-                  paymentMethod: info.paymentMethod || 'Bank Transfer',
-                  documentBase64: sourceFile.buffer.toString('base64'),
-                }
-              },
-              ...(info.repairCost > 0 && {
-                repairs: {
-                  create: {
-                    repairShop: 'Scanner Detected Repairs',
-                    partsCost: info.repairCost,
-                    laborCost: 0,
-                    description: 'Repairs extracted from scanned document',
-                    repairDate: info.purchaseDate ? new Date(info.purchaseDate) : new Date()
-                  }
-                }
-              })
-            }
-          });
-          vehicleId = newVehicle.id;
-        } else {
-          vehicleId = existingVehicle.id;
-        }
-      }
+      // We do not add the vehicle to the inventory here. 
+      // The user will review the extracted data in the UI and submit it via the AddVehicleDialog.
 
       const templateBuffer = templateFile
         ? templateFile.buffer
