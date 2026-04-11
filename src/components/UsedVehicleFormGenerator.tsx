@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { FileUp, CheckCircle2, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { ExtractedVehicleDocumentInfo } from '@/types/inventory';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { apiUrl } from '@/lib/api';
 
 interface UsedVehicleFormGeneratorProps {
@@ -23,6 +25,7 @@ export default function UsedVehicleFormGenerator({
 }: UsedVehicleFormGeneratorProps) {
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [pushToInventory, setPushToInventory] = useState(false);
   const sourceInputRef = useRef<HTMLInputElement>(null);
 
   const handleGenerate = async () => {
@@ -34,6 +37,7 @@ export default function UsedVehicleFormGenerator({
     setLoading(true);
     const formData = new FormData();
     formData.append('sourceFile', sourceFile);
+    formData.append('pushToInventory', String(pushToInventory));
 
     try {
       const response = await fetch(apiUrl('/generate-used-vehicle-form'), {
@@ -45,7 +49,8 @@ export default function UsedVehicleFormGenerator({
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate used vehicle form');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to generate used vehicle form');
       }
 
       const data = (await response.json()) as GenerateUsedVehicleResponse & { inventoryAdded?: boolean };
@@ -59,9 +64,9 @@ export default function UsedVehicleFormGenerator({
       toast.success(message, {
         icon: <CheckCircle2 className="w-4 h-4 text-profit" />,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error('Could not generate the used vehicle form.');
+      toast.error(error.message || 'Could not generate the used vehicle form.');
     } finally {
       setLoading(false);
     }
@@ -96,6 +101,22 @@ export default function UsedVehicleFormGenerator({
           </div>
         </div>
       </button>
+
+      <div className="flex flex-row items-start space-x-3 space-y-0 rounded-md border border-zinc-800 p-4">
+        <Checkbox 
+          id="pushToInventory" 
+          checked={pushToInventory} 
+          onCheckedChange={(checked) => setPushToInventory(checked === true)} 
+        />
+        <div className="space-y-1 leading-none">
+          <Label htmlFor="pushToInventory" className="text-sm font-medium text-white">
+            Push immediately to Inventory
+          </Label>
+          <p className="text-xs text-zinc-400">
+            Automatically create a new vehicle entry and save this document.
+          </p>
+        </div>
+      </div>
 
       <Button
         type="button"

@@ -51,9 +51,6 @@ router.post(
 
       const info = await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype);
       
-      // We do not add the vehicle to the inventory here. 
-      // The user will review the extracted data in the UI and submit it via the AddVehicleDialog.
-
       const templateBuffer = templateFile
         ? templateFile.buffer
         : await readFile(defaultUsedVehicleTemplatePath);
@@ -63,6 +60,66 @@ router.post(
         info,
         templateMimeType
       );
+
+      const isPushToInventory = req.body.pushToInventory === 'true';
+      let vehicleId = null;
+
+      if (isPushToInventory) {
+        if (!info.vin) {
+          throw new Error('Could not extract a valid VIN from the document. Unable to push to inventory.');
+        }
+        
+        const existingVehicle = await prisma.vehicle.findUnique({ where: { vin: info.vin } });
+        if (existingVehicle) {
+          throw new Error(`Vehicle with VIN ${info.vin} already exists in inventory.`);
+        }
+
+        const purchasePrice = Number(info.purchasePrice) || 0;
+        const transportCost = Number(info.transportCost) || 0;
+        const repairCost = Number(info.repairCost) || 0;
+        const inspectionCost = Number(info.inspectionCost) || 0;
+        const registrationCost = Number(info.registrationCost) || 0;
+        const totalPurchaseCost = purchasePrice + transportCost + inspectionCost + registrationCost;
+
+        const vehicle = await prisma.vehicle.create({
+          data: {
+            vin: info.vin,
+            make: info.make || 'Unknown',
+            model: info.model || 'Unknown',
+            year: Number(info.year) || new Date().getFullYear(),
+            mileage: Number(info.mileage) || 0,
+            color: info.color || 'Unknown',
+            purchaseDate: info.purchaseDate ? new Date(info.purchaseDate) : new Date(),
+            status: 'Available',
+            purchase: {
+              create: {
+                sellerName: info.purchasedFrom || 'Auction',
+                purchasePrice,
+                transportCost,
+                inspectionCost,
+                registrationCost,
+                totalPurchaseCost,
+                purchaseDate: info.purchaseDate ? new Date(info.purchaseDate) : new Date(),
+                paymentMethod: 'Bank Transfer',
+                documentBase64: filledPdf.toString('base64')
+              }
+            },
+            ...(repairCost > 0 && {
+              repairs: {
+                create: {
+                  repairShop: 'Initial Pre-Purchase',
+                  partsCost: repairCost,
+                  laborCost: 0,
+                  description: 'Initial repairs added during document scan',
+                  repairDate: info.purchaseDate ? new Date(info.purchaseDate) : new Date()
+                }
+              }
+            })
+          }
+        });
+        vehicleId = vehicle.id;
+      }
+
       const fileName = buildUsedVehiclePdfFileName(info);
 
       res.json({
@@ -73,6 +130,9 @@ router.post(
         inventoryAdded: !!vehicleId
       });
     } catch (err) {
+      if (err.message && err.message.includes('already exists in inventory')) {
+         return res.status(409).json({ message: err.message });
+      }
       next(err);
     }
   }
