@@ -15,38 +15,38 @@ const basePageSize = {
 // ──────────────────────────────────────────────────────────────────────
 const fieldMap = {
   // Row: "Mfrs. Model Year: ___ Make: ___ Model: ___ Color: ___"
-  year:            { x: 115, y: 665, width: 60,  height: 14, font: 'helvetica' },
-  make:            { x: 204, y: 665, width: 115, height: 14, font: 'helvetica' },
-  model:           { x: 350, y: 665, width: 105, height: 14, font: 'helvetica' },
-  color:           { x: 484, y: 665, width: 95,  height: 14, font: 'helvetica' },
+  year:            { x: 146, y: 663, width: 50,  height: 14, font: 'helvetica' },
+  make:            { x: 236, y: 663, width: 105, height: 14, font: 'helvetica' },
+  model:           { x: 400, y: 663, width: 85, height: 14, font: 'helvetica' },
+  color:           { x: 512, y: 663, width: 85,  height: 14, font: 'helvetica' },
 
   // VIN box row (individual chars drawn separately by drawVin)
   vinArea:         { x: 122, y: 608, width: 285, height: 16 },
 
   // "Obtained From (Source): ___ Transaction Date: ___"
-  obtainedFrom:    { x: 164, y: 445, width: 220, height: 12, font: 'courier' },
-  transactionDate: { x: 404, y: 445, width: 110, height: 12, font: 'courier' },
+  obtainedFrom:    { x: 275, y: 435, width: 220, height: 12, font: 'courier' },
+  transactionDate: { x: 505, y: 435, width: 110, height: 12, font: 'courier' },
 
   // "Address (number and street): ___"
-  address:         { x: 159, y: 412, width: 420, height: 12, font: 'courier' },
+  address:         { x: 275, y: 402, width: 420, height: 12, font: 'courier' },
 
   // "City or Town: ___ State: ___ Zip Code: ___ Odometer In: ___"
-  city:            { x: 101,  y: 380, width: 148, height: 12, font: 'courier' },
-  state:           { x: 256, y: 380, width: 48,  height: 12, font: 'courier' },
-  zipCode:         { x: 319, y: 380, width: 78,  height: 12, font: 'courier' },
-  odometerIn:      { x: 462, y: 380, width: 78,  height: 12, font: 'courier' },
+  city:            { x: 180, y: 370, width: 148, height: 12, font: 'courier' },
+  state:           { x: 300, y: 370, width: 48,  height: 12, font: 'courier' },
+  zipCode:         { x: 390, y: 370, width: 78,  height: 12, font: 'courier' },
+  odometerIn:      { x: 500, y: 370, width: 78,  height: 12, font: 'courier' },
 
   // Repeater: "The source … was obtained from: ___"
-  sourceRepeater:  { x: 392, y: 269, width: 195, height: 12, font: 'courier' },
+  sourceRepeater:  { x: 390, y: 285, width: 195, height: 12, font: 'courier' },
 
   // Stock No. — top-right corner
-  stockNo:         { x: 424, y: 749, width: 100, height: 14, font: 'helvetica' },
+  stockNo:         { x: 490, y: 749, width: 100, height: 14, font: 'helvetica' },
 };
 
 // VIN grid constants
-const VIN_START_X = 122;
+const VIN_START_X = 124;
 const VIN_START_Y = 608;
-const VIN_STEP_X  = 17.9;
+const VIN_STEP_X  = 16.6;
 
 export async function fillUsedVehiclePdf(templateBuffer, vehicleInfo, templateMimeType = 'application/pdf') {
   const pdfDoc = await loadTemplateDocument(templateBuffer, templateMimeType);
