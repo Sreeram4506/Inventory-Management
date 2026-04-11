@@ -160,29 +160,47 @@ export default function Registry() {
   );
 }
 
-async function downloadPdf(base64: string, fileName: string) {
+function downloadPdf(base64: string, fileName: string) {
   try {
     let cleanBase64 = base64;
+    // Strip prefixes if present
     if (cleanBase64.includes('base64,')) {
       cleanBase64 = cleanBase64.split('base64,')[1];
     }
-    cleanBase64 = cleanBase64.replace(/\s/g, ''); 
+    // Remove all whitespace and non-base64 chars
+    cleanBase64 = cleanBase64.replace(/[^A-Za-z0-9+/=]/g, '');
 
-    // Robust native decoding via Data URI fetch
-    const response = await fetch(`data:application/pdf;base64,${cleanBase64}`);
-    const blob = await response.blob();
+    // Chunked decoding for robustness with large strings
+    const byteCharacters = atob(cleanBase64);
+    const byteArrays = [];
     
+    for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+      const slice = byteCharacters.slice(offset, offset + 512);
+      const byteNumbers = new Array(slice.length);
+      for (let i = 0; i < slice.length; i++) {
+        byteNumbers[i] = slice.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      byteArrays.push(byteArray);
+    }
+    
+    const blob = new Blob(byteArrays, { type: 'application/pdf' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
+    
     link.href = url;
     link.download = fileName;
+    
+    // Explicitly add to body for cross-browser stability
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     
-    setTimeout(() => window.URL.revokeObjectURL(url), 500);
+    // Use a very long timeout (60s) to give the PDF viewer ample time to load the blob
+    // before it is revoked from memory. 
+    setTimeout(() => window.URL.revokeObjectURL(url), 60000);
   } catch (err) {
-    console.error('Download failed', err);
-    toast.error('Could not process the PDF for download.');
+    console.error('PDF processing failed:', err);
+    toast.error('Failed to process the PDF. Please try again.');
   }
 }

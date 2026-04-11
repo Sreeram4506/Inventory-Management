@@ -82,7 +82,7 @@ export async function fillUsedVehiclePdf(templateBuffer, vehicleInfo, templateMi
   const stockNoValue = vin.length >= 6 ? vin.slice(-6).toUpperCase() : vin.toUpperCase();
   drawField(page, fieldMap.stockNo, stockNoValue, helvetica);
 
-  return Buffer.from(await pdfDoc.save());
+  return await pdfDoc.saveAsBase64();
 }
 
 export function buildUsedVehiclePdfFileName(vehicleInfo) {

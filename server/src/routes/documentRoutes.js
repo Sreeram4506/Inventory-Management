@@ -65,7 +65,7 @@ router.post(
       let vehicleId = null;
       let registryId = null;
 
-      const pdfBase64Str = filledPdf.toString('base64');
+      const pdfBase64Str = filledPdf;
 
       // ALWAYS save to Document Registry (Logs)
       try {
