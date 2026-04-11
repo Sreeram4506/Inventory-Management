@@ -161,15 +161,47 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
               {vehicle.year} {vehicle.make} {vehicle.model}
             </DialogTitle>
             {vehicle.documentBase64 && (
-              <Button 
-                onClick={downloadDocument}
-                variant="outline" 
-                size="sm" 
-                className="gap-2 border-profit/30 text-profit hover:bg-profit/10 h-9 font-bold uppercase tracking-widest text-[10px]"
-              >
-                <FileText className="w-3.5 h-3.5" />
-                View Original doc
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={downloadDocument}
+                  variant="outline" 
+                  size="sm" 
+                  className="gap-2 border-profit/30 text-profit hover:bg-profit/10 h-9 font-bold uppercase tracking-widest text-[10px]"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download
+                </Button>
+                <Button 
+                  onClick={() => {
+                    if (!vehicle.documentBase64) return;
+                    try {
+                      let cleanBase64 = vehicle.documentBase64;
+                      if (cleanBase64.includes('base64,')) {
+                        cleanBase64 = cleanBase64.split('base64,')[1];
+                      }
+                      cleanBase64 = cleanBase64.replace(/[^A-Za-z0-9+/=]/g, '');
+                      const byteCharacters = atob(cleanBase64);
+                      const byteNumbers = new Array(byteCharacters.length);
+                      for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                      }
+                      const byteArray = new Uint8Array(byteNumbers);
+                      const blob = new Blob([byteArray], { type: 'application/pdf' });
+                      const url = window.URL.createObjectURL(blob);
+                      window.open(url, '_blank');
+                      // No revocation here to ensure the tab can load it
+                    } catch (e) {
+                      toast.error('Failed to open document preview');
+                    }
+                  }}
+                  variant="outline" 
+                  size="sm" 
+                  className="gap-2 border-info/30 text-info hover:bg-info/10 h-9 font-bold uppercase tracking-widest text-[10px]"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  View Original
+                </Button>
+              </div>
             )}
           </div>
           <div className="flex gap-4 mt-2">
