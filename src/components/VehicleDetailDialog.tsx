@@ -11,7 +11,7 @@ import { useSales } from '@/hooks/useSales';
 import { toast } from '@/components/ui/toast-utils';
 import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download, ShoppingCart } from 'lucide-react';
 import { useAuth } from '@/context/auth-hooks';
-import { openBinaryDocument } from '@/lib/document-service';
+import { apiUrl } from '@/lib/api';
 
 interface VehicleDetailDialogProps {
   vehicle: Vehicle | null;
@@ -57,14 +57,43 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
     const fileName = `Document_${vehicle.make}_${vehicle.model}_${vehicle.vin.slice(-4)}.pdf`;
     const endpoint = `/vehicles/${vehicle.id}/document`;
 
-    toast.promise(
-      openBinaryDocument(endpoint, token, fileName),
-      {
-        loading: action === 'download' ? 'Preparing download...' : 'Opening document...',
-        success: action === 'download' ? 'Downloaded!' : 'Opened!',
-        error: 'Document unavailable',
+    try {
+      const response = await fetch(apiUrl(endpoint), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        toast.error('Document not found for this vehicle');
+        return;
       }
-    );
+
+      const blob = await response.blob();
+      
+      // Verify we got actual PDF data
+      if (blob.size < 100) {
+        toast.error('Document appears to be empty or corrupted');
+        return;
+      }
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 5000);
+      
+      toast.success(`Downloading ${fileName}`);
+    } catch (err) {
+      console.error('Download failed:', err);
+      toast.error('Failed to download document');
+    }
   };
 
   const handleRepairSubmit = async (e: React.FormEvent) => {
@@ -132,26 +161,15 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
               {vehicle.year} {vehicle.make} {vehicle.model}
             </DialogTitle>
             {vehicle.hasDocument && (
-              <div className="flex gap-2">
-                <Button 
-                  onClick={() => handleDocumentAction('download')}
-                  variant="outline" 
-                  size="sm" 
-                  className="gap-2 border-profit/30 text-profit hover:bg-profit/10 h-9 font-bold uppercase tracking-widest text-[10px]"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  Download
-                </Button>
-                <Button 
-                  onClick={() => handleDocumentAction('view')}
-                  variant="outline" 
-                  size="sm" 
-                  className="gap-2 border-info/30 text-info hover:bg-info/10 h-9 font-bold uppercase tracking-widest text-[10px]"
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  View Original
-                </Button>
-              </div>
+              <Button 
+                onClick={() => handleDocumentAction('download')}
+                variant="outline" 
+                size="sm" 
+                className="gap-2 border-profit/30 text-profit hover:bg-profit/10 h-9 font-bold uppercase tracking-widest text-[10px]"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download Document
+              </Button>
             )}
           </div>
           <div className="flex gap-4 mt-2">

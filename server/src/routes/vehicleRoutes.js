@@ -43,22 +43,43 @@ router.get('/', authenticateToken, async (req, res, next) => {
     const vehicles = await prisma.vehicle.findMany({
       orderBy: { createdAt: 'desc' },
       include: { 
-        purchase: true,
+        purchase: {
+          select: {
+            id: true,
+            sellerName: true,
+            purchasePrice: true,
+            buyerFee: true,
+            transportCost: true,
+            inspectionCost: true,
+            registrationCost: true,
+            totalPurchaseCost: true,
+            purchaseDate: true,
+            paymentMethod: true,
+            // We only need to know IF a document exists, not the actual data
+            documentBase64: true,
+          }
+        },
         repairs: true,
         sale: true 
       }
     });
 
-    const enrichedVehicles = vehicles.map(v => ({
-      ...v,
-      purchasePrice: v.purchase?.purchasePrice || 0,
-      totalPurchaseCost: v.purchase?.totalPurchaseCost || 0,
-      inspectionCost: v.purchase?.inspectionCost || 0,
-      registrationCost: v.purchase?.registrationCost || 0,
-      transportCost: v.purchase?.transportCost || 0,
-      repairCost: v.repairs.reduce((sum, r) => sum + r.partsCost + r.laborCost, 0),
-      hasDocument: !!v.purchase?.documentBase64,
-    }));
+    const enrichedVehicles = vehicles.map(v => {
+      const hasDocument = !!v.purchase?.documentBase64;
+      // Strip the heavy documentBase64 from purchase before sending
+      const { documentBase64, ...purchaseWithoutDoc } = v.purchase || {};
+      return {
+        ...v,
+        purchase: v.purchase ? purchaseWithoutDoc : null,
+        purchasePrice: v.purchase?.purchasePrice || 0,
+        totalPurchaseCost: v.purchase?.totalPurchaseCost || 0,
+        inspectionCost: v.purchase?.inspectionCost || 0,
+        registrationCost: v.purchase?.registrationCost || 0,
+        transportCost: v.purchase?.transportCost || 0,
+        repairCost: v.repairs.reduce((sum, r) => sum + r.partsCost + r.laborCost, 0),
+        hasDocument,
+      };
+    });
 
     res.json(enrichedVehicles);
   } catch (err) {
