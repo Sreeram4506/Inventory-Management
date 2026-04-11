@@ -43,13 +43,16 @@ export default function CashFlow({ isSubpage = false }: CashFlowProps) {
   const cashFlowValue = totalIncome - totalOutgoing;
 
   const transactions = [
-    ...sales.map(s => ({ 
-      type: 'income' as const, 
-      label: `Sale: ${vehicles.find(v => v.id === s.vehicleId)?.make || 'Unknown'} ${vehicles.find(v => v.id === s.vehicleId)?.model || ''}`, 
-      amount: s.salePrice, 
-      date: s.saleDate,
-      vehicle: null
-    })),
+    ...sales.map(s => {
+      const vehicle = vehicles.find(v => v.id === s.vehicleId);
+      return { 
+        type: 'income' as const, 
+        label: `Sale: ${vehicle?.make || 'Unknown'} ${vehicle?.model || ''}`, 
+        amount: s.salePrice, 
+        date: s.saleDate,
+        vehicle: vehicle || null
+      };
+    }),
     ...vehicles.map(v => ({ type: 'expense' as const, label: `Purchase: ${v.make} ${v.model}`, amount: v.totalPurchaseCost, date: v.purchaseDate, vehicle: v })),
     ...expenses.map(e => ({ type: 'expense' as const, label: e.category, amount: e.amount, date: e.date, vehicle: null })),
     ...ads.map(a => ({ type: 'expense' as const, label: `Ad: ${a.campaignName}`, amount: a.amountSpent, date: a.startDate, vehicle: null })),

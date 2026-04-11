@@ -133,27 +133,29 @@ export default function UsedVehicleFormGenerator({
   );
 }
 
-function downloadPdf(base64: string, fileName: string) {
-  let cleanBase64 = base64;
-  if (cleanBase64.includes('base64,')) {
-    cleanBase64 = cleanBase64.split('base64,')[1];
-  }
-  cleanBase64 = cleanBase64.replace(/\s/g, ''); // strip any potential whitespace
+async function downloadPdf(base64: string, fileName: string) {
+  try {
+    let cleanBase64 = base64;
+    if (cleanBase64.includes('base64,')) {
+      cleanBase64 = cleanBase64.split('base64,')[1];
+    }
+    cleanBase64 = cleanBase64.replace(/\s/g, ''); 
 
-  const binary = window.atob(cleanBase64);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
+    // Robust native decoding via Data URI fetch
+    const response = await fetch(`data:application/pdf;base64,${cleanBase64}`);
+    const blob = await response.blob();
+    
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    setTimeout(() => window.URL.revokeObjectURL(url), 500);
+  } catch (err) {
+    console.error('Download failed', err);
+    toast.error('Could not process the PDF for download.');
   }
-  const blob = new Blob([bytes], { type: 'application/pdf' });
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  
-  // Delay revocation to ensure the browser has started the download/viewing process
-  setTimeout(() => window.URL.revokeObjectURL(url), 250);
 }

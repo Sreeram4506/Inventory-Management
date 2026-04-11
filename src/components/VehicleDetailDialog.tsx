@@ -48,7 +48,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
 
   if (!vehicle) return null;
 
-  const downloadDocument = () => {
+  const downloadDocument = async () => {
     if (!vehicle.documentBase64) return;
     
     try {
@@ -56,14 +56,12 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
       if (cleanBase64.includes('base64,')) {
         cleanBase64 = cleanBase64.split('base64,')[1];
       }
-      cleanBase64 = cleanBase64.replace(/\s/g, ''); // strip any potential whitespace
+      cleanBase64 = cleanBase64.replace(/\s/g, ''); 
 
-      const binary = window.atob(cleanBase64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-      const blob = new Blob([bytes], { type: 'application/pdf' });
+      // Robust native decoding via Data URI fetch
+      const response = await fetch(`data:application/pdf;base64,${cleanBase64}`);
+      const blob = await response.blob();
+      
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -72,10 +70,10 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
       link.click();
       document.body.removeChild(link);
       
-      // Delay revocation to ensure the browser has started the download/viewing process
-      setTimeout(() => window.URL.revokeObjectURL(url), 250);
+      setTimeout(() => window.URL.revokeObjectURL(url), 500);
       toast.success('Opening original document...');
     } catch (e) {
+      console.error('Download failed', e);
       toast.error('Failed to process document data');
     }
   };
