@@ -3,6 +3,7 @@ import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/context/auth-hooks';
 import { apiUrl } from '@/lib/api';
 import { FileArchive, Download, Search, FileText } from 'lucide-react';
+import { openBinaryDocument } from '@/lib/document-service';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -46,13 +47,7 @@ export default function Registry() {
 
   const handleDownload = async (id: string, customName: string) => {
     toast.promise(
-      fetch(apiUrl(`/registry/${id}/download`), {
-        headers: { Authorization: `Bearer ${token}` }
-      }).then(async (res) => {
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        downloadPdf(data.documentBase64, `${customName}.pdf`);
-      }),
+      openBinaryDocument(`/registry/${id}/download`, token, `${customName}.pdf`),
       {
         loading: 'Preparing document for download...',
         success: 'Document downloaded successfully!',
@@ -160,47 +155,4 @@ export default function Registry() {
   );
 }
 
-function downloadPdf(base64: string, fileName: string) {
-  try {
-    let cleanBase64 = base64;
-    // Strip prefixes if present
-    if (cleanBase64.includes('base64,')) {
-      cleanBase64 = cleanBase64.split('base64,')[1];
-    }
-    // Remove all whitespace and non-base64 chars
-    cleanBase64 = cleanBase64.replace(/[^A-Za-z0-9+/=]/g, '');
 
-    // Chunked decoding for robustness with large strings
-    const byteCharacters = atob(cleanBase64);
-    const byteArrays = [];
-    
-    for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-      const slice = byteCharacters.slice(offset, offset + 512);
-      const byteNumbers = new Array(slice.length);
-      for (let i = 0; i < slice.length; i++) {
-        byteNumbers[i] = slice.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      byteArrays.push(byteArray);
-    }
-    
-    const blob = new Blob(byteArrays, { type: 'application/pdf' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    
-    link.href = url;
-    link.download = fileName;
-    
-    // Explicitly add to body for cross-browser stability
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    // Use a very long timeout (60s) to give the PDF viewer ample time to load the blob
-    // before it is revoked from memory. 
-    setTimeout(() => window.URL.revokeObjectURL(url), 60000);
-  } catch (err) {
-    console.error('PDF processing failed:', err);
-    toast.error('Failed to process the PDF. Please try again.');
-  }
-}

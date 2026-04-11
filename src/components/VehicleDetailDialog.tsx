@@ -10,6 +10,8 @@ import { useAdvertising } from '@/hooks/useAdvertising';
 import { useSales } from '@/hooks/useSales';
 import { toast } from '@/components/ui/toast-utils';
 import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download, ShoppingCart } from 'lucide-react';
+import { useAuth } from '@/context/auth-hooks';
+import { openBinaryDocument } from '@/lib/document-service';
 
 interface VehicleDetailDialogProps {
   vehicle: Vehicle | null;
@@ -18,6 +20,7 @@ interface VehicleDetailDialogProps {
 }
 
 export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: VehicleDetailDialogProps) {
+  const { token } = useAuth();
   const { addRepair } = useRepairs();
   const { addAd } = useAdvertising();
   const { addSale } = useSales();
@@ -48,52 +51,20 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
 
   if (!vehicle) return null;
 
-  const downloadDocument = () => {
-    if (!vehicle.documentBase64) return;
+  const handleDocumentAction = async (action: 'download' | 'view') => {
+    if (!vehicle || !token) return;
     
-    try {
-      let cleanBase64 = vehicle.documentBase64;
-      // Strip prefixes if present
-      if (cleanBase64.includes('base64,')) {
-        cleanBase64 = cleanBase64.split('base64,')[1];
-      }
-      // Remove all whitespace and non-base64 chars
-      cleanBase64 = cleanBase64.replace(/[^A-Za-z0-9+/=]/g, '');
+    const fileName = `Document_${vehicle.make}_${vehicle.model}_${vehicle.vin.slice(-4)}.pdf`;
+    const endpoint = `/vehicles/${vehicle.id}/document`;
 
-      // Chunked decoding for robustness with large strings
-      const byteCharacters = atob(cleanBase64);
-      const byteArrays = [];
-      
-      for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-        const slice = byteCharacters.slice(offset, offset + 512);
-        const byteNumbers = new Array(slice.length);
-        for (let i = 0; i < slice.length; i++) {
-          byteNumbers[i] = slice.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        byteArrays.push(byteArray);
+    toast.promise(
+      openBinaryDocument(endpoint, token, fileName),
+      {
+        loading: action === 'download' ? 'Preparing download...' : 'Opening document...',
+        success: action === 'download' ? 'Downloaded!' : 'Opened!',
+        error: 'Document unavailable',
       }
-      
-      const blob = new Blob(byteArrays, { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      
-      link.href = url;
-      link.download = `Document_${vehicle.make}_${vehicle.model}_${vehicle.vin.slice(-4)}.pdf`;
-      
-      // Explicitly add to body for cross-browser stability
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      // Use a very long timeout (60s) to give the PDF viewer ample time to load the blob
-      // before it is revoked from memory. 
-      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
-      toast.success('Opening original document...');
-    } catch (err) {
-      console.error('PDF processing failed:', err);
-      toast.error('Failed to process the PDF. Please try again.');
-    }
+    );
   };
 
   const handleRepairSubmit = async (e: React.FormEvent) => {
@@ -160,10 +131,10 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
               <span className="p-2 bg-profit/10 rounded-lg"><Info className="text-profit" /></span>
               {vehicle.year} {vehicle.make} {vehicle.model}
             </DialogTitle>
-            {vehicle.documentBase64 && (
+            {vehicle.hasDocument && (
               <div className="flex gap-2">
                 <Button 
-                  onClick={downloadDocument}
+                  onClick={() => handleDocumentAction('download')}
                   variant="outline" 
                   size="sm" 
                   className="gap-2 border-profit/30 text-profit hover:bg-profit/10 h-9 font-bold uppercase tracking-widest text-[10px]"
@@ -172,28 +143,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                   Download
                 </Button>
                 <Button 
-                  onClick={() => {
-                    if (!vehicle.documentBase64) return;
-                    try {
-                      let cleanBase64 = vehicle.documentBase64;
-                      if (cleanBase64.includes('base64,')) {
-                        cleanBase64 = cleanBase64.split('base64,')[1];
-                      }
-                      cleanBase64 = cleanBase64.replace(/[^A-Za-z0-9+/=]/g, '');
-                      const byteCharacters = atob(cleanBase64);
-                      const byteNumbers = new Array(byteCharacters.length);
-                      for (let i = 0; i < byteCharacters.length; i++) {
-                        byteNumbers[i] = byteCharacters.charCodeAt(i);
-                      }
-                      const byteArray = new Uint8Array(byteNumbers);
-                      const blob = new Blob([byteArray], { type: 'application/pdf' });
-                      const url = window.URL.createObjectURL(blob);
-                      window.open(url, '_blank');
-                      // No revocation here to ensure the tab can load it
-                    } catch (e) {
-                      toast.error('Failed to open document preview');
-                    }
-                  }}
+                  onClick={() => handleDocumentAction('view')}
                   variant="outline" 
                   size="sm" 
                   className="gap-2 border-info/30 text-info hover:bg-info/10 h-9 font-bold uppercase tracking-widest text-[10px]"

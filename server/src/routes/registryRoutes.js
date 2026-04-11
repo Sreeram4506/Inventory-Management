@@ -33,11 +33,20 @@ router.get('/:id/download', authenticateToken, async (req, res, next) => {
       select: { documentBase64: true, sourceFileName: true, documentType: true }
     });
     
-    if (!log) {
+    if (!log || !log.documentBase64) {
       return res.status(404).json({ message: 'Document not found' });
     }
     
-    res.json(log);
+    let base64 = log.documentBase64;
+    if (base64.includes('base64,')) {
+      base64 = base64.split('base64,')[1];
+    }
+
+    const buffer = Buffer.from(base64, 'base64');
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    // Content-Disposition helps browser know it's a file
+    res.send(buffer);
   } catch (err) {
     next(err);
   }

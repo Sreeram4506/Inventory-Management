@@ -22,6 +22,7 @@ export interface Vehicle {
   status: VehicleStatus;
   daysInInventory: number;
   documentBase64?: string | null;
+  hasDocument?: boolean;
   repairs?: Repair[];
 }
 

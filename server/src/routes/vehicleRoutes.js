@@ -5,6 +5,32 @@ import { validate, vehicleSchema } from '../utils/validators.js';
 
 const router = express.Router();
 
+router.get('/:id/document', authenticateToken, async (req, res, next) => {
+  try {
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: req.params.id },
+      include: { purchase: true }
+    });
+
+    if (!vehicle || !vehicle.purchase?.documentBase64) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    let base64 = vehicle.purchase.documentBase64;
+    if (base64.includes('base64,')) {
+      base64 = base64.split('base64,')[1];
+    }
+
+    const buffer = Buffer.from(base64, 'base64');
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=Document_${vehicle.vin.slice(-4)}.pdf`);
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/', authenticateToken, async (req, res, next) => {
   try {
     const vehicles = await prisma.vehicle.findMany({
@@ -24,7 +50,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
       registrationCost: v.purchase?.registrationCost || 0,
       transportCost: v.purchase?.transportCost || 0,
       repairCost: v.repairs.reduce((sum, r) => sum + r.partsCost + r.laborCost, 0),
-      documentBase64: v.purchase?.documentBase64 || null,
+      hasDocument: !!v.purchase?.documentBase64,
     }));
 
     res.json(enrichedVehicles);
