@@ -5,7 +5,20 @@ export const notFound = (req, res, next) => {
 };
 
 export const errorHandler = (err, req, res, next) => {
-  const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+  let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+  let message = err.message;
+
+  // Handle specific standard Express middleware overrides
+  if (err.status) {
+    statusCode = err.status;
+  }
+
+  // Map Prisma Unique Constraint Violations precisely to 409 Conflict
+  if (err.code === 'P2002') {
+    statusCode = 409;
+    message = 'This record already exists in the system. Duplicate entries are not allowed.';
+  }
+
   const isProduction = process.env.NODE_ENV === 'production';
   
   // Clean up any uploaded file in memory/disk if there was an error in handling
@@ -14,7 +27,7 @@ export const errorHandler = (err, req, res, next) => {
   }
   
   res.status(statusCode).json({
-    message: err.message,
+    message: message,
     stack: isProduction ? null : err.stack,
   });
 };

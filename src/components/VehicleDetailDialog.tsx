@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -128,6 +128,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl bg-zinc-950 border-zinc-900 text-foreground">
         <DialogHeader>
+          <DialogDescription className="sr-only">Vehicle details and management tabs.</DialogDescription>
           <div className="flex items-start justify-between">
             <DialogTitle className="flex items-center gap-3 text-2xl font-black font-display tracking-tight text-white">
               <span className="p-2 bg-profit/10 rounded-lg"><Info className="text-profit" /></span>

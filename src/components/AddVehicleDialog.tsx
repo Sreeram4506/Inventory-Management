@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -174,6 +174,7 @@ export default function AddVehicleDialog({ open, onOpenChange }: AddVehicleDialo
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-zinc-950 border-zinc-900 text-white selection:bg-profit/30">
         <DialogHeader>
           <DialogTitle className="font-display text-2xl text-white">Add New Vehicle</DialogTitle>
+          <DialogDescription className="sr-only">Add a new vehicle manually or scan a document to push into inventory.</DialogDescription>
           <p className="text-zinc-400 text-sm">Fill in the details manually or use our AI scanner.</p>
         </DialogHeader>
 
