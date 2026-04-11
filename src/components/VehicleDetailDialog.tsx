@@ -51,49 +51,14 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
 
   if (!vehicle) return null;
 
-  const handleDocumentAction = async (action: 'download' | 'view') => {
+  const handleDocumentAction = () => {
     if (!vehicle || !token) return;
     
-    const fileName = `Document_${vehicle.make}_${vehicle.model}_${vehicle.vin.slice(-4)}.pdf`;
-    const endpoint = `/vehicles/${vehicle.id}/document`;
-
-    try {
-      const response = await fetch(apiUrl(endpoint), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!response.ok) {
-        toast.error('Document not found for this vehicle');
-        return;
-      }
-
-      const blob = await response.blob();
-      
-      // Verify we got actual PDF data
-      if (blob.size < 100) {
-        toast.error('Document appears to be empty or corrupted');
-        return;
-      }
-      
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      
-      // Clean up
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }, 5000);
-      
-      toast.success(`Downloading ${fileName}`);
-    } catch (err) {
-      console.error('Download failed:', err);
-      toast.error('Failed to download document');
-    }
+    // Direct browser navigation - bypasses all JS blob handling
+    // Edge will download natively without trying to preview
+    const downloadUrl = apiUrl(`/vehicles/${vehicle.id}/document?token=${encodeURIComponent(token)}`);
+    window.open(downloadUrl, '_blank');
+    toast.success('Download started...');
   };
 
   const handleRepairSubmit = async (e: React.FormEvent) => {
@@ -162,7 +127,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
             </DialogTitle>
             {vehicle.hasDocument && (
               <Button 
-                onClick={() => handleDocumentAction('download')}
+                onClick={handleDocumentAction}
                 variant="outline" 
                 size="sm" 
                 className="gap-2 border-profit/30 text-profit hover:bg-profit/10 h-9 font-bold uppercase tracking-widest text-[10px]"

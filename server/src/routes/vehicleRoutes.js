@@ -5,8 +5,30 @@ import { validate, vehicleSchema } from '../utils/validators.js';
 
 const router = express.Router();
 
-router.get('/:id/document', authenticateToken, async (req, res, next) => {
+// Document download - accepts token via query param for direct browser navigation
+router.get('/:id/document', async (req, res, next) => {
   try {
+    // Accept token from either Authorization header OR query parameter
+    let token = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (req.query.token) {
+      token = req.query.token;
+    }
+
+    if (!token) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Verify the token manually
+    const jwt = await import('jsonwebtoken');
+    try {
+      jwt.default.verify(token, process.env.JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({ message: 'Invalid token' });
+    }
+
     const vehicle = await prisma.vehicle.findUnique({
       where: { id: req.params.id },
       include: { purchase: true }
@@ -22,14 +44,15 @@ router.get('/:id/document', authenticateToken, async (req, res, next) => {
     }
 
     const buffer = Buffer.from(base64, 'base64');
+    const safeFileName = `Document_${vehicle.make}_${vehicle.model}_${(vehicle.vin || 'unk').slice(-4)}.pdf`;
     console.log(`[BinaryStream] Sending PDF for vehicle ${req.params.id}, size: ${buffer.length} bytes`);
     
+    // Use application/octet-stream to force browser to SAVE, not preview
     res.writeHead(200, {
-      'Content-Type': 'application/pdf',
+      'Content-Type': 'application/octet-stream',
       'Content-Length': buffer.length,
-      'Content-Disposition': `attachment; filename="Document_${(vehicle.vin || 'unk').slice(-4)}.pdf"`,
+      'Content-Disposition': `attachment; filename="${safeFileName}"`,
       'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'X-Content-Type-Options': 'nosniff',
     });
     
     res.end(buffer);
