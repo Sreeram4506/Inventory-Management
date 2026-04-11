@@ -52,7 +52,13 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
     if (!vehicle.documentBase64) return;
     
     try {
-      const binary = window.atob(vehicle.documentBase64);
+      let cleanBase64 = vehicle.documentBase64;
+      if (cleanBase64.includes('base64,')) {
+        cleanBase64 = cleanBase64.split('base64,')[1];
+      }
+      cleanBase64 = cleanBase64.replace(/\s/g, ''); // strip any potential whitespace
+
+      const binary = window.atob(cleanBase64);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) {
         bytes[i] = binary.charCodeAt(i);
