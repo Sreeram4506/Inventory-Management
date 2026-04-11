@@ -1,7 +1,12 @@
+import { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAdvertising } from '@/hooks/useAdvertising';
 import { useInventory } from '@/hooks/useInventory';
 import QueryErrorState from '@/components/QueryErrorState';
+import { Button } from '@/components/ui/button';
+import { Plus, Megaphone } from 'lucide-react';
+import AddAdvertisingDialog from '@/components/AddAdvertisingDialog';
+
 
 interface AdvertisingProps {
   isSubpage?: boolean;
@@ -10,6 +15,7 @@ interface AdvertisingProps {
 export default function Advertising({ isSubpage = false }: AdvertisingProps) {
   const { ads, isLoading: adsLoading, isError: adsError } = useAdvertising();
   const { vehicles, isLoading: vehiclesLoading, isError: vehiclesError } = useInventory();
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   if (adsLoading || vehiclesLoading) return <div className="p-8 text-center text-muted-foreground">Loading advertising data...</div>;
 
@@ -28,9 +34,18 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
   const content = (
     <div className="space-y-6">
       {!isSubpage && (
-        <div className="animate-in slide-in-from-top-4 duration-500">
-          <h1 className="text-3xl font-bold font-display text-foreground tracking-tight">Advertising Campaigns</h1>
-          <p className="text-muted-foreground mt-1">Strategic marketing data</p>
+        <div className="animate-in slide-in-from-top-4 duration-500 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold font-display text-foreground tracking-tight">Advertising Campaigns</h1>
+            <p className="text-muted-foreground mt-1 text-sm font-medium">Strategic marketing data</p>
+          </div>
+          <Button 
+            onClick={() => setIsDialogOpen(true)}
+            className="bg-profit text-zinc-950 hover:bg-profit/90 h-11 px-6 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-profit/20 transition-all hover:scale-105 active:scale-95"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Launch Campaign
+          </Button>
         </div>
       )}
 
@@ -89,5 +104,10 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
     </div>
   );
 
-  return isSubpage ? content : <AppLayout>{content}</AppLayout>;
+  return (
+    <>
+      {isSubpage ? content : <AppLayout>{content}</AppLayout>}
+      <AddAdvertisingDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
+    </>
+  );
 }

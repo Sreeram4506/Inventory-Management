@@ -1,0 +1,105 @@
+import { useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Receipt, Plus } from 'lucide-react';
+import { useExpenses } from '@/hooks/useExpenses';
+import { toast } from '@/components/ui/toast-utils';
+
+interface AddExpenseDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export default function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) {
+  const { addExpense } = useExpenses();
+  const [formData, setFormData] = useState({
+    category: '',
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    notes: '',
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await addExpense({
+        category: formData.category,
+        amount: parseFloat(formData.amount),
+        date: formData.date,
+        notes: formData.notes,
+      });
+      toast.success('Business expense recorded successfully');
+      setFormData({
+        category: '',
+        amount: '',
+        date: new Date().toISOString().split('T')[0],
+        notes: '',
+      });
+      onOpenChange(false);
+    } catch (err) {
+      toast.error('Failed to record expense');
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md bg-zinc-950 border-zinc-900 text-foreground">
+        <DialogHeader>
+          <div className="flex items-center gap-3 mb-2">
+            <span className="p-2 bg-profit/10 rounded-lg">
+              <Receipt className="text-profit w-5 h-5" />
+            </span>
+            <DialogTitle className="text-xl font-black font-display tracking-tight text-white uppercase">
+              Add Business Expense
+            </DialogTitle>
+          </div>
+          <DialogDescription className="text-muted-foreground text-xs uppercase tracking-widest font-bold">
+            Record operational or maintenance costs.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+          <div className="space-y-2">
+            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Category</Label>
+            <Input 
+              value={formData.category} 
+              onChange={e => setFormData({...formData, category: e.target.value})}
+              placeholder="e.g. Rent, Utilities, Software" required className="bg-zinc-900 border-zinc-800 focus:ring-profit/50"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Amount ($)</Label>
+              <Input 
+                type="number" value={formData.amount} 
+                onChange={e => setFormData({...formData, amount: e.target.value})}
+                placeholder="0.00" required className="bg-zinc-900 border-zinc-800 focus:ring-profit/50"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Date</Label>
+              <Input 
+                type="date" value={formData.date} 
+                onChange={e => setFormData({...formData, date: e.target.value})}
+                required className="bg-zinc-900 border-zinc-800 focus:ring-profit/50"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Notes (Optional)</Label>
+            <Input 
+              value={formData.notes} 
+              onChange={e => setFormData({...formData, notes: e.target.value})}
+              placeholder="Brief description..." className="bg-zinc-900 border-zinc-800 focus:ring-profit/50"
+            />
+          </div>
+          <Button className="w-full bg-profit text-zinc-950 font-black h-12 uppercase tracking-widest text-xs mt-2" type="submit">
+            <Plus className="w-4 h-4 mr-2" /> Record Expense
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

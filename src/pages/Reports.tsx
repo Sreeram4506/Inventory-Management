@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Megaphone, Receipt, TrendingUp, BarChart3, Loader2 } from 'lucide-react';
@@ -7,7 +8,10 @@ import { useAdvertising } from '@/hooks/useAdvertising';
 import { useExpenses } from '@/hooks/useExpenses';
 import Advertising from './Advertising';
 import Expenses from './Expenses';
-import CashFlow from './CashFlow';
+import CashFlowPage from './CashFlow';
+import AddExpenseDialog from '@/components/AddExpenseDialog';
+import AddAdvertisingDialog from '@/components/AddAdvertisingDialog';
+import { Button } from '@/components/ui/button';
 
 export default function Reports() {
   // Pre-fetch all data at once to make switcher instant
@@ -15,7 +19,10 @@ export default function Reports() {
   const { isLoading: salesLoading } = useSales();
   const { isLoading: adsLoading } = useAdvertising();
   const { isLoading: expLoading } = useExpenses();
-
+  
+  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
+  const [advertisingDialogOpen, setAdvertisingDialogOpen] = useState(false);
+  
   const isGlobalLoading = invLoading || salesLoading || adsLoading || expLoading;
 
   return (
@@ -28,6 +35,24 @@ export default function Reports() {
               <BarChart3 className="w-5 h-5 text-profit" />
               Comprehensive financial and marketing insights
             </p>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <Button 
+              onClick={() => setExpenseDialogOpen(true)}
+              variant="outline" 
+              className="border-profit/30 text-profit hover:bg-profit/10 h-11 px-6 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-profit/5"
+            >
+              <Receipt className="w-4 h-4 mr-2" />
+              Add Expense
+            </Button>
+            <Button 
+              onClick={() => setAdvertisingDialogOpen(true)}
+              className="bg-profit text-zinc-950 hover:bg-profit/90 h-11 px-6 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-profit/20 transition-all hover:scale-105 active:scale-95"
+            >
+              <Megaphone className="w-4 h-4 mr-2" />
+              Add Advertising
+            </Button>
           </div>
         </div>
 
@@ -79,6 +104,9 @@ export default function Reports() {
           </div>
         </Tabs>
       )}
+      
+      <AddExpenseDialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen} />
+      <AddAdvertisingDialog open={advertisingDialogOpen} onOpenChange={setAdvertisingDialogOpen} />
     </div>
   </AppLayout>
 );
@@ -94,5 +122,5 @@ function ExpensesContent() {
 }
 
 function CashFlowContent() {
-  return <CashFlow isSubpage />;
+  return <CashFlowPage isSubpage />;
 }

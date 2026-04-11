@@ -1,6 +1,10 @@
+import { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useExpenses } from '@/hooks/useExpenses';
 import QueryErrorState from '@/components/QueryErrorState';
+import { Button } from '@/components/ui/button';
+import { Plus, Receipt } from 'lucide-react';
+import AddExpenseDialog from '@/components/AddExpenseDialog';
 
 interface ExpensesProps {
   isSubpage?: boolean;
@@ -8,6 +12,7 @@ interface ExpensesProps {
 
 export default function Expenses({ isSubpage = false }: ExpensesProps) {
   const { expenses, isLoading, isError } = useExpenses();
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading expenses...</div>;
   
@@ -27,9 +32,18 @@ export default function Expenses({ isSubpage = false }: ExpensesProps) {
   const content = (
     <div className="space-y-6">
       {!isSubpage && (
-        <div className="animate-in slide-in-from-top-4 duration-500">
-          <h1 className="text-3xl font-bold font-display text-foreground tracking-tight">Business Expenses</h1>
-          <p className="text-muted-foreground mt-1">Operational cost tracking</p>
+        <div className="animate-in slide-in-from-top-4 duration-500 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold font-display text-foreground tracking-tight">Business Expenses</h1>
+            <p className="text-muted-foreground mt-1 text-sm font-medium">Operational cost tracking</p>
+          </div>
+          <Button 
+            onClick={() => setIsDialogOpen(true)}
+            className="bg-profit text-zinc-950 hover:bg-profit/90 h-11 px-6 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-profit/20"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Expense
+          </Button>
         </div>
       )}
 
@@ -75,5 +89,10 @@ export default function Expenses({ isSubpage = false }: ExpensesProps) {
     </div>
   );
 
-  return isSubpage ? content : <AppLayout>{content}</AppLayout>;
+  return (
+    <>
+      {isSubpage ? content : <AppLayout>{content}</AppLayout>}
+      <AddExpenseDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
+    </>
+  );
 }
