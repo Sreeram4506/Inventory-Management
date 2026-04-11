@@ -16,8 +16,20 @@ import registryRoutes from './routes/registryRoutes.js';
 
 const app = express();
 
-// Set security HTTP headers
-app.use(helmet());
+// Set security HTTP headers with custom CSP for PDF blob support
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      "script-src": ["'self'", "'unsafe-inline'"],
+      "img-src": ["'self'", "data:", "blob:"],
+      "frame-src": ["'self'", "blob:"],
+      "connect-src": ["'self'", "blob:", "data:"],
+      "object-src": ["'self'", "blob:", "data:"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 
 // Logging
 if (process.env.NODE_ENV !== 'production') {

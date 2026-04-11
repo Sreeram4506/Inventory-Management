@@ -43,10 +43,16 @@ router.get('/:id/download', authenticateToken, async (req, res, next) => {
     }
 
     const buffer = Buffer.from(base64, 'base64');
+    console.log(`[BinaryStream] Sending Registry Log ${req.params.id}, size: ${buffer.length} bytes`);
     
-    res.setHeader('Content-Type', 'application/pdf');
-    // Content-Disposition helps browser know it's a file
-    res.send(buffer);
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Length': buffer.length,
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    
+    res.end(buffer);
   } catch (err) {
     next(err);
   }

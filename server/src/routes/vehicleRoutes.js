@@ -22,10 +22,17 @@ router.get('/:id/document', authenticateToken, async (req, res, next) => {
     }
 
     const buffer = Buffer.from(base64, 'base64');
+    console.log(`[BinaryStream] Sending PDF for vehicle ${req.params.id}, size: ${buffer.length} bytes`);
     
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=Document_${vehicle.vin.slice(-4)}.pdf`);
-    res.send(buffer);
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Length': buffer.length,
+      'Content-Disposition': `attachment; filename="Document_${(vehicle.vin || 'unk').slice(-4)}.pdf"`,
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    
+    res.end(buffer);
   } catch (err) {
     next(err);
   }
