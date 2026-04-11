@@ -108,3 +108,15 @@ model BusinessExpense {
   notes    String?
   createdAt DateTime @default(now())
 }
+
+model DocumentRegistry {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  vin             String?
+  make            String?
+  model           String?
+  year            String?
+  documentType    String   @default("Used Vehicle Record")
+  documentBase64  String
+  sourceFileName  String?
+  createdAt       DateTime @default(now())
+}

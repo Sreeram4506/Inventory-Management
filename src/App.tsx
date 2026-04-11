@@ -22,6 +22,7 @@ const Advertising = lazy(() => import("./pages/Advertising.tsx"));
 const Expenses = lazy(() => import("./pages/Expenses.tsx"));
 const CashFlow = lazy(() => import("./pages/CashFlow.tsx"));
 const UsedVehicleForms = lazy(() => import("./pages/UsedVehicleForms.tsx"));
+const Registry = lazy(() => import("./pages/Registry.tsx"));
 const Login = lazy(() => import("./pages/Login.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
@@ -90,6 +91,11 @@ export default function App() {
                 <Route path="/used-vehicle-forms" element={
                   <ProtectedRoute>
                     <UsedVehicleForms />
+                  </ProtectedRoute>
+                } />
+                <Route path="/registry" element={
+                  <ProtectedRoute>
+                    <Registry />
                   </ProtectedRoute>
                 } />
                 <Route path="/advertising" element={

@@ -12,6 +12,7 @@ import repairRoutes from './routes/repairRoutes.js';
 import expenseRoutes from './routes/expenseRoutes.js';
 import advertisingRoutes from './routes/advertisingRoutes.js';
 import documentRoutes from './routes/documentRoutes.js';
+import registryRoutes from './routes/registryRoutes.js';
 
 const app = express();
 
@@ -57,6 +58,7 @@ app.use('/api/sales', saleRoutes);
 app.use('/api/repairs', repairRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/advertising', advertisingRoutes);
+app.use('/api/registry', registryRoutes);
 app.use('/api', documentRoutes);
 
 // Custom error handling middleware

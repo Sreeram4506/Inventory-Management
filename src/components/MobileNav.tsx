@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Car, ShoppingCart, 
-  BarChart3, Menu, LogOut, X 
+  BarChart3, Menu, LogOut, X, FileArchive
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -12,6 +12,7 @@ const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/inventory', icon: Car, label: 'Inventory' },
   { to: '/sales', icon: ShoppingCart, label: 'Sales' },
+  { to: '/registry', icon: FileArchive, label: 'Logs' },
   { to: '/reports', icon: BarChart3, label: 'Reports' },
 ];
 

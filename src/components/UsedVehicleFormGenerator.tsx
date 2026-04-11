@@ -1,10 +1,8 @@
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { FileUp, CheckCircle2, Download } from 'lucide-react';
+import { FileUp, CheckCircle2, Download, FileArchive, Database } from 'lucide-react';
 import { toast } from 'sonner';
 import { ExtractedVehicleDocumentInfo } from '@/types/inventory';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
 import { apiUrl } from '@/lib/api';
 
 interface UsedVehicleFormGeneratorProps {
@@ -25,10 +23,9 @@ export default function UsedVehicleFormGenerator({
 }: UsedVehicleFormGeneratorProps) {
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [pushToInventory, setPushToInventory] = useState(false);
   const sourceInputRef = useRef<HTMLInputElement>(null);
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (pushToInventory: boolean) => {
     if (!sourceFile) {
       toast.error('Choose the CamScanner file first.');
       return;
@@ -102,31 +99,28 @@ export default function UsedVehicleFormGenerator({
         </div>
       </button>
 
-      <div className="flex flex-row items-start space-x-3 space-y-0 rounded-md border border-zinc-800 p-4">
-        <Checkbox 
-          id="pushToInventory" 
-          checked={pushToInventory} 
-          onCheckedChange={(checked) => setPushToInventory(checked === true)} 
-        />
-        <div className="space-y-1 leading-none">
-          <Label htmlFor="pushToInventory" className="text-sm font-medium text-white">
-            Push immediately to Inventory
-          </Label>
-          <p className="text-xs text-zinc-400">
-            Automatically create a new vehicle entry and save this document.
-          </p>
-        </div>
-      </div>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={loading || !sourceFile}
+          onClick={() => handleGenerate(false)}
+          className="flex-1 border-profit text-profit hover:bg-profit/10 hover:text-profit"
+        >
+          <FileArchive className="mr-2 h-4 w-4" />
+          {loading ? 'Processing...' : 'Save to Logs Only'}
+        </Button>
 
-      <Button
-        type="button"
-        disabled={loading || !sourceFile}
-        onClick={handleGenerate}
-        className="w-full bg-profit hover:bg-profit-hover text-black font-semibold"
-      >
-        <Download className="mr-2 h-4 w-4" />
-        {loading ? 'Generating PDF...' : 'Generate Filled Used Vehicle Form'}
-      </Button>
+        <Button
+          type="button"
+          disabled={loading || !sourceFile}
+          onClick={() => handleGenerate(true)}
+          className="flex-1 bg-profit hover:bg-profit/90 text-black font-semibold"
+        >
+          <Database className="mr-2 h-4 w-4" />
+          {loading ? 'Processing...' : 'Add to Inventory'}
+        </Button>
+      </div>
 
       <input
         ref={sourceInputRef}

@@ -63,6 +63,28 @@ router.post(
 
       const isPushToInventory = req.body.pushToInventory === 'true';
       let vehicleId = null;
+      let registryId = null;
+
+      const pdfBase64Str = filledPdf.toString('base64');
+
+      // ALWAYS save to Document Registry (Logs)
+      try {
+        const registryEntry = await prisma.documentRegistry.create({
+          data: {
+            vin: info.vin || null,
+            make: info.make || null,
+            model: info.model || null,
+            year: info.year ? String(info.year) : null,
+            documentType: 'Used Vehicle Record',
+            documentBase64: pdfBase64Str,
+            sourceFileName: sourceFile.originalname || null,
+          }
+        });
+        registryId = registryEntry.id;
+      } catch (logErr) {
+        console.error('Failed to save to DocumentRegistry:', logErr);
+        // We log the error but don't strictly fail the request if just the logging fails.
+      }
 
       if (isPushToInventory) {
         if (!info.vin) {
@@ -101,7 +123,7 @@ router.post(
                 totalPurchaseCost,
                 purchaseDate: info.purchaseDate ? new Date(info.purchaseDate) : new Date(),
                 paymentMethod: 'Bank Transfer',
-                documentBase64: filledPdf.toString('base64')
+                documentBase64: pdfBase64Str
               }
             },
             ...(repairCost > 0 && {
@@ -126,8 +148,9 @@ router.post(
         success: true,
         info,
         fileName,
-        pdfBase64: filledPdf.toString('base64'),
-        inventoryAdded: !!vehicleId
+        pdfBase64: pdfBase64Str,
+        inventoryAdded: !!vehicleId,
+        registryAdded: !!registryId
       });
     } catch (err) {
       if (err.message && err.message.includes('already exists in inventory')) {
