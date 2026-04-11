@@ -54,11 +54,23 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
   const handleDocumentAction = () => {
     if (!vehicle || !token) return;
     
-    // Direct browser navigation - bypasses all JS blob handling
-    // Edge will download natively without trying to preview
+    // Use a hidden iframe to force pure download
+    // Edge tries to preview PDFs when using window.open or blob URLs — an iframe bypasses this entirely
     const downloadUrl = apiUrl(`/vehicles/${vehicle.id}/document?token=${encodeURIComponent(token)}`);
-    window.open(downloadUrl, '_blank');
-    toast.success('Download started...');
+    
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = downloadUrl;
+    document.body.appendChild(iframe);
+    
+    // Clean up the iframe after the download starts
+    setTimeout(() => {
+      if (iframe.parentNode) {
+        document.body.removeChild(iframe);
+      }
+    }, 60000);
+    
+    toast.success(`Downloading document for ${vehicle.make} ${vehicle.model}...`);
   };
 
   const handleRepairSubmit = async (e: React.FormEvent) => {
