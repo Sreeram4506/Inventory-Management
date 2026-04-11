@@ -68,8 +68,12 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
       const link = document.createElement('a');
       link.href = url;
       link.download = `Document_${vehicle.make}_${vehicle.model}_${vehicle.vin.slice(-4)}.pdf`;
+      document.body.appendChild(link);
       link.click();
-      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      
+      // Delay revocation to ensure the browser has started the download/viewing process
+      setTimeout(() => window.URL.revokeObjectURL(url), 250);
       toast.success('Opening original document...');
     } catch (e) {
       toast.error('Failed to process document data');

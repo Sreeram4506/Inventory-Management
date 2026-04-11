@@ -150,6 +150,10 @@ function downloadPdf(base64: string, fileName: string) {
   const link = document.createElement('a');
   link.href = url;
   link.download = fileName;
+  document.body.appendChild(link);
   link.click();
-  window.URL.revokeObjectURL(url);
+  document.body.removeChild(link);
+  
+  // Delay revocation to ensure the browser has started the download/viewing process
+  setTimeout(() => window.URL.revokeObjectURL(url), 250);
 }
