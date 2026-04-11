@@ -51,27 +51,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
 
   if (!vehicle) return null;
 
-  const handleDocumentAction = () => {
-    if (!vehicle || !token) return;
-    
-    // Use a hidden iframe to force pure download
-    // Edge tries to preview PDFs when using window.open or blob URLs — an iframe bypasses this entirely
-    const downloadUrl = apiUrl(`/vehicles/${vehicle.id}/document?token=${encodeURIComponent(token)}`);
-    
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = downloadUrl;
-    document.body.appendChild(iframe);
-    
-    // Clean up the iframe after the download starts
-    setTimeout(() => {
-      if (iframe.parentNode) {
-        document.body.removeChild(iframe);
-      }
-    }, 60000);
-    
-    toast.success(`Downloading document for ${vehicle.make} ${vehicle.model}...`);
-  };
+
 
   const handleRepairSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,17 +117,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
               <span className="p-2 bg-profit/10 rounded-lg"><Info className="text-profit" /></span>
               {vehicle.year} {vehicle.make} {vehicle.model}
             </DialogTitle>
-            {vehicle.hasDocument && (
-              <Button 
-                onClick={handleDocumentAction}
-                variant="outline" 
-                size="sm" 
-                className="gap-2 border-profit/30 text-profit hover:bg-profit/10 h-9 font-bold uppercase tracking-widest text-[10px]"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Download Document
-              </Button>
-            )}
+
           </div>
           <div className="flex gap-4 mt-2">
             <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground bg-secondary/30 px-3 py-1 rounded-full">

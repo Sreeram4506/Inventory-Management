@@ -2,6 +2,7 @@ import express from 'express';
 import prisma from '../db/prisma.js';
 import { authenticateToken, authorizeAdmin } from '../middlewares/authMiddleware.js';
 import { validate, vehicleSchema } from '../utils/validators.js';
+import jwt from 'jsonwebtoken';
 
 const router = express.Router();
 
@@ -22,10 +23,11 @@ router.get('/:id/document', async (req, res, next) => {
     }
 
     // Verify the token manually
-    const jwt = await import('jsonwebtoken');
     try {
-      jwt.default.verify(token, process.env.JWT_SECRET);
+      jwt.verify(token, process.env.JWT_SECRET);
+      console.log(`[BinaryStream] Token verified successfully for vehicle ${req.params.id}`);
     } catch (e) {
+      console.error(`[BinaryStream] Token verification FAILED: ${e.message}`);
       return res.status(401).json({ message: 'Invalid token' });
     }
 
@@ -45,14 +47,16 @@ router.get('/:id/document', async (req, res, next) => {
 
     const buffer = Buffer.from(base64, 'base64');
     const safeFileName = `Document_${vehicle.make}_${vehicle.model}_${(vehicle.vin || 'unk').slice(-4)}.pdf`;
-    console.log(`[BinaryStream] Sending PDF for vehicle ${req.params.id}, size: ${buffer.length} bytes`);
+    console.log(`[BinaryStream] Forcing Download for vehicle ${req.params.id}, size: ${buffer.length} bytes`);
     
-    // Use application/octet-stream to force browser to SAVE, not preview
+    // Use attachment and octet-stream + noopen to FORCE a local save in Edge
     res.writeHead(200, {
       'Content-Type': 'application/octet-stream',
       'Content-Length': buffer.length,
       'Content-Disposition': `attachment; filename="${safeFileName}"`,
       'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'X-Download-Options': 'noopen',
+      'Content-Transfer-Encoding': 'binary'
     });
     
     res.end(buffer);

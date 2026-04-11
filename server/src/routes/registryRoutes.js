@@ -1,6 +1,7 @@
 import express from 'express';
 import prisma from '../db/prisma.js';
 import { authenticateToken } from '../middlewares/authMiddleware.js';
+import jwt from 'jsonwebtoken';
 
 const router = express.Router();
 
@@ -26,8 +27,30 @@ router.get('/', authenticateToken, async (req, res, next) => {
 });
 
 // Route to fetch a specific document base64 since it might be heavy, we download it on demand
-router.get('/:id/download', authenticateToken, async (req, res, next) => {
+router.get('/:id/download', async (req, res, next) => {
   try {
+    // Accept token from either Authorization header OR query parameter
+    let token = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (req.query.token) {
+      token = req.query.token;
+    }
+
+    if (!token) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Verify the token manually
+    try {
+      jwt.verify(token, process.env.JWT_SECRET);
+      console.log(`[BinaryStream] Token verified successfully for registry log ${req.params.id}`);
+    } catch (e) {
+      console.error(`[BinaryStream] Token verification FAILED for registry: ${e.message}`);
+      return res.status(401).json({ message: 'Invalid token' });
+    }
+
     const log = await prisma.documentRegistry.findUnique({
       where: { id: req.params.id },
       select: { documentBase64: true, sourceFileName: true, documentType: true }
@@ -43,13 +66,16 @@ router.get('/:id/download', authenticateToken, async (req, res, next) => {
     }
 
     const buffer = Buffer.from(base64, 'base64');
-    console.log(`[BinaryStream] Sending Registry Log ${req.params.id}, size: ${buffer.length} bytes`);
+    const safeFileName = `${(log.documentType || 'Document').replace(/\s+/g, '_')}_${(log.sourceFileName || 'log').split('.')[0]}.pdf`;
+    console.log(`[BinaryStream] Forcing registry download ${req.params.id}, size: ${buffer.length} bytes`);
     
     res.writeHead(200, {
-      'Content-Type': 'application/pdf',
+      'Content-Type': 'application/octet-stream',
       'Content-Length': buffer.length,
+      'Content-Disposition': `attachment; filename="${safeFileName}"`,
       'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'X-Content-Type-Options': 'nosniff',
+      'X-Download-Options': 'noopen',
+      'Content-Transfer-Encoding': 'binary'
     });
     
     res.end(buffer);

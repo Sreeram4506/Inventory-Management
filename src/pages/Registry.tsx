@@ -3,7 +3,6 @@ import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/context/auth-hooks';
 import { apiUrl } from '@/lib/api';
 import { FileArchive, Download, Search, FileText } from 'lucide-react';
-import { openBinaryDocument } from '@/lib/document-service';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -45,15 +44,25 @@ export default function Registry() {
     }
   };
 
-  const handleDownload = async (id: string, customName: string) => {
-    toast.promise(
-      openBinaryDocument(`/registry/${id}/download`, token, `${customName}.pdf`),
-      {
-        loading: 'Preparing document for download...',
-        success: 'Document downloaded successfully!',
-        error: 'Failed to download the document.',
+  const handleDownload = (id: string, customName: string) => {
+    if (!token) return;
+
+    // Use a hidden iframe to force pure download
+    const downloadUrl = apiUrl(`/registry/${id}/download?token=${encodeURIComponent(token)}`);
+    
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = downloadUrl;
+    document.body.appendChild(iframe);
+    
+    // Clean up
+    setTimeout(() => {
+      if (iframe.parentNode) {
+        document.body.removeChild(iframe);
       }
-    );
+    }, 60000);
+    
+    toast.success(`Downloading ${customName}...`);
   };
 
   const filteredLogs = logs.filter(log => {
