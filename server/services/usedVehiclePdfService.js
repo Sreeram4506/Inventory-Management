@@ -18,23 +18,23 @@ const fieldMap = {
   year:            { x: 146, y: 663, width: 50,  height: 14, font: 'helvetica' },
   make:            { x: 236, y: 663, width: 105, height: 14, font: 'helvetica' },
   model:           { x: 400, y: 663, width: 85, height: 14, font: 'helvetica' },
-  color:           { x: 512, y: 663, width: 85,  height: 14, font: 'helvetica' },
+  color:           { x: 515, y: 663, width: 85,  height: 14, font: 'helvetica' },
 
   // VIN box row (individual chars drawn separately by drawVin)
   vinArea:         { x: 122, y: 608, width: 285, height: 16 },
 
   // "Obtained From (Source): ___ Transaction Date: ___"
-  obtainedFrom:    { x: 275, y: 435, width: 220, height: 12, font: 'courier' },
-  transactionDate: { x: 505, y: 435, width: 110, height: 12, font: 'courier' },
+  obtainedFrom:    { x: 275, y: 425, width: 220, height: 12, font: 'courier' },
+  transactionDate: { x: 505, y: 425, width: 110, height: 12, font: 'courier' },
 
   // "Address (number and street): ___"
-  address:         { x: 275, y: 402, width: 420, height: 12, font: 'courier' },
+  address:         { x: 275, y: 395, width: 420, height: 12, font: 'courier' },
 
   // "City or Town: ___ State: ___ Zip Code: ___ Odometer In: ___"
-  city:            { x: 180, y: 370, width: 148, height: 12, font: 'courier' },
-  state:           { x: 300, y: 370, width: 48,  height: 12, font: 'courier' },
-  zipCode:         { x: 390, y: 370, width: 78,  height: 12, font: 'courier' },
-  odometerIn:      { x: 500, y: 370, width: 78,  height: 12, font: 'courier' },
+  city:            { x: 180, y: 365, width: 148, height: 12, font: 'courier' },
+  state:           { x: 300, y: 365, width: 48,  height: 12, font: 'courier' },
+  zipCode:         { x: 390, y: 365, width: 78,  height: 12, font: 'courier' },
+  odometerIn:      { x: 520, y: 365, width: 78,  height: 12, font: 'courier' },
 
   // Repeater: "The source … was obtained from: ___"
   sourceRepeater:  { x: 390, y: 285, width: 195, height: 12, font: 'courier' },
@@ -46,7 +46,7 @@ const fieldMap = {
 // VIN grid constants
 const VIN_START_X = 124;
 const VIN_START_Y = 608;
-const VIN_STEP_X  = 16.6;
+const VIN_STEP_X  = 16.75;
 
 export async function fillUsedVehiclePdf(templateBuffer, vehicleInfo, templateMimeType = 'application/pdf') {
   const pdfDoc = await loadTemplateDocument(templateBuffer, templateMimeType);
