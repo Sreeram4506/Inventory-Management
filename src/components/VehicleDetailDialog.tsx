@@ -121,7 +121,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={() => window.open(`${apiUrl}/api/vehicles/${vehicle.id}/document?token=${token}`, '_blank')}
+                onClick={() => window.open(apiUrl(`/vehicles/${vehicle.id}/document?token=${token}`), '_blank')}
                 className="border-border/50 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:bg-white/5"
               >
                 <Download className="w-3.5 h-3.5 mr-2" /> Download PDF
