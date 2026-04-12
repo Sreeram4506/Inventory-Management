@@ -115,7 +115,7 @@
 
   .stat-value {
     font-family: var(--font-display);
-    @apply text-3xl font-bold text-foreground;
+    @apply text-2xl xl:text-xl 2xl:text-2xl font-bold text-foreground;
   }
 
   .stat-label {
