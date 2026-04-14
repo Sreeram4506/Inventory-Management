@@ -55,7 +55,7 @@ export default function Dashboard() {
   const totalProfit = sales.reduce((sum, s) => sum + s.profit, 0);
   const totalAdSpend = ads.reduce((sum, a) => sum + a.amountSpent, 0);
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const inventoryValue = vehicles.filter(v => v.status !== 'Sold').reduce((sum, v) => sum + (v.totalPurchaseCost || 0), 0);
+  const inventoryValue = vehicles.filter(v => v.status !== 'Sold').reduce((sum, v) => sum + (v.totalPurchaseCost || 0) + (v.repairCost || 0), 0);
   
   // Recent sales for AreaChart
   const salesHistory = sales.slice(0, 7).reverse().map(s => ({

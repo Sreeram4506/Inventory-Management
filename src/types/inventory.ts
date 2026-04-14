@@ -23,6 +23,20 @@ export interface Vehicle {
   daysInInventory: number;
   documentBase64?: string | null;
   hasDocument?: boolean;
+  purchase?: {
+    id: string;
+    sellerName: string;
+    sellerAddress?: string;
+    sellerCity?: string;
+    sellerState?: string;
+    sellerZip?: string;
+    purchasePrice: number;
+    transportCost: number;
+    inspectionCost: number;
+    registrationCost: number;
+    totalPurchaseCost: number;
+    purchaseDate: string;
+  };
   repairs?: Repair[];
 }
 

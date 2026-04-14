@@ -278,10 +278,10 @@ function mockExtraction(text) {
         ], 'Auction')
     ).replace(/\s*-\s*$/, ''),
     paymentMethod: getFirstMatch([/Payment Method[:\s]+([A-Za-z\s]+)/i], 'Bank Transfer'),
-    usedVehicleSourceAddress: (sellerBlock?.[2] || '').replace(/^Purchaser's Name \(Print\)\s*/i, '').trim(),
-    usedVehicleSourceCity: (sellerBlock?.[3] || '').trim(),
-    usedVehicleSourceState: (sellerBlock?.[4] || '').trim(),
-    usedVehicleSourceZipCode: (sellerBlock?.[5] || '').trim(),
+    usedVehicleSourceAddress: (sellerBlock?.[2] || getFirstMatch([/(?:Address|Location)[:\s]+([A-Za-z0-9 .'-]+)/i], '')).replace(/^Purchaser's Name \(Print\)\s*/i, '').trim(),
+    usedVehicleSourceCity: (sellerBlock?.[3] || getFirstMatch([/(?:City or Town|City|Town)[:\s]+([A-Za-z .'-]+)/i], '')).trim(),
+    usedVehicleSourceState: (sellerBlock?.[4] || getFirstMatch([/(?:State)[:\s]+([A-Z]{2})\b/i], '')).trim(),
+    usedVehicleSourceZipCode: (sellerBlock?.[5] || getFirstMatch([/(?:Zip Code|Zip|Postal)[:\s]+(\d{5}(?:-\d{4})?)/i], '')).trim(),
     // Additional cost extraction
     transportCost: cleanMoney(
       getFirstMatch([
@@ -411,9 +411,20 @@ Critical rules:
       throw new Error(`NVIDIA Vision Error: ${data.error.message || JSON.stringify(data.error)}`);
     }
     const resultText = data.choices[0].message.content;
+    
+    // Attempt to extract JSON if it's wrapped in markers or text
+    let jsonStr = resultText;
     const jsonMatch = resultText.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? jsonMatch[0] : resultText;
-    return JSON.parse(jsonStr);
+    if (jsonMatch) {
+      jsonStr = jsonMatch[0];
+    }
+
+    try {
+      return JSON.parse(jsonStr);
+    } catch (parseErr) {
+      console.error('Failed to parse AI response as JSON:', resultText);
+      throw new Error('AI returned an invalid format. Please try again or enter details manually.');
+    }
   } catch (err) {
     console.error('NVIDIA Vision extraction failed:', err);
     return null;

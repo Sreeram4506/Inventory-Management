@@ -29,6 +29,7 @@ router.post(
     { name: 'templateFile', maxCount: 1 },
   ]),
   async (req, res, next) => {
+    let info = null;
     try {
       const sourceFile = req.files?.sourceFile?.[0];
       const templateFile = req.files?.templateFile?.[0];
@@ -49,7 +50,7 @@ router.post(
         });
       }
 
-      const info = await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype);
+      info = await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype);
       
       const templateBuffer = templateFile
         ? templateFile.buffer
@@ -69,7 +70,7 @@ router.post(
 
       // ALWAYS save to Document Registry (Logs)
       try {
-        const registryEntry = await prisma.documentRegistry.create({
+        await prisma.documentRegistry.create({
           data: {
             vin: info.vin || null,
             make: info.make || null,
@@ -80,10 +81,9 @@ router.post(
             sourceFileName: sourceFile.originalname || null,
           }
         });
-        registryId = registryEntry.id;
+        registryId = 'logged'; // Marker that registry was updated
       } catch (logErr) {
         console.error('Failed to save to DocumentRegistry:', logErr);
-        // We log the error but don't strictly fail the request if just the logging fails.
       }
 
       if (isPushToInventory) {
@@ -116,6 +116,10 @@ router.post(
             purchase: {
               create: {
                 sellerName: info.purchasedFrom || 'Auction',
+                sellerAddress: info.usedVehicleSourceAddress || '',
+                sellerCity: info.usedVehicleSourceCity || '',
+                sellerState: info.usedVehicleSourceState || '',
+                sellerZip: info.usedVehicleSourceZipCode || '',
                 purchasePrice,
                 transportCost,
                 inspectionCost,
@@ -154,7 +158,12 @@ router.post(
       });
     } catch (err) {
       if (err.message && err.message.includes('already exists in inventory')) {
-         return res.status(409).json({ message: err.message });
+         const vin = info?.vin;
+         const existing = await prisma.vehicle.findUnique({ where: { vin } });
+         return res.status(409).json({ 
+           message: err.message, 
+           existingId: existing?.id 
+         });
       }
       next(err);
     }

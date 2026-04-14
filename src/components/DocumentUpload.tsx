@@ -11,10 +11,11 @@ interface DocumentUploadProps {
     data: ExtractedVehicleDocumentInfo, 
     pdfData?: { base64: string; fileName: string }
   ) => void;
+  onViewExisting?: (id: string, vin: string) => void;
   token: string | null;
 }
 
-export default function DocumentUpload({ onScanComplete, token }: DocumentUploadProps) {
+export default function DocumentUpload({ onScanComplete, onViewExisting, token }: DocumentUploadProps) {
   const [scanning, setScanning] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -36,7 +37,21 @@ export default function DocumentUpload({ onScanComplete, token }: DocumentUpload
         body: formData,
       });
 
-      if (!response.ok) throw new Error('Scan failed');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 409) {
+          toast.error(errorData.message || 'Vehicle already exists in inventory', {
+            description: 'Duplicate VIN detected. This vehicle is already registered.',
+            action: errorData.existingId && onViewExisting ? {
+              label: 'View Vehicle',
+              onClick: () => onViewExisting(errorData.existingId, info.vin || ''),
+            } : undefined
+          });
+          return;
+        }
+        throw new Error(errorData.message || 'Scan failed');
+      }
+      
       const data = await response.json();
       
       if (data.info) {
@@ -50,9 +65,9 @@ export default function DocumentUpload({ onScanComplete, token }: DocumentUpload
       } else {
         toast.error('Could not extract details from this document.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error('Failed to analyze document. Please enter details manually.');
+      toast.error(err.message || 'Failed to analyze document. Please enter details manually.');
     } finally {
       setScanning(false);
     }

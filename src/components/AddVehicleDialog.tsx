@@ -14,6 +14,7 @@ import { ExtractedVehicleDocumentInfo, Vehicle } from '@/types/inventory';
 interface AddVehicleDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onViewExisting?: (id: string, vin: string) => void;
 }
 
 const createInitialFormData = () => ({
@@ -58,7 +59,7 @@ function normalizePaymentMethod(value?: string) {
   return match || 'Bank Transfer';
 }
 
-export default function AddVehicleDialog({ open, onOpenChange }: AddVehicleDialogProps) {
+export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }: AddVehicleDialogProps) {
   const { addVehicle } = useInventory();
   const { token } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -180,7 +181,7 @@ export default function AddVehicleDialog({ open, onOpenChange }: AddVehicleDialo
 
         {/* Document Upload / Photo Section */}
         <div className="mb-6">
-          <DocumentUpload onScanComplete={handleScanComplete} token={token} />
+          <DocumentUpload onScanComplete={handleScanComplete} onViewExisting={onViewExisting} token={token} />
         </div>
 
         <form className="space-y-6" onSubmit={handleSubmit}>

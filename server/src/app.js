@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
+import compression from 'compression';
 import { notFound, errorHandler } from './middlewares/errorMiddleware.js';
 
 import authRoutes from './routes/authRoutes.js';
@@ -13,6 +14,7 @@ import expenseRoutes from './routes/expenseRoutes.js';
 import advertisingRoutes from './routes/advertisingRoutes.js';
 import documentRoutes from './routes/documentRoutes.js';
 import registryRoutes from './routes/registryRoutes.js';
+import chatRoutes from './routes/chatRoutes.js';
 
 const app = express();
 
@@ -30,6 +32,9 @@ app.use(helmet({
   },
   crossOriginEmbedderPolicy: false,
 }));
+
+// Enable compression
+app.use(compression());
 
 // Logging
 if (process.env.NODE_ENV !== 'production') {
@@ -58,6 +63,10 @@ app.use('/api/', apiLimiter);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+app.get('/api/ping', (req, res) => {
+  res.status(200).send('Server alive');
+});
+
 // Health Check
 app.get('/', (req, res) => {
   res.json({ message: 'Auto Profit Hub API is running' });
@@ -71,6 +80,7 @@ app.use('/api/repairs', repairRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/advertising', advertisingRoutes);
 app.use('/api/registry', registryRoutes);
+app.use('/api/chat', chatRoutes);
 app.use('/api', documentRoutes);
 
 // Custom error handling middleware

@@ -25,6 +25,26 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
   const { addAd } = useAdvertising();
   const { addSale } = useSales();
   
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    make: '',
+    model: '',
+    year: '',
+    vin: '',
+    color: '',
+    mileage: '',
+    purchasedFrom: '',
+    sellerAddress: '',
+    sellerCity: '',
+    sellerState: '',
+    sellerZip: '',
+    purchasePrice: '',
+    transportCost: '',
+    inspectionCost: '',
+    registrationCost: '',
+    purchaseDate: '',
+  });
+
   const [repairForm, setRepairForm] = useState({
     shop: '',
     parts: '',
@@ -51,7 +71,62 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
 
   if (!vehicle) return null;
 
+  const startEditing = () => {
+    setEditForm({
+      make: vehicle.make || '',
+      model: vehicle.model || '',
+      year: String(vehicle.year || ''),
+      vin: vehicle.vin || '',
+      color: vehicle.color || '',
+      mileage: String(vehicle.mileage || ''),
+      purchasedFrom: vehicle.purchase?.sellerName || '',
+      sellerAddress: vehicle.purchase?.sellerAddress || '',
+      sellerCity: vehicle.purchase?.sellerCity || '',
+      sellerState: vehicle.purchase?.sellerState || '',
+      sellerZip: vehicle.purchase?.sellerZip || '',
+      purchasePrice: String(vehicle.purchase?.purchasePrice || ''),
+      transportCost: String(vehicle.purchase?.transportCost || ''),
+      inspectionCost: String(vehicle.purchase?.inspectionCost || ''),
+      registrationCost: String(vehicle.purchase?.registrationCost || ''),
+      purchaseDate: vehicle.purchaseDate ? new Date(vehicle.purchaseDate).toISOString().split('T')[0] : '',
+    });
+    setIsEditing(true);
+  };
 
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const response = await fetch(apiUrl(`/vehicles/${vehicle.id}`), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...editForm,
+          year: parseInt(editForm.year),
+          mileage: parseInt(editForm.mileage),
+          purchasePrice: parseFloat(editForm.purchasePrice) || 0,
+          transportCost: parseFloat(editForm.transportCost) || 0,
+          inspectionCost: parseFloat(editForm.inspectionCost) || 0,
+          registrationCost: parseFloat(editForm.registrationCost) || 0,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || 'Failed to update vehicle');
+      }
+
+      toast.success('Vehicle updated and PDF regenerated');
+      setIsEditing(false);
+      // We should ideally trigger a refresh of the vehicle list here.
+      // For now, we'll suggest the user to refresh or rely on the parent component.
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err: any) {
+      toast.error(err.message || 'Update failed');
+    }
+  };
 
   const handleRepairSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,37 +184,47 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl bg-zinc-950 border-zinc-900 text-foreground">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-zinc-950 border-zinc-900 text-foreground custom-scrollbar">
         <DialogHeader>
           <DialogDescription className="sr-only">Vehicle details and management tabs.</DialogDescription>
           <div className="flex items-start justify-between">
-            <DialogTitle className="flex items-center gap-3 text-2xl font-black font-display tracking-tight text-white">
+            <DialogTitle className="flex items-center gap-3 text-2xl font-black font-display tracking-tight text-white line-clamp-1">
               <span className="p-2 bg-profit/10 rounded-lg"><Info className="text-profit" /></span>
-              {vehicle.year} {vehicle.make} {vehicle.model}
+              {isEditing ? 'Editing Vehicle Record' : `${vehicle.year} ${vehicle.make} ${vehicle.model}`}
             </DialogTitle>
-            {vehicle.hasDocument && (
+            <div className="flex gap-2">
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={() => window.open(apiUrl(`/vehicles/${vehicle.id}/document?token=${token}`), '_blank')}
-                className="border-border/50 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:bg-white/5"
+                onClick={isEditing ? () => setIsEditing(false) : startEditing}
+                className="border-profit/30 text-xs font-bold uppercase tracking-widest text-white/70 hover:bg-profit/10"
               >
-                <Download className="w-3.5 h-3.5 mr-2" /> Download PDF
+                {isEditing ? 'Cancel' : <><Pencil className="w-3.5 h-3.5 mr-2" /> Edit Details</>}
               </Button>
-            )}
+              {vehicle.hasDocument && !isEditing && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => window.open(apiUrl(`/vehicles/${vehicle.id}/document?token=${token}`), '_blank')}
+                  className="border-border/50 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:bg-white/5"
+                >
+                  <Download className="w-3.5 h-3.5 mr-2" /> Download PDF
+                </Button>
+              )}
+            </div>
           </div>
           <div className="flex gap-4 mt-2">
             <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground bg-secondary/30 px-3 py-1 rounded-full">
               VIN: {vehicle.vin}
             </span>
             <span className="text-xs font-bold uppercase tracking-widest text-white/90 bg-profit/80 px-3 py-1 rounded-full">
-               Total Cost: ${vehicle.totalPurchaseCost.toLocaleString()}
+               Total Cost: ${((vehicle.totalPurchaseCost || 0) + (vehicle.repairCost || 0)).toLocaleString()}
             </span>
           </div>
         </DialogHeader>
 
-        <Tabs defaultValue="financials" className="mt-6">
-          <TabsList className="bg-secondary/20 border border-border/50 p-1 rounded-xl h-auto flex flex-wrap gap-1">
+        <Tabs defaultValue={isEditing ? "edit" : "financials"} value={isEditing ? "edit" : undefined} className="mt-6">
+          <TabsList className={`bg-secondary/20 border border-border/50 p-1 rounded-xl h-auto flex flex-wrap gap-1 ${isEditing ? 'hidden' : ''}`}>
             <TabsTrigger value="financials" className="data-[state=active]:bg-profit data-[state=active]:text-zinc-950 px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
               <Receipt className="w-3.5 h-3.5" /> Financials
             </TabsTrigger>
@@ -155,6 +240,105 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
               </TabsTrigger>
             )}
           </TabsList>
+
+          <TabsContent value="edit" className="animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="bg-secondary/10 border border-border/40 rounded-xl p-5 mt-4 space-y-6">
+              <form onSubmit={handleUpdate} className="space-y-6">
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-profit border-b border-profit/20 pb-2">Vehicle Details</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                       <Label className="text-[10px] uppercase font-bold text-muted-foreground">Year</Label>
+                       <Input value={editForm.year} onChange={e => setEditForm({...editForm, year: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                    </div>
+                    <div className="space-y-2">
+                       <Label className="text-[10px] uppercase font-bold text-muted-foreground">Make</Label>
+                       <Input value={editForm.make} onChange={e => setEditForm({...editForm, make: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                    </div>
+                    <div className="space-y-2">
+                       <Label className="text-[10px] uppercase font-bold text-muted-foreground">Model</Label>
+                       <Input value={editForm.model} onChange={e => setEditForm({...editForm, model: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                    </div>
+                    <div className="space-y-2">
+                       <Label className="text-[10px] uppercase font-bold text-muted-foreground">Color</Label>
+                       <Input value={editForm.color} onChange={e => setEditForm({...editForm, color: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                    </div>
+                    <div className="space-y-2">
+                       <Label className="text-[10px] uppercase font-bold text-muted-foreground">Mileage (In)</Label>
+                       <Input type="number" value={editForm.mileage} onChange={e => setEditForm({...editForm, mileage: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                    </div>
+                    <div className="space-y-2">
+                       <Label className="text-[10px] uppercase font-bold text-muted-foreground">VIN</Label>
+                       <Input value={editForm.vin} onChange={e => setEditForm({...editForm, vin: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-profit border-b border-profit/20 pb-2">Purchase & Seller Details</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                     <div className="space-y-2 col-span-2">
+                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Seller Name (Obtained From)</Label>
+                        <Input value={editForm.purchasedFrom} onChange={e => setEditForm({...editForm, purchasedFrom: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                     </div>
+                     <div className="space-y-2 col-span-2">
+                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Seller Address</Label>
+                        <Input value={editForm.sellerAddress} onChange={e => setEditForm({...editForm, sellerAddress: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                     </div>
+                     <div className="space-y-2">
+                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">City</Label>
+                        <Input value={editForm.sellerCity} onChange={e => setEditForm({...editForm, sellerCity: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                     </div>
+                     <div className="grid grid-cols-2 gap-2">
+                       <div className="space-y-2">
+                          <Label className="text-[10px] uppercase font-bold text-muted-foreground">State</Label>
+                          <Input value={editForm.sellerState} onChange={e => setEditForm({...editForm, sellerState: e.target.value})} maxLength={2} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                       </div>
+                       <div className="space-y-2">
+                          <Label className="text-[10px] uppercase font-bold text-muted-foreground">Zip</Label>
+                          <Input value={editForm.sellerZip} onChange={e => setEditForm({...editForm, sellerZip: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                       </div>
+                     </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-profit border-b border-profit/20 pb-2">Purchase Breakdown (Financials)</h4>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                    <div className="space-y-2">
+                       <Label className="text-[10px] uppercase font-bold text-muted-foreground">Purchase Price ($)</Label>
+                       <Input type="number" value={editForm.purchasePrice} onChange={e => setEditForm({...editForm, purchasePrice: e.target.value})} className="bg-zinc-900 border-profit/20 h-9 text-sm font-bold text-profit" />
+                    </div>
+                    <div className="space-y-2">
+                       <Label className="text-[10px] uppercase font-bold text-muted-foreground">Transport ($)</Label>
+                       <Input type="number" value={editForm.transportCost} onChange={e => setEditForm({...editForm, transportCost: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                    </div>
+                    <div className="space-y-2">
+                       <Label className="text-[10px] uppercase font-bold text-muted-foreground">Inspection ($)</Label>
+                       <Input type="number" value={editForm.inspectionCost} onChange={e => setEditForm({...editForm, inspectionCost: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                    </div>
+                    <div className="space-y-2">
+                       <Label className="text-[10px] uppercase font-bold text-muted-foreground">Registration ($)</Label>
+                       <Input type="number" value={editForm.registrationCost} onChange={e => setEditForm({...editForm, registrationCost: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                    </div>
+                    <div className="space-y-2">
+                       <Label className="text-[10px] uppercase font-bold text-muted-foreground">Purchase Date</Label>
+                       <Input type="date" value={editForm.purchaseDate} onChange={e => setEditForm({...editForm, purchaseDate: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <Button type="submit" className="flex-1 bg-profit text-zinc-950 font-black uppercase tracking-tighter h-12 hover:bg-profit/90">
+                    Update Vehicle & Regenerate PDF
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setIsEditing(false)} className="px-8 border-border h-12 uppercase font-black text-xs tracking-widest">
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </TabsContent>
 
           <TabsContent value="financials" className="animate-in fade-in slide-in-from-top-2 duration-300">
             <div className="grid grid-cols-2 gap-4 mt-4">

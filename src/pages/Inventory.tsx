@@ -184,7 +184,22 @@ export default function Inventory() {
           </div>
         </div>
       </div>
-      <AddVehicleDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <AddVehicleDialog 
+        open={dialogOpen} 
+        onOpenChange={setDialogOpen} 
+        onViewExisting={(id) => {
+          setDialogOpen(false);
+          const existing = vehicles.find(v => v.id === id);
+          if (existing) {
+            setSelectedVehicle(existing);
+          } else {
+            // If the vehicle was just found but not in our cached list, 
+            // the user might need to refresh or we could fetch it individually.
+            // For now, toast a message to refresh.
+            toast.error('Vehicle found but needs list refresh to view.');
+          }
+        }}
+      />
       <VehicleDetailDialog 
         vehicle={selectedVehicle} 
         open={!!selectedVehicle} 

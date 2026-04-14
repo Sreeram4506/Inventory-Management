@@ -1,8 +1,13 @@
 import express from 'express';
+import { readFile } from 'fs/promises';
 import prisma from '../db/prisma.js';
 import { authenticateToken, authorizeAdmin } from '../middlewares/authMiddleware.js';
 import { validate, vehicleSchema } from '../utils/validators.js';
 import jwt from 'jsonwebtoken';
+import { vehicleCache } from '../utils/cache.js';
+import { fillUsedVehiclePdf } from '../../services/usedVehiclePdfService.js';
+
+const defaultUsedVehicleTemplatePath = new URL('../../used-vechile-report.jpeg', import.meta.url);
 
 const router = express.Router();
 
@@ -67,6 +72,12 @@ router.get('/:id/document', async (req, res, next) => {
 
 router.get('/', authenticateToken, async (req, res, next) => {
   try {
+    const cachedData = vehicleCache.get('vehicle-list');
+    if (cachedData) {
+      console.log('[Cache] Returning cached vehicle list');
+      return res.json(cachedData);
+    }
+
     const vehicles = await prisma.vehicle.findMany({
       orderBy: { createdAt: 'desc' },
       include: { 
@@ -74,6 +85,10 @@ router.get('/', authenticateToken, async (req, res, next) => {
           select: {
             id: true,
             sellerName: true,
+            sellerAddress: true,
+            sellerCity: true,
+            sellerState: true,
+            sellerZip: true,
             purchasePrice: true,
             buyerFee: true,
             transportCost: true,
@@ -108,6 +123,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
       };
     });
 
+    vehicleCache.set('vehicle-list', enrichedVehicles);
     res.json(enrichedVehicles);
   } catch (err) {
     next(err);
@@ -163,6 +179,8 @@ router.post('/', authenticateToken, validate(vehicleSchema), async (req, res, ne
       },
       include: { purchase: true, repairs: true }
     });
+    
+    vehicleCache.delete('vehicle-list'); // Invalidate cache
     res.status(201).json(vehicle);
   } catch (err) {
     next(err);
@@ -171,12 +189,122 @@ router.post('/', authenticateToken, validate(vehicleSchema), async (req, res, ne
 
 router.patch('/:id', authenticateToken, async (req, res, next) => {
   try {
-    const vehicle = await prisma.vehicle.update({
-      where: { id: req.params.id },
-      data: req.body
+    const { 
+      vin, make, model, year, mileage, color, status, purchaseDate,
+      purchasedFrom, purchasePrice, paymentMethod, transportCost, buyerFee,
+      inspectionCost, registrationCost, 
+      sellerAddress, sellerCity, sellerState, sellerZip
+    } = req.body;
+
+    const vehicleId = req.params.id;
+
+    // 1. Update the Vehicle and Purchase records
+    const updatedVehicle = await prisma.$transaction(async (tx) => {
+      // Check for VIN conflicts if VIN is being updated
+      if (vin) {
+        const existing = await tx.vehicle.findUnique({ where: { vin } });
+        if (existing && existing.id !== vehicleId) {
+          throw new Error('VIN_CONFLICT');
+        }
+      }
+
+      // Update Vehicle details
+      const v = await tx.vehicle.update({
+        where: { id: vehicleId },
+        data: {
+          ...(vin && { vin }),
+          ...(make && { make }),
+          ...(model && { model }),
+          ...(year && { year: Number(year) }),
+          ...(mileage && { mileage: Number(mileage) }),
+          ...(color && { color }),
+          ...(status && { status }),
+          ...(purchaseDate && { purchaseDate: new Date(purchaseDate) }),
+        },
+        include: { purchase: true }
+      });
+
+      // Update Purchase details if provided
+      if (v.purchase) {
+        const pPrice = purchasePrice !== undefined ? Number(purchasePrice) : v.purchase.purchasePrice;
+        const tCost = transportCost !== undefined ? Number(transportCost) : v.purchase.transportCost;
+        const bFee = buyerFee !== undefined ? Number(buyerFee) : v.purchase.buyerFee;
+        const iCost = inspectionCost !== undefined ? Number(inspectionCost) : v.purchase.inspectionCost;
+        const rCost = registrationCost !== undefined ? Number(registrationCost) : v.purchase.registrationCost;
+        const total = pPrice + tCost + bFee + iCost + rCost;
+
+        await tx.purchase.update({
+          where: { id: v.purchase.id },
+          data: {
+            ...(purchasedFrom && { sellerName: purchasedFrom }),
+            ...(sellerAddress !== undefined && { sellerAddress }),
+            ...(sellerCity !== undefined && { sellerCity }),
+            ...(sellerState !== undefined && { sellerState }),
+            ...(sellerZip !== undefined && { sellerZip }),
+            ...(purchasePrice !== undefined && { purchasePrice: pPrice }),
+            ...(buyerFee !== undefined && { buyerFee: bFee }),
+            ...(transportCost !== undefined && { transportCost: tCost }),
+            ...(inspectionCost !== undefined && { inspectionCost: iCost }),
+            ...(registrationCost !== undefined && { registrationCost: rCost }),
+            totalPurchaseCost: total,
+            ...(purchaseDate && { purchaseDate: new Date(purchaseDate) }),
+            ...(paymentMethod && { paymentMethod }),
+          }
+        });
+      }
+
+      return await tx.vehicle.findUnique({
+        where: { id: vehicleId },
+        include: { purchase: true, repairs: true, sale: true }
+      });
     });
-    res.json(vehicle);
+
+    // 2. Regenerate the PDF document
+    try {
+      if (updatedVehicle && updatedVehicle.purchase) {
+        const templateBuffer = await readFile(defaultUsedVehicleTemplatePath);
+        
+        // Prepare info object for the PDF service
+        const pdfInfo = {
+          vin: updatedVehicle.vin,
+          make: updatedVehicle.make,
+          model: updatedVehicle.model,
+          year: updatedVehicle.year,
+          color: updatedVehicle.color,
+          mileage: updatedVehicle.mileage,
+          purchaseDate: updatedVehicle.purchaseDate,
+          purchasedFrom: updatedVehicle.purchase.sellerName,
+          usedVehicleSourceAddress: updatedVehicle.purchase.sellerAddress,
+          usedVehicleSourceCity: updatedVehicle.purchase.sellerCity,
+          usedVehicleSourceState: updatedVehicle.purchase.sellerState,
+          usedVehicleSourceZipCode: updatedVehicle.purchase.sellerZip,
+          purchasePrice: updatedVehicle.purchase.purchasePrice,
+          transportCost: updatedVehicle.purchase.transportCost,
+          inspectionCost: updatedVehicle.purchase.inspectionCost,
+          registrationCost: updatedVehicle.purchase.registrationCost,
+        };
+
+        const newPdfBase64 = await fillUsedVehiclePdf(templateBuffer, pdfInfo, 'image/jpeg');
+
+        await prisma.purchase.update({
+          where: { id: updatedVehicle.purchase.id },
+          data: { documentBase64: newPdfBase64 }
+        });
+        
+        console.log(`[Regenerate] PDF rebuilt successfully for vehicle ${vehicleId}`);
+      }
+    } catch (pdfErr) {
+      console.error('[Regenerate] Failed to rebuild PDF:', pdfErr);
+      // We don't fail the whole update if only PDF regeneration fails, 
+      // but the user might notice the old PDF.
+    }
+    
+    vehicleCache.delete('vehicle-list'); // Invalidate cache
+    res.json(updatedVehicle);
   } catch (err) {
+    if (err.message === 'VIN_CONFLICT') {
+      return res.status(409).json({ message: 'A vehicle with this VIN already exists.' });
+    }
     next(err);
   }
 });
@@ -189,6 +317,8 @@ router.delete('/:id', authenticateToken, authorizeAdmin, async (req, res, next) 
       prisma.repair.deleteMany({ where: { vehicleId: req.params.id } }),
       prisma.vehicle.delete({ where: { id: req.params.id } })
     ]);
+    
+    vehicleCache.delete('vehicle-list'); // Invalidate cache
     res.json({ message: 'Vehicle deleted successfully' });
   } catch (err) {
     next(err);

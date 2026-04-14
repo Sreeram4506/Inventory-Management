@@ -41,6 +41,10 @@ model Purchase {
   vehicle           Vehicle  @relation(fields: [vehicleId], references: [id])
   vehicleId         String   @unique @db.ObjectId
   sellerName        String
+  sellerAddress     String?
+  sellerCity        String?
+  sellerState       String?
+  sellerZip         String?
   purchasePrice     Float
   buyerFee          Float    @default(0)
   transportCost     Float    @default(0)

@@ -36,7 +36,7 @@ export default function CashFlow({ isSubpage = false }: CashFlowProps) {
   }
 
   const totalIncome = sales.reduce((s, sale) => s + (sale.salePrice || 0), 0);
-  const totalCarPurchases = vehicles.reduce((s, v) => s + (v.totalPurchaseCost || 0), 0);
+  const totalCarPurchases = vehicles.reduce((s, v) => s + ((v.totalPurchaseCost || 0) + (v.repairCost || 0)), 0);
   const totalAdSpend = ads.reduce((s, a) => s + (a.amountSpent || 0), 0);
   const totalOpExpenses = expenses.reduce((s, e) => s + (e.amount || 0), 0);
   const totalOutgoing = totalCarPurchases + totalAdSpend + totalOpExpenses;
@@ -53,7 +53,7 @@ export default function CashFlow({ isSubpage = false }: CashFlowProps) {
         vehicle: vehicle || null
       };
     }),
-    ...vehicles.map(v => ({ type: 'expense' as const, label: `Purchase: ${v.make} ${v.model}`, amount: v.totalPurchaseCost, date: v.purchaseDate, vehicle: v })),
+    ...vehicles.map(v => ({ type: 'expense' as const, label: `Purchase & Prep: ${v.make} ${v.model}`, amount: (v.totalPurchaseCost || 0) + (v.repairCost || 0), date: v.purchaseDate, vehicle: v })),
     ...expenses.map(e => ({ type: 'expense' as const, label: e.category, amount: e.amount, date: e.date, vehicle: null })),
     ...ads.map(a => ({ type: 'expense' as const, label: `Ad: ${a.campaignName}`, amount: a.amountSpent, date: a.startDate, vehicle: null })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
