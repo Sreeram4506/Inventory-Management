@@ -19,17 +19,9 @@ export default function Dashboard() {
   const { ads, isLoading: adsLoading, isError: adsError } = useAdvertising();
   const { expenses, isLoading: expLoading, isError: expError } = useExpenses();
 
-  if (invLoading || salesLoading || adsLoading || expLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-zinc-950 text-white">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-full border-4 border-profit/20 border-t-profit animate-spin" />
-          <p className="text-zinc-400 font-display animate-pulse">Initializing Profit Engine...</p>
-        </div>
-      </div>
-    );
-  }
-  if (invError || salesError || adsError || expError) {
+  const isLoading = invLoading || salesLoading || adsLoading || expLoading;
+  const anyError = invError || salesError || adsError || expError;
+  if (anyError) {
     return (
       <AppLayout>
         <QueryErrorState
@@ -83,12 +75,12 @@ export default function Dashboard() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          <StatCard label="Total Inventory" value={String(vehicles.length)} icon={Car} />
-          <StatCard label="Units Sold" value={String(sales.length)} icon={ShoppingCart} />
-          <StatCard label="Inventory Value" value={`$${inventoryValue.toLocaleString()}`} icon={Package} />
-          <StatCard label="Total Revenue" value={`$${totalRevenue.toLocaleString()}`} icon={DollarSign} iconClassName="bg-blue-500 text-white" />
-          <StatCard label="Ad Spend" value={`$${totalAdSpend.toLocaleString()}`} icon={Megaphone} iconClassName="bg-warning text-black" />
-          <StatCard label="Net Profit" value={`$${totalProfit.toLocaleString()}`} icon={TrendingUp} iconClassName="bg-profit text-black" />
+          <StatCard label="Total Inventory" value={invLoading ? "..." : String(vehicles.length)} icon={Car} />
+          <StatCard label="Units Sold" value={salesLoading ? "..." : String(sales.length)} icon={ShoppingCart} />
+          <StatCard label="Inventory Value" value={invLoading ? "..." : `$${inventoryValue.toLocaleString()}`} icon={Package} />
+          <StatCard label="Total Revenue" value={salesLoading ? "..." : `$${totalRevenue.toLocaleString()}`} icon={DollarSign} iconClassName="bg-blue-500 text-white" />
+          <StatCard label="Ad Spend" value={adsLoading ? "..." : `$${totalAdSpend.toLocaleString()}`} icon={Megaphone} iconClassName="bg-warning text-black" />
+          <StatCard label="Net Profit" value={salesLoading ? "..." : `$${totalProfit.toLocaleString()}`} icon={TrendingUp} iconClassName="bg-profit text-black" />
         </div>
 
         {/* Charts Section */}
@@ -115,7 +107,11 @@ export default function Dashboard() {
               <span className="text-xs text-zinc-500 font-medium tracking-tight">Last 30 Days</span>
             </div>
             <div className="space-y-3">
-              {expenses.length > 0 ? expenses.slice(0, 5).map((exp) => (
+              {expLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="h-16 w-full animate-pulse bg-zinc-900 shadow-lg rounded-xl border border-zinc-800" />
+                ))
+              ) : expenses.length > 0 ? expenses.slice(0, 5).map((exp) => (
                 <div key={exp.id} className="group flex items-center justify-between p-3 rounded-xl border border-zinc-800/50 bg-zinc-950/30 hover:bg-zinc-900/50 transition-all duration-300">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-zinc-900 flex items-center justify-center text-zinc-400 group-hover:text-profit transition-colors">

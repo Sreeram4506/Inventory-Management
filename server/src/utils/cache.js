@@ -34,4 +34,7 @@ class Cache {
 }
 
 export const vehicleCache = new Cache(600000); // 10 minutes default for vehicles
+export const salesCache = new Cache(300000); // 5 minutes
+export const expenseCache = new Cache(300000); // 5 minutes
+export const adsCache = new Cache(300000); // 5 minutes
 export default Cache;

@@ -3,10 +3,15 @@ import prisma from '../db/prisma.js';
 import { authenticateToken } from '../middlewares/authMiddleware.js';
 import { validate, saleSchema } from '../utils/validators.js';
 
+import { salesCache } from '../utils/cache.js';
+
 const router = express.Router();
 
 router.get('/', authenticateToken, async (req, res, next) => {
   try {
+    const cachedData = salesCache.get('sales-list');
+    if (cachedData) return res.json(cachedData);
+
     const sales = await prisma.sale.findMany({
       include: { 
         vehicle: {
@@ -15,6 +20,8 @@ router.get('/', authenticateToken, async (req, res, next) => {
       },
       orderBy: { saleDate: 'desc' }
     });
+    
+    salesCache.set('sales-list', sales);
     res.json(sales);
   } catch (err) {
     next(err);
@@ -59,6 +66,8 @@ router.post('/', authenticateToken, validate(saleSchema), async (req, res, next)
       });
       return s;
     });
+
+    salesCache.delete('sales-list');
     res.status(201).json(sale);
   } catch (err) {
     next(err);
