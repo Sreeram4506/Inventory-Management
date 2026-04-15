@@ -164,7 +164,8 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
       toast.success('Vehicle added successfully');
       handleDialogChange(false);
     } catch (err) {
-      toast.error('Failed to add vehicle');
+      const message = err instanceof Error ? err.message : 'Failed to add vehicle';
+      toast.error(message);
     } finally {
       setLoading(false);
     }

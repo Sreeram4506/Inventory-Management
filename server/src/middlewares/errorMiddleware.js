@@ -16,7 +16,14 @@ export const errorHandler = (err, req, res, next) => {
   // Map Prisma Unique Constraint Violations precisely to 409 Conflict
   if (err.code === 'P2002') {
     statusCode = 409;
-    message = 'This record already exists in the system. Duplicate entries are not allowed.';
+    const targetField = err.meta?.target;
+    if (Array.isArray(targetField) && targetField.includes('vin')) {
+      message = 'A vehicle with this VIN already exists in the inventory.';
+    } else if (typeof targetField === 'string' && targetField.includes('vin')) {
+      message = 'A vehicle with this VIN already exists in the inventory.';
+    } else {
+      message = 'This record already exists in the system. Duplicate entries are not allowed.';
+    }
   }
 
   const isProduction = process.env.NODE_ENV === 'production';
