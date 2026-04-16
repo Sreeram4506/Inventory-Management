@@ -8,11 +8,19 @@ interface StatCardProps {
   trend?: { value: string; positive: boolean };
   className?: string;
   iconClassName?: string;
+  onClick?: () => void;
 }
 
-export default function StatCard({ label, value, icon: Icon, trend, className, iconClassName }: StatCardProps) {
+export default function StatCard({ label, value, icon: Icon, trend, className, iconClassName, onClick }: StatCardProps) {
   return (
-    <div className={cn("stat-card animate-fade-in", className)}>
+    <div 
+      className={cn(
+        "stat-card animate-fade-in transition-all", 
+        onClick && "cursor-pointer hover:border-profit/30 hover:shadow-lg hover:shadow-profit/5 active:scale-[0.98]",
+        className
+      )}
+      onClick={onClick}
+    >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <p className="stat-label truncate">{label}</p>

@@ -6,7 +6,8 @@ import { useAdvertising } from '@/hooks/useAdvertising';
 import { useExpenses } from '@/hooks/useExpenses';
 import { Car, ShoppingCart, DollarSign, TrendingUp, Package, Megaphone, Activity } from 'lucide-react';
 import QueryErrorState from '@/components/QueryErrorState';
-import { lazy, Suspense, useState, useEffect } from 'react';
+import { lazy, Suspense, useState } from 'react';
+import RevenueReportDialog from '@/components/RevenueReportDialog';
 
 // Lazy load charts
 const ChartsSection = lazy(() => import('./ChartsSection'));
@@ -18,6 +19,7 @@ export default function Dashboard() {
   const { sales, isLoading: salesLoading, isError: salesError } = useSales();
   const { ads, isLoading: adsLoading, isError: adsError } = useAdvertising();
   const { expenses, isLoading: expLoading, isError: expError } = useExpenses();
+  const [reportModalOpen, setReportModalOpen] = useState(false);
 
   const isLoading = invLoading || salesLoading || adsLoading || expLoading;
   const anyError = invError || salesError || adsError || expError;
@@ -78,7 +80,13 @@ export default function Dashboard() {
           <StatCard label="Total Inventory" value={invLoading ? "..." : String(vehicles.length)} icon={Car} />
           <StatCard label="Units Sold" value={salesLoading ? "..." : String(sales.length)} icon={ShoppingCart} />
           <StatCard label="Inventory Value" value={invLoading ? "..." : `$${inventoryValue.toLocaleString()}`} icon={Package} />
-          <StatCard label="Total Revenue" value={salesLoading ? "..." : `$${totalRevenue.toLocaleString()}`} icon={DollarSign} iconClassName="bg-blue-500 text-white" />
+          <StatCard 
+            label="Total Revenue" 
+            value={salesLoading ? "..." : `$${totalRevenue.toLocaleString()}`} 
+            icon={DollarSign} 
+            iconClassName="bg-blue-500 text-white" 
+            onClick={() => setReportModalOpen(true)}
+          />
           <StatCard label="Ad Spend" value={adsLoading ? "..." : `$${totalAdSpend.toLocaleString()}`} icon={Megaphone} iconClassName="bg-warning text-black" />
           <StatCard label="Net Profit" value={salesLoading ? "..." : `$${totalProfit.toLocaleString()}`} icon={TrendingUp} iconClassName="bg-profit text-black" />
         </div>
@@ -131,6 +139,12 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      
+      <RevenueReportDialog 
+        open={reportModalOpen} 
+        onOpenChange={setReportModalOpen} 
+        sales={sales} 
+      />
     </AppLayout>
   );
 }
