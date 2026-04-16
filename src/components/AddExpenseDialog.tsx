@@ -84,7 +84,7 @@ export default function AddExpenseDialog({ open, onOpenChange, expense }: AddExp
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Category</Label>
+            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Category<span className="text-red-500 ml-1">*</span></Label>
             <Input 
               value={formData.category} 
               onChange={e => setFormData({...formData, category: e.target.value})}
@@ -93,7 +93,7 @@ export default function AddExpenseDialog({ open, onOpenChange, expense }: AddExp
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Amount ($)</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Amount ($)<span className="text-red-500 ml-1">*</span></Label>
               <Input 
                 type="number" value={formData.amount} 
                 onChange={e => setFormData({...formData, amount: e.target.value})}
@@ -101,7 +101,7 @@ export default function AddExpenseDialog({ open, onOpenChange, expense }: AddExp
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Date</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Date<span className="text-red-500 ml-1">*</span></Label>
               <Input 
                 type="date" value={formData.date} 
                 onChange={e => setFormData({...formData, date: e.target.value})}

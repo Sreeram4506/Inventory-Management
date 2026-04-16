@@ -12,6 +12,7 @@ const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/inventory', icon: Car, label: 'Inventory' },
   { to: '/sales', icon: ShoppingCart, label: 'Sales' },
+  { to: '/expenses', icon: Receipt, label: 'Expenses' },
   { to: '/used-vehicle-forms', icon: FileCheck2, label: 'Used Forms' },
   { to: '/registry', icon: FileArchive, label: 'Registry' },
   { to: '/reports', icon: BarChart3, label: 'Reports', roles: ['ADMIN', 'MANAGER'] },

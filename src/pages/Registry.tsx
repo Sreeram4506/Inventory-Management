@@ -1,20 +1,29 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/context/auth-hooks';
 import { apiUrl } from '@/lib/api';
-import { FileArchive, Download, Search, FileText, Pencil, Trash2 } from 'lucide-react';
+import { FileArchive, Download, Search, FileText, Pencil, Trash2, Eye, Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useRegistry, DocumentLog } from '@/hooks/useRegistry';
 import EditRegistryDialog from '@/components/EditRegistryDialog';
+import DocumentViewerDialog from '@/components/DocumentViewerDialog';
+
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+
+const DOCUMENT_TYPES = ['All', 'Used Vehicle Record', 'Title', 'Sales Agreement', 'Bill of Sale', 'Repair Invoice', 'Inspection', 'Other'];
 
 export default function Registry() {
   const { token } = useAuth();
   const { logs, isLoading, isError, deleteLog } = useRegistry();
   const [searchTerm, setSearchTerm] = useState('');
+  const [typeFilter, setTypeFilter] = useState('All');
   const [selectedLog, setSelectedLog] = useState<DocumentLog | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
 
   if (isError) {
     return (
@@ -22,31 +31,21 @@ export default function Registry() {
         <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4">
            <FileArchive className="h-12 w-12 text-loss/50" />
            <h2 className="text-xl font-bold text-white">Could not load registry</h2>
-           <p className="text-zinc-500 max-w-xs">There was an error fetching the document logs. Please check your connection or server status.</p>
+           <p className="text-zinc-500 max-w-xs">There was an error fetching the document logs.</p>
            <Button onClick={() => window.location.reload()} variant="outline" className="border-zinc-800 text-zinc-400">Retry</Button>
         </div>
       </AppLayout>
     );
   }
 
-  const handleDownload = (id: string, customName: string) => {
+  const handleDownload = (id: string, customName: string, isSource = false) => {
     if (!token) return;
-
-    // Use a hidden iframe to force pure download
-    const downloadUrl = apiUrl(`/registry/${id}/download?token=${encodeURIComponent(token)}`);
-    
+    const downloadUrl = apiUrl(`/registry/${id}/download?token=${encodeURIComponent(token)}${isSource ? '&type=source' : ''}`);
     const iframe = document.createElement('iframe');
     iframe.style.display = 'none';
     iframe.src = downloadUrl;
     document.body.appendChild(iframe);
-    
-    // Clean up
-    setTimeout(() => {
-      if (iframe.parentNode) {
-        document.body.removeChild(iframe);
-      }
-    }, 60000);
-    
+    setTimeout(() => { if (iframe.parentNode) document.body.removeChild(iframe); }, 60000);
     toast.success(`Downloading ${customName}...`);
   };
 
@@ -65,10 +64,24 @@ export default function Registry() {
     setEditDialogOpen(true);
   };
 
-  const filteredLogs = logs.filter(log => {
-    const searchStr = `${log.vin} ${log.make} ${log.model} ${log.year} ${log.sourceFileName}`.toLowerCase();
-    return searchStr.includes(searchTerm.toLowerCase());
-  });
+  const handleView = (log: DocumentLog) => {
+    if (log.documentBase64) {
+      const vehicleName = [log.year, log.make, log.model].filter(Boolean).join(' ') || 'Document';
+      setViewerDoc({ base64: log.documentBase64, name: vehicleName, type: log.documentType });
+      setViewerOpen(true);
+    } else {
+      toast.error('No document data available to preview.');
+    }
+  };
+
+  const filteredLogs = useMemo(() => {
+    return logs.filter(log => {
+      const searchStr = `${log.vin} ${log.make} ${log.model} ${log.year} ${log.sourceFileName}`.toLowerCase();
+      const matchesSearch = searchStr.includes(searchTerm.toLowerCase());
+      const matchesType = typeFilter === 'All' || log.documentType === typeFilter;
+      return matchesSearch && matchesType;
+    });
+  }, [logs, searchTerm, typeFilter]);
 
   return (
     <AppLayout>
@@ -80,18 +93,31 @@ export default function Registry() {
               Document Registry
             </h1>
             <p className="mt-2 text-zinc-400">
-              A permanent historical log of all generated documents and forms.
+              A permanent historical log of all generated and scanned documents.
             </p>
           </div>
           
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-            <Input
-              placeholder="Search VIN, Make, Model..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full border-zinc-800 bg-zinc-900/50 pl-10 text-white focus-visible:ring-profit/50"
-            />
+          <div className="flex items-center gap-3">
+            <div className="relative w-full sm:w-56">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <Input
+                placeholder="Search VIN, Make, Model..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full border-zinc-800 bg-zinc-900/50 pl-10 text-white focus-visible:ring-profit/50"
+              />
+            </div>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-[180px] bg-zinc-900/50 border-zinc-800 h-10 text-xs">
+                <Filter className="w-3.5 h-3.5 mr-2 text-zinc-500" />
+                <SelectValue placeholder="Filter type" />
+              </SelectTrigger>
+              <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                {DOCUMENT_TYPES.map(dt => (
+                  <SelectItem key={dt} value={dt}>{dt}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -115,7 +141,7 @@ export default function Registry() {
                 ) : filteredLogs.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="py-8 text-center text-zinc-500">
-                      {searchTerm ? 'No matching documents found.' : 'Your registry is empty. Generate a document to start logging.'}
+                      {searchTerm || typeFilter !== 'All' ? 'No matching documents found.' : 'Your registry is empty. Generate a document to start logging.'}
                     </td>
                   </tr>
                 ) : (
@@ -146,6 +172,15 @@ export default function Registry() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-8 w-8 hover:bg-blue-500/10 hover:text-blue-400"
+                              onClick={() => handleView(log)}
+                              title="View Document"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               className="h-8 w-8 hover:bg-zinc-800 hover:text-white"
                               onClick={() => handleEdit(log)}
                             >
@@ -159,14 +194,31 @@ export default function Registry() {
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-profit hover:bg-profit/10 hover:text-profit h-8"
-                              onClick={() => handleDownload(log.id, downloadName)}
-                            >
-                              <Download className="mr-2 h-4 w-4" /> Download
-                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-profit hover:bg-profit/10 hover:text-profit h-8 border border-profit/20 rounded-lg ml-1"
+                                >
+                                  <Download className="mr-2 h-3.5 w-3.5" /> Download
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800 text-white">
+                                <DropdownMenuItem 
+                                  className="hover:bg-zinc-800 focus:bg-zinc-800 cursor-pointer"
+                                  onClick={() => handleDownload(log.id, downloadName)}
+                                >
+                                  Generated PDF Record
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  className="hover:bg-zinc-800 focus:bg-zinc-800 cursor-pointer"
+                                  onClick={() => handleDownload(log.id, downloadName, true)}
+                                >
+                                  Original Source File
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </td>
                       </tr>
@@ -183,9 +235,15 @@ export default function Registry() {
           open={editDialogOpen} 
           onOpenChange={setEditDialogOpen} 
         />
+        
+        <DocumentViewerDialog
+          open={viewerOpen}
+          onOpenChange={setViewerOpen}
+          documentBase64={viewerDoc?.base64 || null}
+          vehicleName={viewerDoc?.name || ''}
+          documentType={viewerDoc?.type || ''}
+        />
       </div>
     </AppLayout>
   );
 }
-
-

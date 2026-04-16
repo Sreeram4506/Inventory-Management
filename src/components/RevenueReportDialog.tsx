@@ -97,7 +97,7 @@ export default function RevenueReportDialog({ open, onOpenChange, sales }: Reven
       s.vehicle ? `${s.vehicle.year} ${s.vehicle.make} ${s.vehicle.model}` : 'Unknown',
       `$${s.salePrice.toLocaleString()}`,
       `$${s.profit.toLocaleString()}`,
-      s.buyerName
+      s.customerName
     ]);
 
     autoTable(doc, {

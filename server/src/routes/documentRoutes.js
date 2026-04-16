@@ -71,7 +71,31 @@ router.post(
 
       const pdfBase64Str = filledPdf;
 
-      // ALWAYS save to Document Registry (Logs)
+      // 1. ALWAYS check if the vehicle already exists in the inventory, regardless of what we're doing.
+      // If it exists in the inventory, block the entire process and throw an error.
+      if (info.vin) {
+        const existingVehicle = await prisma.vehicle.findUnique({ where: { vin: info.vin } });
+        if (existingVehicle) {
+          throw new Error(`Vehicle with VIN ${info.vin} already exists in inventory.`);
+        }
+      } else if (isPushToInventory && !info.vin) {
+        throw new Error('Could not extract a valid VIN from the document. Unable to push to inventory.');
+      }
+
+      // 2. Check for exact duplicate document in registry to prevent log bloat
+      if (info.vin) {
+        const existingLog = await prisma.documentRegistry.findFirst({
+           where: { vin: info.vin, documentType: 'Used Vehicle Record' },
+           orderBy: { createdAt: 'desc' }
+        });
+        
+        // If a registry entry exists from less than 5 minutes ago for this exact VIN, block it as duplicate
+        if (existingLog && (Date.now() - new Date(existingLog.createdAt).getTime()) < 5 * 60 * 1000) {
+           throw new Error(`Vehicle with VIN ${info.vin} already exists in inventory.`);
+        }
+      }
+
+      // ALWAYS save to Document Registry (Logs) AFTER validation
       try {
         await prisma.documentRegistry.create({
           data: {
@@ -82,6 +106,7 @@ router.post(
             documentType: 'Used Vehicle Record',
             documentBase64: pdfBase64Str,
             sourceFileName: sourceFile.originalname || null,
+            sourceDocumentBase64: sourceFile.buffer.toString('base64'),
           }
         });
         registryId = 'logged'; // Marker that registry was updated
@@ -90,15 +115,6 @@ router.post(
       }
 
       if (isPushToInventory) {
-        if (!info.vin) {
-          throw new Error('Could not extract a valid VIN from the document. Unable to push to inventory.');
-        }
-        
-        const existingVehicle = await prisma.vehicle.findUnique({ where: { vin: info.vin } });
-        if (existingVehicle) {
-          throw new Error(`Vehicle with VIN ${info.vin} already exists in inventory.`);
-        }
-
         const purchasePrice = Number(info.purchasePrice) || 0;
         const transportCost = Number(info.transportCost) || 0;
         const repairCost = Number(info.repairCost) || 0;

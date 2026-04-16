@@ -147,6 +147,7 @@ export default function Inventory() {
                   <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Initial Purchase</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Investment</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Days</th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Status</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Manage</th>
                 </tr>
               </thead>
@@ -170,6 +171,11 @@ export default function Inventory() {
                     <td className="px-6 py-4">
                       <span className={cn("text-sm font-bold", vehicle.daysInInventory >= 60 ? "text-warning" : "text-foreground")}>
                         {vehicle.daysInInventory}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-bold uppercase border tracking-widest", statusStyles[vehicle.status])}>
+                        {vehicle.status}
                       </span>
                     </td>
                     <td className="px-6 py-4">

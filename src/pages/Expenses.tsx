@@ -19,6 +19,21 @@ export default function Expenses({ isSubpage = false }: ExpensesProps) {
   const [selectedExpense, setSelectedExpense] = useState<BusinessExpense | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter(exp => 
+      exp.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (exp.notes && exp.notes.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  }, [expenses, searchTerm]);
+
+  const totalExpenses = useMemo(() => {
+    return filteredExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+  }, [filteredExpenses]);
+  
+  const categories = useMemo(() => {
+    return [...new Set(filteredExpenses.map(e => e.category))];
+  }, [filteredExpenses]);
+
   if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading expenses...</div>;
   
   if (isError) {
@@ -45,21 +60,6 @@ export default function Expenses({ isSubpage = false }: ExpensesProps) {
     setSelectedExpense(expense);
     setIsDialogOpen(true);
   };
-
-  const filteredExpenses = useMemo(() => {
-    return expenses.filter(exp => 
-      exp.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (exp.notes && exp.notes.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
-  }, [expenses, searchTerm]);
-
-  const totalExpenses = useMemo(() => {
-    return filteredExpenses.reduce((s, e) => s + (e.amount || 0), 0);
-  }, [filteredExpenses]);
-  
-  const categories = useMemo(() => {
-    return [...new Set(filteredExpenses.map(e => e.category))];
-  }, [filteredExpenses]);
 
   const content = (
     <div className="space-y-6">

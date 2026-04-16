@@ -20,6 +20,7 @@ export interface Vehicle {
   registrationCost: number;
   totalPurchaseCost: number;
   status: VehicleStatus;
+  titleNumber?: string;
   daysInInventory: number;
   documentBase64?: string | null;
   hasDocument?: boolean;

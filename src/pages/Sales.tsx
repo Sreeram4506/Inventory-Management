@@ -3,10 +3,14 @@ import { useSales } from '@/hooks/useSales';
 import { useInventory } from '@/hooks/useInventory';
 import { cn } from '@/lib/utils';
 import QueryErrorState from '@/components/QueryErrorState';
+import { useState } from 'react';
+import VehicleDetailDialog from '@/components/VehicleDetailDialog';
+import { Vehicle } from '@/types/inventory';
 
 export default function Sales() {
   const { sales, isLoading: salesLoading, isError: salesError } = useSales();
   const { vehicles, isLoading: vehiclesLoading, isError: vehiclesError } = useInventory();
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
 
   if (salesLoading || vehiclesLoading) return <div className="p-8 text-center text-muted-foreground">Loading sales...</div>;
   if (salesError || vehiclesError) {
@@ -14,7 +18,7 @@ export default function Sales() {
       <AppLayout>
         <QueryErrorState
           title="Could not load sales"
-          description="At least one sales-related API request failed, so this page is not pretending the totals are zero."
+          description="At least one sales-related API request failed."
         />
       </AppLayout>
     );
@@ -23,6 +27,11 @@ export default function Sales() {
   const totalRevenue = sales.reduce((s, sale) => s + sale.salePrice, 0);
   const totalProfit = sales.reduce((s, sale) => s + sale.profit, 0);
   const avgProfit = sales.length > 0 ? Math.round(totalProfit / sales.length) : 0;
+
+  const handleVehicleClick = (vehicleId: string) => {
+    const vehicle = vehicles.find(v => v.id === vehicleId);
+    if (vehicle) setSelectedVehicle(vehicle);
+  };
 
   return (
     <AppLayout>
@@ -34,7 +43,6 @@ export default function Sales() {
           </div>
         </div>
 
-        {/* Sales Stats - Scroll on Mobile */}
         <div className="flex md:grid md:grid-cols-3 gap-4 overflow-x-auto pb-4 md:pb-0 -mx-5 px-5 md:mx-0 md:px-0 scrollbar-hide">
           <div className="stat-card min-w-[200px] md:min-w-0 flex-shrink-0 bg-zinc-900/40 border-zinc-800/50">
             <p className="stat-label uppercase text-[10px] tracking-widest font-bold text-zinc-500">Total Revenue</p>
@@ -59,7 +67,10 @@ export default function Sales() {
                 <div key={sale.id} className="stat-card bg-zinc-900/40 border-zinc-800/50 p-4 relative overflow-hidden">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <h3 className="font-bold text-lg text-white">
+                      <h3 
+                        className="font-bold text-lg text-white cursor-pointer hover:text-profit transition-colors"
+                        onClick={() => handleVehicleClick(sale.vehicleId)}
+                      >
                         {vehicle ? `${vehicle.make} ${vehicle.model}` : `ID: ${sale.vehicleId.slice(-8)}`}
                       </h3>
                       <p className="text-xs text-zinc-500 font-medium">Sold to {sale.customerName}</p>
@@ -101,7 +112,7 @@ export default function Sales() {
               );
             })
           ) : (
-            <div className="py-12 text-center text-zinc-500 font-medium italic underline decoration-zinc-800 underline-offset-4">No sales recorded yet.</div>
+            <div className="py-12 text-center text-zinc-500 font-medium italic">No sales recorded yet.</div>
           )}
         </div>
 
@@ -125,8 +136,10 @@ export default function Sales() {
                   return (
                     <tr key={sale.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-4">
-                        <p className="font-semibold text-foreground">{vehicle ? `${vehicle.make} ${vehicle.model}` : sale.vehicleId}</p>
-                        <p className="text-xs text-muted-foreground">{vehicle?.year} · {vehicle?.color}</p>
+                        <div className="cursor-pointer group" onClick={() => handleVehicleClick(sale.vehicleId)}>
+                          <p className="font-semibold text-foreground group-hover:text-profit transition-colors">{vehicle ? `${vehicle.make} ${vehicle.model}` : sale.vehicleId}</p>
+                          <p className="text-xs text-muted-foreground">{vehicle?.year} · {vehicle?.color}</p>
+                        </div>
                       </td>
                       <td className="px-4 py-4">
                         <p className="text-sm font-medium text-foreground">{sale.customerName}</p>
@@ -157,6 +170,12 @@ export default function Sales() {
           </div>
         </div>
       </div>
+
+      <VehicleDetailDialog 
+        vehicle={selectedVehicle} 
+        open={!!selectedVehicle} 
+        onOpenChange={(open) => !open && setSelectedVehicle(null)} 
+      />
     </AppLayout>
   );
 }

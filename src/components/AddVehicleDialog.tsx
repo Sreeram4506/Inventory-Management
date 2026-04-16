@@ -215,27 +215,27 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-zinc-300">VIN Number</Label>
+                <Label className="text-zinc-300">VIN Number<span className="text-red-500 ml-1">*</span></Label>
                 <Input name="vin" value={formData.vin} onChange={handleInputChange} placeholder="Enter VIN" required className="bg-zinc-800 border-zinc-700 text-white" />
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Make</Label>
+                <Label className="text-zinc-300">Make<span className="text-red-500 ml-1">*</span></Label>
                 <Input name="make" value={formData.make} onChange={handleInputChange} placeholder="e.g. Honda" required className="bg-zinc-800 border-zinc-700 text-white" />
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Model</Label>
+                <Label className="text-zinc-300">Model<span className="text-red-500 ml-1">*</span></Label>
                 <Input name="model" value={formData.model} onChange={handleInputChange} placeholder="e.g. Civic" required className="bg-zinc-800 border-zinc-700 text-white" />
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Year</Label>
+                <Label className="text-zinc-300">Year<span className="text-red-500 ml-1">*</span></Label>
                 <Input name="year" value={formData.year} onChange={handleInputChange} type="number" placeholder="2024" required className="bg-zinc-800 border-zinc-700 text-white" />
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Mileage</Label>
+                <Label className="text-zinc-300">Mileage<span className="text-red-500 ml-1">*</span></Label>
                 <Input name="mileage" value={formData.mileage} onChange={handleInputChange} type="number" placeholder="0" required className="bg-zinc-800 border-zinc-700 text-white" />
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Color</Label>
+                <Label className="text-zinc-300">Color<span className="text-red-500 ml-1">*</span></Label>
                 <Input name="color" value={formData.color} onChange={handleInputChange} placeholder="e.g. Silver" required className="bg-zinc-800 border-zinc-700 text-white" />
               </div>
             </div>
@@ -246,7 +246,7 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
             <h3 className="font-semibold text-sm text-profit uppercase tracking-wider mb-3">Purchase Details</h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-zinc-300">Purchase Date</Label>
+                <Label className="text-zinc-300">Purchase Date<span className="text-red-500 ml-1">*</span></Label>
                 <Input name="purchaseDate" value={formData.purchaseDate} onChange={handleInputChange} type="date" required className="bg-zinc-800 border-zinc-700 text-white" />
               </div>
               <div className="space-y-2">
@@ -263,7 +263,7 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Purchase Price ($)</Label>
+                <Label className="text-zinc-300">Purchase Price ($)<span className="text-red-500 ml-1">*</span></Label>
                 <Input name="purchasePrice" value={formData.purchasePrice} onChange={handleInputChange} type="number" placeholder="0" required className="bg-zinc-800 border-zinc-700 text-white" />
               </div>
               <div className="space-y-2">
@@ -299,7 +299,7 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
                 <Input name="inspectionCost" value={formData.inspectionCost} onChange={handleInputChange} type="number" placeholder="0" className="bg-zinc-800 border-zinc-700 text-white" />
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Registration Cost ($)</Label>
+                <Label className="text-zinc-300">Fees ($)</Label>
                 <Input name="registrationCost" value={formData.registrationCost} onChange={handleInputChange} type="number" placeholder="0" className="bg-zinc-800 border-zinc-700 text-white" />
               </div>
             </div>

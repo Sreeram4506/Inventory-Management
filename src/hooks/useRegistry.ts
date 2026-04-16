@@ -17,6 +17,8 @@ export interface DocumentLog {
   sellerState?: string | null;
   sellerZip?: string | null;
   documentType: string;
+  documentBase64?: string | null;
+  sourceDocumentBase64?: string | null;
   sourceFileName: string | null;
   createdAt: string;
 }

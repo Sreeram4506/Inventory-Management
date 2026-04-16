@@ -42,6 +42,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
     transportCost: '',
     inspectionCost: '',
     registrationCost: '',
+    titleNumber: '',
     purchaseDate: '',
   });
 
@@ -88,6 +89,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
       transportCost: String(vehicle.purchase?.transportCost || ''),
       inspectionCost: String(vehicle.purchase?.inspectionCost || ''),
       registrationCost: String(vehicle.purchase?.registrationCost || ''),
+      titleNumber: vehicle.titleNumber || '',
       purchaseDate: vehicle.purchaseDate ? new Date(vehicle.purchaseDate).toISOString().split('T')[0] : '',
     });
     setIsEditing(true);
@@ -110,6 +112,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
           transportCost: parseFloat(editForm.transportCost) || 0,
           inspectionCost: parseFloat(editForm.inspectionCost) || 0,
           registrationCost: parseFloat(editForm.registrationCost) || 0,
+          titleNumber: editForm.titleNumber || undefined,
         }),
       });
 
@@ -213,10 +216,15 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
               )}
             </div>
           </div>
-          <div className="flex gap-4 mt-2">
+          <div className="flex flex-wrap gap-2 mt-2">
             <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground bg-secondary/30 px-3 py-1 rounded-full">
               VIN: {vehicle.vin}
             </span>
+            {vehicle.titleNumber && (
+              <span className="text-xs font-bold uppercase tracking-widest text-blue-300 bg-blue-500/10 px-3 py-1 rounded-full">
+                Title #: {vehicle.titleNumber}
+              </span>
+            )}
             <span className="text-xs font-bold uppercase tracking-widest text-white/90 bg-profit/80 px-3 py-1 rounded-full">
                Total Cost: ${((vehicle.totalPurchaseCost || 0) + (vehicle.repairCost || 0)).toLocaleString()}
             </span>
@@ -271,6 +279,10 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">VIN</Label>
                        <Input value={editForm.vin} onChange={e => setEditForm({...editForm, vin: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
                     </div>
+                    <div className="space-y-2">
+                       <Label className="text-[10px] uppercase font-bold text-muted-foreground">Title Number</Label>
+                       <Input value={editForm.titleNumber} onChange={e => setEditForm({...editForm, titleNumber: e.target.value})} placeholder="e.g. T-12345678" className="bg-zinc-900 border-blue-500/20 h-9 text-sm" />
+                    </div>
                   </div>
                 </div>
 
@@ -318,7 +330,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                        <Input type="number" value={editForm.inspectionCost} onChange={e => setEditForm({...editForm, inspectionCost: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
                     </div>
                     <div className="space-y-2">
-                       <Label className="text-[10px] uppercase font-bold text-muted-foreground">Registration ($)</Label>
+                       <Label className="text-[10px] uppercase font-bold text-muted-foreground">Fees ($)</Label>
                        <Input type="number" value={editForm.registrationCost} onChange={e => setEditForm({...editForm, registrationCost: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
                     </div>
                     <div className="space-y-2">
@@ -358,7 +370,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                     <span className="font-bold text-white">${vehicle.inspectionCost.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Registration</span>
+                    <span className="text-muted-foreground">Fees</span>
                     <span className="font-bold text-white">${vehicle.registrationCost.toLocaleString()}</span>
                   </div>
                   <div className="pt-2 border-t border-border/40 flex justify-between text-sm">
@@ -404,6 +416,13 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                 </div>
               </div>
             )}
+
+            {vehicle.status === 'Sold' && (
+              <div className="mt-4 bg-info/5 border border-info/20 rounded-xl p-4">
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-info mb-3">Buyer Information</h4>
+                <BuyerInfoSection vehicleId={vehicle.id} />
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="repairs" className="animate-in fade-in slide-in-from-top-2 duration-300">
@@ -411,7 +430,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
               <h4 className="text-sm font-black uppercase tracking-widest text-profit">Add Post-Purchase Repair</h4>
               <form onSubmit={handleRepairSubmit} className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase text-muted-foreground">Repair Shop</Label>
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Repair Shop<span className="text-red-500 ml-1">*</span></Label>
                   <Input 
                     value={repairForm.shop} 
                     onChange={e => setRepairForm({...repairForm, shop: e.target.value})}
@@ -419,7 +438,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase text-muted-foreground">Parts Cost ($)</Label>
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Parts Cost ($)<span className="text-red-500 ml-1">*</span></Label>
                   <Input 
                     type="number" value={repairForm.parts} 
                     onChange={e => setRepairForm({...repairForm, parts: e.target.value})}
@@ -427,7 +446,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase text-muted-foreground">Labor Cost ($)</Label>
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Labor Cost ($)<span className="text-red-500 ml-1">*</span></Label>
                   <Input 
                     type="number" value={repairForm.labor} 
                     onChange={e => setRepairForm({...repairForm, labor: e.target.value})}
@@ -506,7 +525,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                 <h4 className="text-sm font-black uppercase tracking-widest text-info">Process Vehicle Sale</h4>
                 <form onSubmit={handleSaleSubmit} className="grid grid-cols-2 gap-4">
                   <div className="space-y-2 col-span-2 md:col-span-1">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Customer Name</Label>
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Customer Name<span className="text-red-500 ml-1">*</span></Label>
                     <Input 
                       value={saleForm.customerName} 
                       onChange={e => setSaleForm({...saleForm, customerName: e.target.value})}
@@ -514,7 +533,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                     />
                   </div>
                   <div className="space-y-2 col-span-2 md:col-span-1">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Phone Number</Label>
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Phone Number<span className="text-red-500 ml-1">*</span></Label>
                     <Input 
                       value={saleForm.phone} 
                       onChange={e => setSaleForm({...saleForm, phone: e.target.value})}
@@ -522,7 +541,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                     />
                   </div>
                   <div className="space-y-2 col-span-2">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Customer Address</Label>
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Customer Address<span className="text-red-500 ml-1">*</span></Label>
                     <Input 
                       value={saleForm.address} 
                       onChange={e => setSaleForm({...saleForm, address: e.target.value})}
@@ -530,7 +549,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Sale Price ($)</Label>
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Sale Price ($)<span className="text-red-500 ml-1">*</span></Label>
                     <Input 
                       type="number" value={saleForm.salePrice} 
                       onChange={e => setSaleForm({...saleForm, salePrice: e.target.value})}
@@ -538,7 +557,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Sale Date</Label>
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Sale Date<span className="text-red-500 ml-1">*</span></Label>
                     <Input 
                       type="date" value={saleForm.saleDate} 
                       onChange={e => setSaleForm({...saleForm, saleDate: e.target.value})}
@@ -569,5 +588,47 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
         </Tabs>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function BuyerInfoSection({ vehicleId }: { vehicleId: string }) {
+  const { sales } = useSales();
+  const sale = sales.find(s => s.vehicleId === vehicleId);
+
+  if (!sale) {
+    return <p className="text-xs text-muted-foreground italic">Sale record not found.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-between text-xs">
+        <span className="text-muted-foreground">Buyer Name</span>
+        <span className="font-bold text-white">{sale.customerName}</span>
+      </div>
+      <div className="flex justify-between text-xs">
+        <span className="text-muted-foreground">Phone</span>
+        <span className="font-bold text-white">{sale.phone}</span>
+      </div>
+      <div className="flex justify-between text-xs">
+        <span className="text-muted-foreground">Address</span>
+        <span className="font-bold text-white">{sale.address}</span>
+      </div>
+      <div className="flex justify-between text-xs">
+        <span className="text-muted-foreground">Sale Price</span>
+        <span className="font-bold text-profit">${sale.salePrice.toLocaleString()}</span>
+      </div>
+      <div className="flex justify-between text-xs">
+        <span className="text-muted-foreground">Sale Date</span>
+        <span className="font-bold text-white">{new Date(sale.saleDate).toLocaleDateString()}</span>
+      </div>
+      <div className="flex justify-between text-xs">
+        <span className="text-muted-foreground">Payment Method</span>
+        <span className="font-bold text-white">{sale.paymentMethod}</span>
+      </div>
+      <div className="flex justify-between text-xs pt-2 border-t border-border/40">
+        <span className="font-black uppercase tracking-widest text-[10px] text-info">Net Profit</span>
+        <span className={`font-black ${sale.profit >= 0 ? 'text-profit' : 'text-loss'}`}>${sale.profit.toLocaleString()}</span>
+      </div>
+    </div>
   );
 }

@@ -94,23 +94,46 @@ router.get('/:id/download', async (req, res, next) => {
 
     const log = await prisma.documentRegistry.findUnique({
       where: { id: req.params.id },
-      select: { documentBase64: true, sourceFileName: true, documentType: true }
+      select: { documentBase64: true, sourceDocumentBase64: true, sourceFileName: true, documentType: true }
     });
     
-    if (!log || !log.documentBase64) {
+    if (!log) {
       return res.status(404).json({ message: 'Document not found' });
     }
+
+    const isSource = req.query.type === 'source';
+    let base64 = isSource ? log.sourceDocumentBase64 : log.documentBase64;
+
+    if (!base64) {
+      return res.status(404).json({ message: 'Requested document data not available' });
+    }
     
-    let base64 = log.documentBase64;
     if (base64.includes('base64,')) {
       base64 = base64.split('base64,')[1];
     }
 
     const buffer = Buffer.from(base64, 'base64');
-    const safeFileName = `${(log.documentType || 'Document').replace(/\s+/g, '_')}_${(log.sourceFileName || 'log').split('.')[0]}.pdf`;
+
+    // Determine extension based on type and context
+    let extension = 'pdf';
+    if (isSource && log.sourceFileName) {
+       const parts = log.sourceFileName.split('.');
+       if (parts.length > 1) extension = parts.pop().toLowerCase();
+    } else {
+       // Generated records are usually PDF
+       extension = 'pdf';
+    }
+
+    const prefix = isSource ? 'Source_' : '';
+    const safeFileName = `${prefix}${(log.documentType || 'Document').replace(/\s+/g, '_')}_${(log.sourceFileName || 'log').split('.')[0]}.${extension}`;
     
+    const contentType = extension === 'pdf' ? 'application/pdf' : 
+                        extension === 'png' ? 'image/png' : 
+                        (extension === 'jpg' || extension === 'jpeg') ? 'image/jpeg' : 
+                        'application/octet-stream';
+
     res.writeHead(200, {
-      'Content-Type': 'application/octet-stream',
+      'Content-Type': contentType,
       'Content-Length': buffer.length,
       'Content-Disposition': `attachment; filename="${safeFileName}"`,
     });
