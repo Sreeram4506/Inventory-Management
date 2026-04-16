@@ -163,9 +163,19 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
       
       toast.success('Vehicle added successfully');
       handleDialogChange(false);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to add vehicle';
-      toast.error(message);
+    } catch (err: any) {
+      if (err.status === 409 && err.data?.existingId && onViewExisting) {
+        toast.error(err.message || 'Vehicle already exists', {
+          description: 'This VIN is already registered. Would you like to view it?',
+          action: {
+            label: 'View Vehicle',
+            onClick: () => onViewExisting(err.data.existingId, formData.vin),
+          }
+        });
+      } else {
+        const message = err instanceof Error ? err.message : 'Failed to add vehicle';
+        toast.error(message);
+      }
     } finally {
       setLoading(false);
     }

@@ -87,7 +87,7 @@ export async function parseVehicleInfo(text) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "meta/llama-3.1-405b-instruct",
+        model: "meta/llama-3.1-8b-instruct",
         messages: [
           {
             role: "system",

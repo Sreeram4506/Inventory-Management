@@ -1,18 +1,23 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useExpenses } from '@/hooks/useExpenses';
 import QueryErrorState from '@/components/QueryErrorState';
 import { Button } from '@/components/ui/button';
-import { Plus, Receipt } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Plus, Receipt, Edit2, Trash2, Search } from 'lucide-react';
 import AddExpenseDialog from '@/components/AddExpenseDialog';
+import { BusinessExpense } from '@/types/inventory';
+import { toast } from '@/components/ui/toast-utils';
 
 interface ExpensesProps {
   isSubpage?: boolean;
 }
 
 export default function Expenses({ isSubpage = false }: ExpensesProps) {
-  const { expenses, isLoading, isError } = useExpenses();
+  const { expenses, isLoading, isError, deleteExpense } = useExpenses();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<BusinessExpense | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading expenses...</div>;
   
@@ -26,24 +31,66 @@ export default function Expenses({ isSubpage = false }: ExpensesProps) {
     return isSubpage ? errorState : <AppLayout>{errorState}</AppLayout>;
   }
 
-  const totalExpenses = expenses.reduce((s, e) => s + (e.amount || 0), 0);
-  const categories = [...new Set(expenses.map(e => e.category))];
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this expense?')) return;
+    try {
+      await deleteExpense(id);
+      toast.success('Expense deleted successfully');
+    } catch (err) {
+      toast.error('Failed to delete expense');
+    }
+  };
+
+  const handleEdit = (expense: BusinessExpense) => {
+    setSelectedExpense(expense);
+    setIsDialogOpen(true);
+  };
+
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter(exp => 
+      exp.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (exp.notes && exp.notes.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  }, [expenses, searchTerm]);
+
+  const totalExpenses = useMemo(() => {
+    return filteredExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+  }, [filteredExpenses]);
+  
+  const categories = useMemo(() => {
+    return [...new Set(filteredExpenses.map(e => e.category))];
+  }, [filteredExpenses]);
 
   const content = (
     <div className="space-y-6">
       {!isSubpage && (
-        <div className="animate-in slide-in-from-top-4 duration-500 flex items-center justify-between">
+        <div className="animate-in slide-in-from-top-4 duration-500 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold font-display text-foreground tracking-tight">Business Expenses</h1>
             <p className="text-muted-foreground mt-1 text-sm font-medium">Operational cost tracking</p>
           </div>
-          <Button 
-            onClick={() => setIsDialogOpen(true)}
-            className="bg-profit text-zinc-950 hover:bg-profit/90 h-11 px-6 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-profit/20"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Expense
-          </Button>
+          
+          <div className="flex items-center gap-3">
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <Input
+                placeholder="Search expenses..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full border-zinc-800 bg-zinc-900/50 pl-10 text-white focus-visible:ring-profit/50"
+              />
+            </div>
+            <Button 
+              onClick={() => {
+                setSelectedExpense(null);
+                setIsDialogOpen(true);
+              }}
+              className="bg-profit text-zinc-950 hover:bg-profit/90 h-11 px-6 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-profit/20 flex-shrink-0"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Expense
+            </Button>
+          </div>
         </div>
       )}
 
@@ -71,15 +118,36 @@ export default function Expenses({ isSubpage = false }: ExpensesProps) {
                 <th className="text-left px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none">Amount</th>
                 <th className="text-left px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none">Date</th>
                 <th className="text-left px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none">Notes</th>
+                <th className="text-right px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] leading-none">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {expenses.map((exp) => (
+              {filteredExpenses.map((exp) => (
                 <tr key={exp.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="px-6 py-4 font-bold text-foreground text-sm tracking-tight">{exp.category}</td>
                   <td className="px-6 py-4 font-display font-black text-foreground text-base">${exp.amount.toLocaleString()}</td>
                   <td className="px-6 py-4 text-xs text-muted-foreground font-black tracking-tight">{new Date(exp.date).toLocaleDateString()}</td>
                   <td className="px-4 py-4 text-xs text-muted-foreground italic">{exp.notes || '—'}</td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => handleEdit(exp)}
+                        className="w-8 h-8 text-muted-foreground hover:text-white hover:bg-zinc-800"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => handleDelete(exp.id)}
+                        className="w-8 h-8 text-muted-foreground hover:text-loss hover:bg-loss/10"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -92,7 +160,11 @@ export default function Expenses({ isSubpage = false }: ExpensesProps) {
   return (
     <>
       {isSubpage ? content : <AppLayout>{content}</AppLayout>}
-      <AddExpenseDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
+      <AddExpenseDialog 
+        open={isDialogOpen} 
+        onOpenChange={setIsDialogOpen} 
+        expense={selectedExpense}
+      />
     </>
   );
 }

@@ -33,11 +33,41 @@ export function useExpenses() {
     },
   });
 
+  const updateExpenseMutation = useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<BusinessExpense> & { id: string }) => {
+      const response = await apiFetch(`/expenses/${id}`, token, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      });
+      return handleApiResponse(response, logout);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+    },
+  });
+
+  const deleteExpenseMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiFetch(`/expenses/${id}`, token, {
+        method: 'DELETE',
+      });
+      return handleApiResponse(response, logout);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+    },
+  });
+
   return {
     expenses: expensesQuery.data || [],
     isLoading: expensesQuery.isLoading,
     isError: expensesQuery.isError,
     error: expensesQuery.error,
     addExpense: addExpenseMutation.mutateAsync,
+    updateExpense: updateExpenseMutation.mutateAsync,
+    deleteExpense: deleteExpenseMutation.mutateAsync,
   };
 }

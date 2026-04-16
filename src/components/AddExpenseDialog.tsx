@@ -1,19 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Receipt, Plus } from 'lucide-react';
+import { Receipt, Plus, Save } from 'lucide-react';
 import { useExpenses } from '@/hooks/useExpenses';
+import { BusinessExpense } from '@/types/inventory';
 import { toast } from '@/components/ui/toast-utils';
 
 interface AddExpenseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  expense?: BusinessExpense | null;
 }
 
-export default function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) {
-  const { addExpense } = useExpenses();
+export default function AddExpenseDialog({ open, onOpenChange, expense }: AddExpenseDialogProps) {
+  const { addExpense, updateExpense } = useExpenses();
   const [formData, setFormData] = useState({
     category: '',
     amount: '',
@@ -21,25 +23,45 @@ export default function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialo
     notes: '',
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await addExpense({
-        category: formData.category,
-        amount: parseFloat(formData.amount),
-        date: formData.date,
-        notes: formData.notes,
+  useEffect(() => {
+    if (expense) {
+      setFormData({
+        category: expense.category,
+        amount: expense.amount.toString(),
+        date: new Date(expense.date).toISOString().split('T')[0],
+        notes: expense.notes || '',
       });
-      toast.success('Business expense recorded successfully');
+    } else {
       setFormData({
         category: '',
         amount: '',
         date: new Date().toISOString().split('T')[0],
         notes: '',
       });
+    }
+  }, [expense, open]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const data = {
+        category: formData.category,
+        amount: parseFloat(formData.amount),
+        date: formData.date,
+        notes: formData.notes,
+      };
+
+      if (expense) {
+        await updateExpense({ id: expense.id, ...data });
+        toast.success('Business expense updated successfully');
+      } else {
+        await addExpense(data);
+        toast.success('Business expense recorded successfully');
+      }
+      
       onOpenChange(false);
     } catch (err) {
-      toast.error('Failed to record expense');
+      toast.error(expense ? 'Failed to update expense' : 'Failed to record expense');
     }
   };
 
@@ -52,11 +74,11 @@ export default function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialo
               <Receipt className="text-profit w-5 h-5" />
             </span>
             <DialogTitle className="text-xl font-black font-display tracking-tight text-white uppercase">
-              Add Business Expense
+              {expense ? 'Edit Expense' : 'Add Business Expense'}
             </DialogTitle>
           </div>
           <DialogDescription className="text-muted-foreground text-xs uppercase tracking-widest font-bold">
-            Record operational or maintenance costs.
+            {expense ? 'Modify recorded cost details.' : 'Record operational or maintenance costs.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -96,7 +118,8 @@ export default function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialo
             />
           </div>
           <Button className="w-full bg-profit text-zinc-950 font-black h-12 uppercase tracking-widest text-xs mt-2" type="submit">
-            <Plus className="w-4 h-4 mr-2" /> Record Expense
+            {expense ? <Save className="w-4 h-4 mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+            {expense ? 'Save Changes' : 'Record Expense'}
           </Button>
         </form>
       </DialogContent>

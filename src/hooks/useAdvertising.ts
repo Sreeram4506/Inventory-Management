@@ -33,11 +33,41 @@ export function useAdvertising() {
     },
   });
 
+  const updateAdMutation = useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<AdvertisingExpense> & { id: string }) => {
+      const response = await apiFetch(`/advertising/${id}`, token, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      });
+      return handleApiResponse(response, logout);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['advertising'] });
+    },
+  });
+
+  const deleteAdMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiFetch(`/advertising/${id}`, token, {
+        method: 'DELETE',
+      });
+      return handleApiResponse(response, logout);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['advertising'] });
+    },
+  });
+
   return {
     ads: adsQuery.data || [],
     isLoading: adsQuery.isLoading,
     isError: adsQuery.isError,
     error: adsQuery.error,
     addAd: addAdMutation.mutateAsync,
+    updateAd: updateAdMutation.mutateAsync,
+    deleteAd: deleteAdMutation.mutateAsync,
   };
 }

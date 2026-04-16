@@ -138,6 +138,18 @@ router.post('/', authenticateToken, validate(vehicleSchema), async (req, res, ne
   } = req.body;
 
   try {
+    // Check if vehicle with this VIN already exists
+    const existingVehicle = await prisma.vehicle.findUnique({
+      where: { vin }
+    });
+
+    if (existingVehicle) {
+      return res.status(409).json({ 
+        message: `Vehicle with VIN '${vin}' already exists in inventory.`,
+        existingId: existingVehicle.id
+      });
+    }
+
     const totalPurchaseCost = purchasePrice + transportCost + buyerFee + inspectionCost + registrationCost;
     
     // Efficiently create the vehicle with nested relations

@@ -3,33 +3,77 @@ import prisma from '../db/prisma.js';
 import { authenticateToken } from '../middlewares/authMiddleware.js';
 import jwt from 'jsonwebtoken';
 
+import { fillUsedVehiclePdf } from '../../services/usedVehiclePdfService.js';
+import { readFile } from 'fs/promises';
+
 const router = express.Router();
+const defaultUsedVehicleTemplatePath = new URL('../../used-vechile-report.jpeg', import.meta.url);
 
 router.get('/', authenticateToken, async (req, res, next) => {
   try {
-    const logs = await prisma.documentRegistry.findMany({
+    const allLogs = await prisma.documentRegistry.findMany({
       orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        vin: true,
-        make: true,
-        model: true,
-        year: true,
-        documentType: true,
-        sourceFileName: true,
-        createdAt: true,
-      }
     });
+    
+    console.log(`[Registry] Found ${allLogs.length} logs in DB`);
+    
+    // Exclude the heavy documentBase64 from the list view
+    const logs = allLogs.map(({ documentBase64, ...rest }) => ({
+      ...rest,
+      documentType: rest.documentType || 'Used Vehicle Record'
+    }));
+    
     res.json(logs);
   } catch (err) {
+    console.error('[Registry Error]', err);
     next(err);
   }
 });
 
-// Route to fetch a specific document base64 since it might be heavy, we download it on demand
+router.patch('/:id', authenticateToken, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    // 1. Get current log to ensure it exists
+    const currentLog = await prisma.documentRegistry.findUnique({
+      where: { id }
+    });
+
+    if (!currentLog) {
+      return res.status(404).json({ message: 'Document log not found' });
+    }
+
+    // 2. Merge updates
+    const updatedData = { ...currentLog, ...updates };
+
+    // 3. Regenerate PDF with updated info
+    // We use the default template for now as it's the standard for 'Used Vehicle Record'
+    const templateBuffer = await readFile(defaultUsedVehicleTemplatePath);
+    const filledPdf = await fillUsedVehiclePdf(
+      templateBuffer,
+      updatedData,
+      'image/jpeg'
+    );
+
+    // 4. Save back to DB
+    const log = await prisma.documentRegistry.update({
+      where: { id },
+      data: {
+        ...updates,
+        documentBase64: filledPdf
+      }
+    });
+
+    res.json(log);
+  } catch (err) {
+    console.error('[Registry Patch Error]', err);
+    next(err);
+  }
+});
+
 router.get('/:id/download', async (req, res, next) => {
   try {
-    // Accept token from either Authorization header OR query parameter
     let token = null;
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -42,12 +86,9 @@ router.get('/:id/download', async (req, res, next) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    // Verify the token manually
     try {
       jwt.verify(token, process.env.JWT_SECRET);
-      console.log(`[BinaryStream] Token verified successfully for registry log ${req.params.id}`);
     } catch (e) {
-      console.error(`[BinaryStream] Token verification FAILED for registry: ${e.message}`);
       return res.status(401).json({ message: 'Invalid token' });
     }
 
@@ -67,15 +108,11 @@ router.get('/:id/download', async (req, res, next) => {
 
     const buffer = Buffer.from(base64, 'base64');
     const safeFileName = `${(log.documentType || 'Document').replace(/\s+/g, '_')}_${(log.sourceFileName || 'log').split('.')[0]}.pdf`;
-    console.log(`[BinaryStream] Forcing registry download ${req.params.id}, size: ${buffer.length} bytes`);
     
     res.writeHead(200, {
       'Content-Type': 'application/octet-stream',
       'Content-Length': buffer.length,
       'Content-Disposition': `attachment; filename="${safeFileName}"`,
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'X-Download-Options': 'noopen',
-      'Content-Transfer-Encoding': 'binary'
     });
     
     res.end(buffer);
@@ -84,7 +121,6 @@ router.get('/:id/download', async (req, res, next) => {
   }
 });
 
-// Optionally delete a log (Admin or self)
 router.delete('/:id', authenticateToken, async (req, res, next) => {
   try {
     await prisma.documentRegistry.delete({

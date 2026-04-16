@@ -77,41 +77,63 @@ export default function UsedVehicleForms() {
             </div>
 
             {extractedInfo ? (
-              <div className="mt-5 space-y-5">
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Vehicle</p>
-                  <p className="mt-2 font-display text-2xl font-bold text-white">
-                    {[extractedInfo.year, extractedInfo.make, extractedInfo.model].filter(Boolean).join(' ')}
-                  </p>
-                  <p className="mt-1 text-sm text-zinc-400">
-                    {[extractedInfo.color, extractedInfo.usedVehicleSourceCity, extractedInfo.usedVehicleSourceState]
-                      .filter(Boolean)
-                      .join(' • ')}
-                  </p>
-                </div>
-
-                <div className="space-y-3">
-                  {fieldRows.map(({ key, label, icon: Icon }) => {
-                    const value = formatFieldValue(key, extractedInfo);
-                    return (
-                      <div
-                        key={key}
-                        className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3"
-                      >
-                        <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-zinc-800 text-zinc-300">
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">{label}</p>
-                          <p className="mt-1 break-words text-sm font-medium text-white">
-                            {value || 'Not detected'}
-                          </p>
-                        </div>
+                <div className="space-y-6">
+                  {/* Vehicle Section */}
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+                    <p className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">Vehicle Details</p>
+                    <p className="font-display text-xl font-bold text-white leading-tight">
+                      {[extractedInfo.year, extractedInfo.make, extractedInfo.model].filter(Boolean).join(' ')}
+                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/50 p-2">
+                        <p className="text-[10px] uppercase text-zinc-500">VIN</p>
+                        <p className="text-xs font-medium text-zinc-200 mt-1 truncate" title={extractedInfo.vin}>{extractedInfo.vin || '—'}</p>
                       </div>
-                    );
-                  })}
+                      <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/50 p-2">
+                        <p className="text-[10px] uppercase text-zinc-500">Mileage</p>
+                        <p className="text-xs font-medium text-zinc-200 mt-1">
+                           {extractedInfo.mileage ? `${extractedInfo.mileage.toLocaleString()} mi` : '—'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Seller Section */}
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+                    <p className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">Seller Information</p>
+                    <p className="font-semibold text-sm text-white">{extractedInfo.purchasedFrom || 'Unknown Seller'}</p>
+                    <p className="mt-1 text-xs text-zinc-400">
+                      {[
+                        extractedInfo.usedVehicleSourceAddress, 
+                        extractedInfo.usedVehicleSourceCity, 
+                        extractedInfo.usedVehicleSourceState
+                      ].filter(Boolean).join(', ') || 'No address provided'}
+                    </p>
+                  </div>
+
+                  {/* Financials Section */}
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+                    <p className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">Financials</p>
+                    <div className="space-y-2">
+                       <div className="flex justify-between items-center bg-zinc-950/50 p-2 rounded-lg border border-zinc-800/60">
+                         <span className="text-xs text-zinc-400">Purchase Price</span>
+                         <span className="text-sm font-bold text-profit">
+                           {extractedInfo.purchasePrice ? `$${extractedInfo.purchasePrice.toLocaleString()}` : '—'}
+                         </span>
+                       </div>
+                       <div className="flex justify-between items-center bg-zinc-950/50 p-2 rounded-lg border border-zinc-800/60">
+                         <span className="text-xs text-zinc-400">Date</span>
+                         <span className="text-xs font-medium text-zinc-300">
+                           {extractedInfo.purchaseDate 
+                              ? (Number.isNaN(new Date(extractedInfo.purchaseDate).getTime()) 
+                                  ? extractedInfo.purchaseDate 
+                                  : new Date(extractedInfo.purchaseDate).toLocaleDateString()) 
+                              : '—'}
+                         </span>
+                       </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
             ) : (
               <div className="mt-5 rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 p-6 text-sm leading-6 text-zinc-500">
                 Generate a form once and the extracted vehicle information will appear here so

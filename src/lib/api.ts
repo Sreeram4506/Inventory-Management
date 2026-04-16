@@ -38,15 +38,21 @@ export async function handleApiResponse<T>(response: Response, logout?: () => vo
   if (!response.ok) {
     const errorText = await response.text();
     let errorMessage = 'API request failed';
+    let errorData = null;
+
     if (errorText) {
       try {
-        const parsed = JSON.parse(errorText);
-        errorMessage = parsed.message || errorMessage;
+        errorData = JSON.parse(errorText);
+        errorMessage = errorData.message || errorMessage;
       } catch {
         errorMessage = errorText;
       }
     }
-    throw new Error(errorMessage);
+    
+    const error = new Error(errorMessage);
+    (error as any).status = response.status;
+    (error as any).data = errorData;
+    throw error;
   }
 
   return response.json() as Promise<T>;

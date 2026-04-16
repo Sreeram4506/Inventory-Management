@@ -7,7 +7,10 @@ import { buildUsedVehiclePdfFileName, fillUsedVehiclePdf } from '../../services/
 import prisma from '../db/prisma.js';
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit for security
+});
 
 const defaultUsedVehicleTemplatePath = new URL('../../used-vechile-report.jpeg', import.meta.url);
 

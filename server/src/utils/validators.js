@@ -35,6 +35,22 @@ export const saleSchema = z.object({
   monthlyPayment: z.number().or(z.string().transform(Number)).optional().nullable(),
 });
 
+export const expenseSchema = z.object({
+  category: z.string().min(1, "Category is required"),
+  amount: z.number().or(z.string().transform(Number)),
+  date: z.string().or(z.date()).refine((d) => !isNaN(Date.parse(d)), "Invalid date format"),
+  notes: z.string().optional().nullable(),
+});
+
+export const advertisingSchema = z.object({
+  campaignName: z.string().min(1, "Campaign name is required"),
+  platform: z.string().min(1, "Platform is required"),
+  startDate: z.string().or(z.date()).refine((d) => !isNaN(Date.parse(d)), "Invalid start date"),
+  endDate: z.string().or(z.date()).refine((d) => !isNaN(Date.parse(d)), "Invalid end date"),
+  amountSpent: z.number().or(z.string().transform(Number)),
+  linkedVehicleId: z.string().length(24, "Invalid vehicle ID").optional().nullable(),
+});
+
 export const validate = (schema) => (req, res, next) => {
   try {
     const validData = schema.parse(req.body);

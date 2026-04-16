@@ -1,7 +1,7 @@
 import express from 'express';
 import prisma from '../db/prisma.js';
 import { authenticateToken } from '../middlewares/authMiddleware.js';
-
+import { validate, expenseSchema } from '../utils/validators.js';
 import { expenseCache } from '../utils/cache.js';
 
 const router = express.Router();
@@ -19,13 +19,38 @@ router.get('/', authenticateToken, async (req, res, next) => {
   }
 });
 
-router.post('/', authenticateToken, async (req, res, next) => {
+router.post('/', authenticateToken, validate(expenseSchema), async (req, res, next) => {
   try {
     const expense = await prisma.businessExpense.create({
       data: { ...req.body, date: new Date(req.body.date) }
     });
     expenseCache.delete('expense-list');
     res.status(201).json(expense);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/:id', authenticateToken, validate(expenseSchema), async (req, res, next) => {
+  try {
+    const expense = await prisma.businessExpense.update({
+      where: { id: req.params.id },
+      data: { ...req.body, date: new Date(req.body.date) }
+    });
+    expenseCache.delete('expense-list');
+    res.json(expense);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/:id', authenticateToken, async (req, res, next) => {
+  try {
+    await prisma.businessExpense.delete({
+      where: { id: req.params.id }
+    });
+    expenseCache.delete('expense-list');
+    res.json({ message: 'Expense deleted successfully' });
   } catch (err) {
     next(err);
   }
