@@ -16,9 +16,8 @@ router.get('/', authenticateToken, async (req, res, next) => {
     });
     
     console.log(`[Registry] Found ${allLogs.length} logs in DB`);
-    
-    // Exclude the heavy documentBase64 from the list view
-    const logs = allLogs.map(({ documentBase64, ...rest }) => ({
+    // Exclude the heavy base64 strings from the list view
+    const logs = allLogs.map(({ documentBase64, sourceDocumentBase64, ...rest }) => ({
       ...rest,
       documentType: rest.documentType || 'Used Vehicle Record'
     }));
@@ -26,6 +25,25 @@ router.get('/', authenticateToken, async (req, res, next) => {
     res.json(logs);
   } catch (err) {
     console.error('[Registry Error]', err);
+    next(err);
+  }
+});
+
+router.get('/:id/data', authenticateToken, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const log = await prisma.documentRegistry.findUnique({
+      where: { id },
+      select: { documentBase64: true, sourceDocumentBase64: true }
+    });
+    
+    if (!log) {
+      return res.status(404).json({ message: 'Document log not found' });
+    }
+    
+    res.json(log);
+  } catch (err) {
+    console.error('[Registry Data Error]', err);
     next(err);
   }
 });

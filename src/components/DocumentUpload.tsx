@@ -9,7 +9,8 @@ import { apiUrl } from '@/lib/api';
 interface DocumentUploadProps {
   onScanComplete: (
     data: ExtractedVehicleDocumentInfo, 
-    pdfData?: { base64: string; fileName: string }
+    pdfData?: { base64: string; fileName: string },
+    sourceBase64?: string
   ) => void;
   onViewExisting?: (id: string, vin: string) => void;
   token: string | null;
@@ -25,6 +26,17 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
     if (!file) return;
 
     setScanning(true);
+    
+    // Convert to base64 for preview/storage
+    const sourceBase64 = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        resolve(base64.includes('base64,') ? base64.split('base64,')[1] : base64);
+      };
+      reader.readAsDataURL(file);
+    });
+
     const formData = new FormData();
     formData.append('sourceFile', file);
 
@@ -44,7 +56,7 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
             description: 'Duplicate VIN detected. This vehicle is already registered.',
             action: errorData.existingId && onViewExisting ? {
               label: 'View Vehicle',
-              onClick: () => onViewExisting(errorData.existingId, info.vin || ''),
+              onClick: () => onViewExisting(errorData.existingId, ''), // VIN can be from errorData if needed
             } : undefined
           });
           return;
@@ -57,7 +69,8 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
       if (data.info) {
         onScanComplete(
           data.info, 
-          data.pdfBase64 ? { base64: data.pdfBase64, fileName: data.fileName } : undefined
+          data.pdfBase64 ? { base64: data.pdfBase64, fileName: data.fileName } : undefined,
+          sourceBase64
         );
         toast.success('Document processed! Details filled and PDF record generated.', {
           icon: <CheckCircle2 className="w-4 h-4 text-profit" />,

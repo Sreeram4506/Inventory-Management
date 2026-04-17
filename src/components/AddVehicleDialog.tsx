@@ -66,10 +66,12 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
   // Form States
   const [formData, setFormData] = useState(createInitialFormData);
   const [pdfData, setPdfData] = useState<{ base64: string; fileName: string } | null>(null);
+  const [sourceData, setSourceData] = useState<string | null>(null);
 
   const resetForm = () => {
     setFormData(createInitialFormData());
     setPdfData(null);
+    setSourceData(null);
   };
 
   const handleDialogChange = (nextOpen: boolean) => {
@@ -91,7 +93,8 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
 
   const handleScanComplete = (
     info: ExtractedVehicleDocumentInfo, 
-    pdfInfo?: { base64: string; fileName: string }
+    pdfInfo?: { base64: string; fileName: string },
+    sourceBase64?: string
   ) => {
     setFormData(prev => ({
       ...prev,
@@ -114,6 +117,9 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
 
     if (pdfInfo) {
       setPdfData(pdfInfo);
+    }
+    if (sourceBase64) {
+      setSourceData(sourceBase64);
     }
   };
 
@@ -158,6 +164,7 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
         registrationCost,
         totalPurchaseCost: purchasePrice + transportCost + repairCost + inspectionCost + registrationCost,
         documentBase64: pdfData?.base64 || null,
+        sourceDocumentBase64: sourceData || null,
         status: 'Available',
       } as Partial<Vehicle>);
       

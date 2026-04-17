@@ -24,6 +24,7 @@ export interface Vehicle {
   daysInInventory: number;
   documentBase64?: string | null;
   hasDocument?: boolean;
+  hasSourceDocument?: boolean;
   purchase?: {
     id: string;
     sellerName: string;

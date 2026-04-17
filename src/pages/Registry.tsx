@@ -64,13 +64,27 @@ export default function Registry() {
     setEditDialogOpen(true);
   };
 
-  const handleView = (log: DocumentLog) => {
-    if (log.documentBase64) {
-      const vehicleName = [log.year, log.make, log.model].filter(Boolean).join(' ') || 'Document';
-      setViewerDoc({ base64: log.documentBase64, name: vehicleName, type: log.documentType });
-      setViewerOpen(true);
-    } else {
-      toast.error('No document data available to preview.');
+  const handleView = async (log: DocumentLog, isSource = false) => {
+    if (!token) return;
+    try {
+      const resp = await fetch(apiUrl(`/registry/${log.id}/data`), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!resp.ok) throw new Error('Failed to fetch document data');
+      const data = await resp.json();
+      
+      const targetBase64 = isSource ? data.sourceDocumentBase64 : data.documentBase64;
+      
+      if (targetBase64) {
+        let vehicleName = [log.year, log.make, log.model].filter(Boolean).join(' ') || 'Document';
+        if (isSource) vehicleName += ' (Source)';
+        setViewerDoc({ base64: targetBase64, name: vehicleName, type: isSource ? 'Source Document' : log.documentType });
+        setViewerOpen(true);
+      } else {
+        toast.error(isSource ? 'No original source document available to preview.' : 'No generated document available to preview.');
+      }
+    } catch (e) {
+      toast.error('Error loading document preview.');
     }
   };
 
@@ -169,15 +183,32 @@ export default function Registry() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-2 text-zinc-400">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 hover:bg-blue-500/10 hover:text-blue-400"
-                              onClick={() => handleView(log)}
-                              title="View Document"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 hover:bg-blue-500/10 hover:text-blue-400"
+                                  title="View Document"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800 text-white">
+                                <DropdownMenuItem 
+                                  className="hover:bg-zinc-800 focus:bg-zinc-800 cursor-pointer"
+                                  onClick={() => handleView(log)}
+                                >
+                                  Preview Generated Record
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  className="hover:bg-zinc-800 focus:bg-zinc-800 cursor-pointer"
+                                  onClick={() => handleView(log, true)}
+                                >
+                                  Preview Original Source
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                             <Button
                               variant="ghost"
                               size="icon"

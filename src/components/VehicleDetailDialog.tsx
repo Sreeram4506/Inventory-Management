@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +13,7 @@ import { toast } from '@/components/ui/toast-utils';
 import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download, ShoppingCart } from 'lucide-react';
 import { useAuth } from '@/context/auth-hooks';
 import { apiUrl } from '@/lib/api';
+import DocumentViewerDialog from './DocumentViewerDialog';
 
 interface VehicleDetailDialogProps {
   vehicle: Vehicle | null;
@@ -26,6 +28,33 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
   const { addSale } = useSales();
   
   const [isEditing, setIsEditing] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
+
+  const handleView = async (isSource = false) => {
+    if (!token || !vehicle) return;
+    try {
+      const resp = await fetch(apiUrl(`/vehicles/${vehicle.id}/data`), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!resp.ok) throw new Error('Failed to fetch document data');
+      const data = await resp.json();
+      
+      const targetBase64 = isSource ? data.sourceDocumentBase64 : data.documentBase64;
+      
+      if (targetBase64) {
+        let name = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+        if (isSource) name += ' (Source)';
+        setViewerDoc({ base64: targetBase64, name, type: isSource ? 'Original Source' : 'Generated Record' });
+        setViewerOpen(true);
+      } else {
+        toast.error(isSource ? 'No original source document available to preview.' : 'No generated document available to preview.');
+      }
+    } catch (e) {
+      toast.error('Error loading document preview.');
+    }
+  };
+
   const [editForm, setEditForm] = useState({
     make: '',
     model: '',
@@ -204,15 +233,53 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
               >
                 {isEditing ? 'Cancel' : <><Pencil className="w-3.5 h-3.5 mr-2" /> Edit Details</>}
               </Button>
-              {vehicle.hasDocument && !isEditing && (
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => window.open(apiUrl(`/vehicles/${vehicle.id}/document?token=${token}`), '_blank')}
-                  className="border-border/50 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:bg-white/5"
-                >
-                  <Download className="w-3.5 h-3.5 mr-2" /> Download PDF
-                </Button>
+              {(vehicle.hasDocument || vehicle.hasSourceDocument) && !isEditing && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="border-border/50 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:bg-white/5"
+                    >
+                      <Download className="w-3.5 h-3.5 mr-2" /> Download
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800 text-white">
+                    {vehicle.hasDocument && (
+                      <>
+                        <DropdownMenuItem 
+                          className="hover:bg-zinc-800 focus:bg-zinc-800 cursor-pointer text-xs font-bold uppercase tracking-widest text-profit"
+                          onClick={() => handleView(false)}
+                        >
+                          Preview Record
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className="hover:bg-zinc-800 focus:bg-zinc-800 cursor-pointer text-xs font-bold uppercase tracking-widest text-profit"
+                          onClick={() => window.open(apiUrl(`/vehicles/${vehicle.id}/document?token=${token}`), '_blank')}
+                        >
+                          Download Record (PDF)
+                        </DropdownMenuItem>
+                        <div className="h-px bg-zinc-800 my-1" />
+                      </>
+                    )}
+                    {vehicle.hasSourceDocument && (
+                      <>
+                        <DropdownMenuItem 
+                          className="hover:bg-zinc-800 focus:bg-zinc-800 cursor-pointer text-xs font-bold uppercase tracking-widest text-blue-400"
+                          onClick={() => handleView(true)}
+                        >
+                          Preview Source Doc
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className="hover:bg-zinc-800 focus:bg-zinc-800 cursor-pointer text-xs font-bold uppercase tracking-widest text-blue-400"
+                          onClick={() => window.open(apiUrl(`/vehicles/${vehicle.id}/document?token=${token}&type=source`), '_blank')}
+                        >
+                          Download Source Doc
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
             </div>
           </div>
@@ -586,6 +653,14 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
             </TabsContent>
           )}
         </Tabs>
+
+        <DocumentViewerDialog 
+          open={viewerOpen} 
+          onOpenChange={setViewerOpen}
+          documentBase64={viewerDoc?.base64 || null}
+          vehicleName={viewerDoc?.name || ''}
+          documentType={viewerDoc?.type || ''}
+        />
       </DialogContent>
     </Dialog>
   );

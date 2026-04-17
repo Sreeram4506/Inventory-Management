@@ -55,6 +55,7 @@ model Purchase {
   purchaseDate      DateTime
   paymentMethod     String
   documentBase64    String?
+  sourceDocumentBase64 String?
   createdAt         DateTime @default(now())
 }
 

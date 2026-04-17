@@ -41,22 +41,40 @@ router.get('/:id/document', async (req, res, next) => {
       include: { purchase: true }
     });
 
-    if (!vehicle || !vehicle.purchase?.documentBase64) {
-      return res.status(404).json({ message: 'Document not found' });
+    if (!vehicle || !vehicle.purchase) {
+      return res.status(404).json({ message: 'Vehicle not found' });
     }
 
-    let base64 = vehicle.purchase.documentBase64;
+    const isSource = req.query.type === 'source';
+    let base64 = isSource ? vehicle.purchase.sourceDocumentBase64 : vehicle.purchase.documentBase64;
+
+    if (!base64) {
+      return res.status(404).json({ message: 'Requested document data not available' });
+    }
+
     if (base64.includes('base64,')) {
       base64 = base64.split('base64,')[1];
     }
 
     const buffer = Buffer.from(base64, 'base64');
-    const safeFileName = `Document_${vehicle.make}_${vehicle.model}_${(vehicle.vin || 'unk').slice(-4)}.pdf`;
-    console.log(`[BinaryStream] Forcing Download for vehicle ${req.params.id}, size: ${buffer.length} bytes`);
     
-    // Use attachment and octet-stream + noopen to FORCE a local save in Edge
+    // Determine extension based on type and context
+    let extension = 'pdf';
+    if (isSource) {
+       // Since we don't store sourceFileName in Purchase, we try to detect or default.
+       // Most sources are images or PDFs.
+       extension = base64.startsWith('JVBER') ? 'pdf' : 'jpg';
+    }
+
+    const prefix = isSource ? 'Source_' : 'Report_';
+    const safeFileName = `${prefix}${vehicle.make}_${vehicle.model}_${(vehicle.vin || 'unk').slice(-4)}.${extension}`;
+    
+    console.log(`[BinaryStream] Forcing Download for vehicle ${req.params.id}, type: ${isSource ? 'source' : 'report'}, size: ${buffer.length} bytes`);
+    
+    const contentType = extension === 'pdf' ? 'application/pdf' : 'image/jpeg';
+
     res.writeHead(200, {
-      'Content-Type': 'application/octet-stream',
+      'Content-Type': contentType,
       'Content-Length': buffer.length,
       'Content-Disposition': `attachment; filename="${safeFileName}"`,
       'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -66,6 +84,27 @@ router.get('/:id/document', async (req, res, next) => {
     
     res.end(buffer);
   } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/:id/data', authenticateToken, async (req, res, next) => {
+  try {
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: req.params.id },
+      include: { purchase: true }
+    });
+    
+    if (!vehicle || !vehicle.purchase) {
+      return res.status(404).json({ message: 'Vehicle or purchase record not found' });
+    }
+    
+    res.json({
+      documentBase64: vehicle.purchase.documentBase64,
+      sourceDocumentBase64: vehicle.purchase.sourceDocumentBase64
+    });
+  } catch (err) {
+    console.error('[Vehicle Data Error]', err);
     next(err);
   }
 });
@@ -99,6 +138,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
             paymentMethod: true,
             // We only need to know IF a document exists, not the actual data
             documentBase64: true,
+            sourceDocumentBase64: true,
           }
         },
         repairs: true,
@@ -108,8 +148,9 @@ router.get('/', authenticateToken, async (req, res, next) => {
 
     const enrichedVehicles = vehicles.map(v => {
       const hasDocument = !!v.purchase?.documentBase64;
-      // Strip the heavy documentBase64 from purchase before sending
-      const { documentBase64, ...purchaseWithoutDoc } = v.purchase || {};
+      const hasSourceDocument = !!v.purchase?.sourceDocumentBase64;
+      // Strip the heavy base64 strings from purchase before sending
+      const { documentBase64, sourceDocumentBase64, ...purchaseWithoutDoc } = v.purchase || {};
       return {
         ...v,
         purchase: v.purchase ? purchaseWithoutDoc : null,
@@ -120,6 +161,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
         transportCost: v.purchase?.transportCost || 0,
         repairCost: v.repairs.reduce((sum, r) => sum + r.partsCost + r.laborCost, 0),
         hasDocument,
+        hasSourceDocument,
       };
     });
 
@@ -134,7 +176,7 @@ router.post('/', authenticateToken, validate(vehicleSchema), async (req, res, ne
   const { 
     vin, make, model, year, mileage, color, purchaseDate,
     purchasedFrom, purchasePrice, paymentMethod, transportCost, buyerFee,
-    inspectionCost, registrationCost, repairCost, documentBase64
+    inspectionCost, registrationCost, repairCost, documentBase64, sourceDocumentBase64
   } = req.body;
 
   try {
@@ -174,7 +216,8 @@ router.post('/', authenticateToken, validate(vehicleSchema), async (req, res, ne
             totalPurchaseCost,
             purchaseDate: new Date(purchaseDate),
             paymentMethod,
-            documentBase64
+            documentBase64,
+            sourceDocumentBase64
           }
         },
         ...(repairCost > 0 && {

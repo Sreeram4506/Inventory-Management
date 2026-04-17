@@ -146,7 +146,8 @@ router.post(
                 totalPurchaseCost,
                 purchaseDate: info.purchaseDate ? new Date(info.purchaseDate) : new Date(),
                 paymentMethod: 'Bank Transfer',
-                documentBase64: pdfBase64Str
+                documentBase64: pdfBase64Str,
+                sourceDocumentBase64: sourceFile.buffer.toString('base64')
               }
             },
             ...(repairCost > 0 && {
