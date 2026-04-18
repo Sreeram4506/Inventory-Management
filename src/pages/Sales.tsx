@@ -64,13 +64,14 @@ export default function Sales() {
             sales.map((sale) => {
               const vehicle = vehicles.find(v => v.id === sale.vehicleId);
               return (
-                <div key={sale.id} className="stat-card bg-zinc-900/40 border-zinc-800/50 p-4 relative overflow-hidden">
+                <div 
+                  key={sale.id} 
+                  onClick={() => handleVehicleClick(sale.vehicleId)}
+                  className="stat-card bg-zinc-900/40 border-zinc-800/50 p-4 relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
+                >
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <h3 
-                        className="font-bold text-lg text-white cursor-pointer hover:text-profit transition-colors"
-                        onClick={() => handleVehicleClick(sale.vehicleId)}
-                      >
+                      <h3 className="font-bold text-lg text-white">
                         {vehicle ? `${vehicle.make} ${vehicle.model}` : `ID: ${sale.vehicleId.slice(-8)}`}
                       </h3>
                       <p className="text-xs text-zinc-500 font-medium">Sold to {sale.customerName}</p>
@@ -134,9 +135,13 @@ export default function Sales() {
                 {sales.map((sale) => {
                   const vehicle = vehicles.find(v => v.id === sale.vehicleId);
                   return (
-                    <tr key={sale.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                    <tr 
+                      key={sale.id} 
+                      onClick={() => handleVehicleClick(sale.vehicleId)}
+                      className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors cursor-pointer group"
+                    >
                       <td className="px-4 py-4">
-                        <div className="cursor-pointer group" onClick={() => handleVehicleClick(sale.vehicleId)}>
+                        <div className="group">
                           <p className="font-semibold text-foreground group-hover:text-profit transition-colors">{vehicle ? `${vehicle.make} ${vehicle.model}` : sale.vehicleId}</p>
                           <p className="text-xs text-muted-foreground">{vehicle?.year} · {vehicle?.color}</p>
                         </div>

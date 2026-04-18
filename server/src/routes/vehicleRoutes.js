@@ -337,6 +337,13 @@ router.patch('/:id', authenticateToken, async (req, res, next) => {
           transportCost: updatedVehicle.purchase.transportCost,
           inspectionCost: updatedVehicle.purchase.inspectionCost,
           registrationCost: updatedVehicle.purchase.registrationCost,
+          // Sale / Disposition details
+          disposedTo: updatedVehicle.sale?.customerName,
+          disposedAddress: updatedVehicle.sale?.address,
+          disposedDate: updatedVehicle.sale?.saleDate,
+          disposedPrice: updatedVehicle.sale?.salePrice,
+          paymentMethod: updatedVehicle.sale?.paymentMethod,
+          disposedDlNumber: updatedVehicle.sale?.driverLicense,
         };
 
         const newPdfBase64 = await fillUsedVehiclePdf(templateBuffer, pdfInfo, 'image/jpeg');

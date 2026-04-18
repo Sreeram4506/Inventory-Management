@@ -73,6 +73,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
     registrationCost: '',
     titleNumber: '',
     purchaseDate: '',
+    status: '',
   });
 
   const [repairForm, setRepairForm] = useState({
@@ -120,6 +121,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
       registrationCost: String(vehicle.purchase?.registrationCost || ''),
       titleNumber: vehicle.titleNumber || '',
       purchaseDate: vehicle.purchaseDate ? new Date(vehicle.purchaseDate).toISOString().split('T')[0] : '',
+      status: vehicle.status || 'Available',
     });
     setIsEditing(true);
   };
@@ -142,6 +144,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
           inspectionCost: parseFloat(editForm.inspectionCost) || 0,
           registrationCost: parseFloat(editForm.registrationCost) || 0,
           titleNumber: editForm.titleNumber || undefined,
+          status: editForm.status,
         }),
       });
 
@@ -349,6 +352,19 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                     <div className="space-y-2">
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Title Number</Label>
                        <Input value={editForm.titleNumber} onChange={e => setEditForm({...editForm, titleNumber: e.target.value})} placeholder="e.g. T-12345678" className="bg-zinc-900 border-blue-500/20 h-9 text-sm" />
+                    </div>
+                    <div className="space-y-2">
+                       <Label className="text-[10px] uppercase font-bold text-muted-foreground font-semibold text-profit">Current Status</Label>
+                       <select 
+                         value={editForm.status} 
+                         onChange={e => setEditForm({...editForm, status: e.target.value})}
+                         className="flex h-9 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-profit/50 disabled:cursor-not-allowed disabled:opacity-50"
+                       >
+                         <option value="Available">Available</option>
+                         <option value="Reserved">Reserved</option>
+                         <option value="Sold" disabled>Sold (Auto-updated)</option>
+                         <option value="Returned">Returned</option>
+                       </select>
                     </div>
                   </div>
                 </div>

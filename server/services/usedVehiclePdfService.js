@@ -41,6 +41,19 @@ const fieldMap = {
 
   // Stock No. — top-right corner
   stockNo:         { x: 462, y: 754, width: 120, height: 14, font: 'helvetica' },
+
+  // Title No. — top-leftish or near stock
+  titleNo:         { x: 124, y: 754, width: 200, height: 14, font: 'helvetica' },
+
+  // ── Disposition of Motor Vehicle/Part ──
+  disposedTo:      { x: 182, y: 204, width: 235, height: 12, font: 'courier' },
+  disposedAddress: { x: 182, y: 174, width: 400, height: 12, font: 'courier' },
+  disposedCity:    { x: 114, y: 144, width: 145, height: 12, font: 'courier' },
+  disposedState:   { x: 332, y: 144, width: 40,  height: 12, font: 'courier' },
+  disposedZip:     { x: 416, y: 144, width: 68,  height: 12, font: 'courier' },
+  disposedOdometer:{ x: 534, y: 144, width: 55,  height: 12, font: 'courier' },
+  disposedDate:    { x: 442, y: 204, width: 140, height: 12, font: 'courier' },
+  disposedPrice:   { x: 218, y: 115, width: 130, height: 12, font: 'courier' },
 };
 
 // VIN grid constants
@@ -77,10 +90,21 @@ export async function fillUsedVehiclePdf(templateBuffer, vehicleInfo, templateMi
   );
   drawField(page, fieldMap.sourceRepeater, sourceName, courier);
 
-  // ── Stock No. ──
+  // ── Stock & Title No. ──
   const vin = vehicleInfo.vin || '';
   const stockNoValue = vin.length >= 6 ? vin.slice(-6).toUpperCase() : vin.toUpperCase();
   drawField(page, fieldMap.stockNo, stockNoValue, helvetica);
+  drawField(page, fieldMap.titleNo, vehicleInfo.titleNumber || '', helvetica);
+
+  // ── Disposition of Motor Vehicle/Part ──
+  drawField(page, fieldMap.disposedTo, vehicleInfo.disposedTo || '', courier);
+  drawField(page, fieldMap.disposedAddress, vehicleInfo.disposedAddress || '', courier);
+  drawField(page, fieldMap.disposedCity, vehicleInfo.disposedCity || '', courier);
+  drawField(page, fieldMap.disposedState, vehicleInfo.disposedState || '', courier);
+  drawField(page, fieldMap.disposedZip, vehicleInfo.disposedZip || '', courier);
+  drawField(page, fieldMap.disposedOdometer, vehicleInfo.disposedOdometer ? String(vehicleInfo.disposedOdometer) : '', courier);
+  drawField(page, fieldMap.disposedDate, formatUsedVehicleDate(vehicleInfo.disposedDate), courier);
+  drawField(page, fieldMap.disposedPrice, vehicleInfo.disposedPrice ? `$${vehicleInfo.disposedPrice}` : '', courier);
 
   return await pdfDoc.saveAsBase64({ useObjectStreams: false });
 }

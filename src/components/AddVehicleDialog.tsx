@@ -32,6 +32,7 @@ const createInitialFormData = () => ({
   repairCost: '0',
   inspectionCost: '0',
   registrationCost: '0',
+  titleNumber: '',
 });
 
 const paymentMethodOptions = ['Cash', 'Check', 'Bank Transfer'] as const;
@@ -113,6 +114,7 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
       repairCost: info.repairCost ? String(info.repairCost) : prev.repairCost,
       inspectionCost: info.inspectionCost ? String(info.inspectionCost) : prev.inspectionCost,
       registrationCost: info.registrationCost ? String(info.registrationCost) : prev.registrationCost,
+      titleNumber: info.titleNumber || prev.titleNumber,
     }));
 
     if (pdfInfo) {
@@ -244,6 +246,10 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
               <div className="space-y-2">
                 <Label className="text-zinc-300">Color<span className="text-red-500 ml-1">*</span></Label>
                 <Input name="color" value={formData.color} onChange={handleInputChange} placeholder="e.g. Silver" required className="bg-zinc-800 border-zinc-700 text-white" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-zinc-300">Title Number</Label>
+                <Input name="titleNumber" value={formData.titleNumber} onChange={handleInputChange} placeholder="e.g. TITLE123456" className="bg-zinc-800 border-zinc-700 text-white" />
               </div>
             </div>
           </div>

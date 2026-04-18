@@ -116,6 +116,17 @@ Required keys (use null when not found):
 - repairCost (number)
 - inspectionCost (number)
 - registrationCost (number)
+- titleNumber (string)
+- disposedTo (string, the BUYER/PURCHASER name)
+- disposedAddress (string, buyer street address)
+- disposedCity (string)
+- disposedState (string, 2-letter state code)
+- disposedZip (string, 5-digit zip)
+- disposedDate (string, ISO 8601 format)
+- disposedPrice (number, selling price to the customer)
+- disposedOdometer (number, odometer reading at time of sale)
+- disposedDlNumber (string, driver's license number of buyer)
+- disposedDlState (string, DL state)
 
 Rules:
 1. VIN must be exactly 17 characters. Remove spaces/dashes. Never include letters I, O, or Q.
@@ -308,6 +319,10 @@ function mockExtraction(text) {
         /dmv(?: cost| fee)?\s*[:$~©]*\s*\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/i,
       ], '0')
     ),
+    titleNumber: getFirstMatch([
+      /(?:Title No|Title Number|Certificate of Title|Title#)[:\s]*([A-Z0-9]{5,20})/i,
+      /Title\s*[:#]?\s*([A-Z0-9]{5,20})/i
+    ], null),
   };
 }
 
@@ -377,6 +392,17 @@ Required keys (use null when not found):
 - repairCost: number
 - inspectionCost: number
 - registrationCost: number
+- titleNumber: string
+- disposedTo: string (BUYER name — look for "Purchaser(s)", "Buyer", "Sold To")
+- disposedAddress: string (buyer street address)
+- disposedCity: string
+- disposedState: string
+- disposedZip: string
+- disposedDate: string (ISO 8601 format)
+- disposedPrice: number (selling price)
+- disposedOdometer: number (odometer at sale)
+- disposedDlNumber: string (buyer's DL)
+- disposedDlState: string
 
 Critical rules:
 1. VIN is exactly 17 characters. Remove any spaces or dashes. Never include I, O, or Q.
@@ -549,6 +575,18 @@ function normalizeVehicleInfo(info) {
     repairCost: normalizeFloat(info?.repairCost),
     inspectionCost: normalizeFloat(info?.inspectionCost),
     registrationCost: normalizeFloat(info?.registrationCost),
+    titleNumber: sanitizeString(info?.titleNumber),
+    // Disposition details
+    disposedTo: sanitizeString(info?.disposedTo),
+    disposedAddress: sanitizeString(info?.disposedAddress),
+    disposedCity: sanitizeString(info?.disposedCity),
+    disposedState: sanitizeString(info?.disposedState).toUpperCase().slice(0, 2),
+    disposedZip: sanitizeString(info?.disposedZip).replace(/[^\d-]/g, '').slice(0, 10),
+    disposedDate: parseDateToIso(info?.disposedDate),
+    disposedPrice: normalizeFloat(info?.disposedPrice),
+    disposedOdometer: normalizeNumber(info?.disposedOdometer),
+    disposedDlNumber: sanitizeString(info?.disposedDlNumber),
+    disposedDlState: sanitizeString(info?.disposedDlState).toUpperCase().slice(0, 2),
   };
 
   return normalized;

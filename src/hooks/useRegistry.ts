@@ -10,6 +10,7 @@ export interface DocumentLog {
   year: string | null;
   color?: string | null;
   mileage?: string | null;
+  titleNumber?: string | null;
   purchaseDate?: string | null;
   purchasedFrom?: string | null;
   sellerAddress?: string | null;
@@ -20,6 +21,17 @@ export interface DocumentLog {
   documentBase64?: string | null;
   sourceDocumentBase64?: string | null;
   sourceFileName: string | null;
+  // Disposition details
+  disposedTo?: string | null;
+  disposedAddress?: string | null;
+  disposedCity?: string | null;
+  disposedState?: string | null;
+  disposedZip?: string | null;
+  disposedDate?: string | null;
+  disposedPrice?: string | null;
+  disposedOdometer?: string | null;
+  disposedDlNumber?: string | null;
+  disposedDlState?: string | null;
   createdAt: string;
 }
 

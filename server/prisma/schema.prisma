@@ -123,6 +123,7 @@ model DocumentRegistry {
   year              String?
   color             String?
   mileage           String?
+  titleNumber       String?
   purchaseDate      String?
   purchasedFrom     String?  // The dealer/source name
   sellerAddress     String?
@@ -133,5 +134,18 @@ model DocumentRegistry {
   documentBase64    String
   sourceFileName    String?
   sourceDocumentBase64 String?
+  
+  // Disposition details (from Bill of Sale)
+  disposedTo        String?
+  disposedAddress   String?
+  disposedCity      String?
+  disposedState     String?
+  disposedZip       String?
+  disposedDate      String?
+  disposedPrice     String?
+  disposedOdometer  String?
+  disposedDlNumber  String?
+  disposedDlState   String?
+
   createdAt         DateTime @default(now())
 }

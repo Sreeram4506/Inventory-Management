@@ -23,6 +23,7 @@ export default function EditRegistryDialog({ log, open, onOpenChange }: EditRegi
     year: '',
     color: '',
     mileage: '',
+    titleNumber: '',
     purchasedFrom: '',
     purchaseDate: '',
   });
@@ -36,8 +37,19 @@ export default function EditRegistryDialog({ log, open, onOpenChange }: EditRegi
         year: log.year || '',
         color: log.color || '',
         mileage: log.mileage || '',
+        titleNumber: log.titleNumber || '',
         purchasedFrom: log.purchasedFrom || '',
         purchaseDate: log.purchaseDate ? log.purchaseDate.split('T')[0] : '',
+        disposedTo: log.disposedTo || '',
+        disposedAddress: log.disposedAddress || '',
+        disposedCity: log.disposedCity || '',
+        disposedState: log.disposedState || '',
+        disposedZip: log.disposedZip || '',
+        disposedDate: log.disposedDate ? log.disposedDate.split('T')[0] : '',
+        disposedPrice: log.disposedPrice || '',
+        disposedOdometer: log.disposedOdometer || '',
+        disposedDlNumber: log.disposedDlNumber || '',
+        disposedDlState: log.disposedDlState || '',
       });
     }
   }, [log]);
@@ -131,6 +143,16 @@ export default function EditRegistryDialog({ log, open, onOpenChange }: EditRegi
           </div>
 
           <div className="space-y-2">
+            <Label className="text-zinc-400 text-xs uppercase tracking-wider">Title Number</Label>
+            <Input
+              value={formData.titleNumber}
+              onChange={(e) => setFormData({ ...formData, titleNumber: e.target.value })}
+              className="bg-zinc-900 border-zinc-800 text-white"
+              placeholder="e.g. TITLE123456"
+            />
+          </div>
+
+          <div className="space-y-2">
             <Label className="text-zinc-400 text-xs uppercase tracking-wider">Purchased From</Label>
             <Input
               value={formData.purchasedFrom}
@@ -147,6 +169,97 @@ export default function EditRegistryDialog({ log, open, onOpenChange }: EditRegi
               onChange={(e) => setFormData({ ...formData, purchaseDate: e.target.value })}
               className="bg-zinc-900 border-zinc-800 text-white"
             />
+          </div>
+
+          <div className="pt-4 pb-2 border-t border-zinc-800">
+            <h4 className="text-sm font-semibold text-profit uppercase tracking-widest">Sale / Disposition Details</h4>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-zinc-400 text-xs uppercase tracking-wider">Disposed To (Buyer)</Label>
+            <Input
+              value={formData.disposedTo}
+              onChange={(e) => setFormData({ ...formData, disposedTo: e.target.value })}
+              className="bg-zinc-900 border-zinc-800 text-white"
+              placeholder="Customer Name"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-zinc-400 text-xs uppercase tracking-wider">Buyer Address</Label>
+            <Input
+              value={formData.disposedAddress}
+              onChange={(e) => setFormData({ ...formData, disposedAddress: e.target.value })}
+              className="bg-zinc-900 border-zinc-800 text-white"
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-2 col-span-1">
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">City</Label>
+              <Input
+                value={formData.disposedCity}
+                onChange={(e) => setFormData({ ...formData, disposedCity: e.target.value })}
+                className="bg-zinc-900 border-zinc-800 text-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">State</Label>
+              <Input
+                value={formData.disposedState}
+                onChange={(e) => setFormData({ ...formData, disposedState: e.target.value })}
+                className="bg-zinc-900 border-zinc-800 text-white"
+                maxLength={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Zip</Label>
+              <Input
+                value={formData.disposedZip}
+                onChange={(e) => setFormData({ ...formData, disposedZip: e.target.value })}
+                className="bg-zinc-900 border-zinc-800 text-white"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Sale Date</Label>
+              <Input
+                type="date"
+                value={formData.disposedDate}
+                onChange={(e) => setFormData({ ...formData, disposedDate: e.target.value })}
+                className="bg-zinc-900 border-zinc-800 text-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Sale Price</Label>
+              <Input
+                value={formData.disposedPrice}
+                onChange={(e) => setFormData({ ...formData, disposedPrice: e.target.value })}
+                className="bg-zinc-900 border-zinc-800 text-white"
+                placeholder="$"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Disposal Odometer</Label>
+              <Input
+                value={formData.disposedOdometer}
+                onChange={(e) => setFormData({ ...formData, disposedOdometer: e.target.value })}
+                className="bg-zinc-900 border-zinc-800 text-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">DL Number</Label>
+              <Input
+                value={formData.disposedDlNumber}
+                onChange={(e) => setFormData({ ...formData, disposedDlNumber: e.target.value })}
+                className="bg-zinc-900 border-zinc-800 text-white"
+              />
+            </div>
           </div>
 
           <DialogFooter className="pt-4">

@@ -48,6 +48,17 @@ export interface ExtractedVehicleDocumentInfo extends Partial<Vehicle> {
   usedVehicleSourceCity?: string;
   usedVehicleSourceState?: string;
   usedVehicleSourceZipCode?: string;
+  // Disposition details
+  disposedTo?: string;
+  disposedAddress?: string;
+  disposedCity?: string;
+  disposedState?: string;
+  disposedZip?: string;
+  disposedDate?: string;
+  disposedPrice?: number;
+  disposedOdometer?: number;
+  disposedDlNumber?: string;
+  disposedDlState?: string;
 }
 
 export interface LoanDetails {
