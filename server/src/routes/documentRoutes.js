@@ -207,30 +207,56 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
 
     const cleanVin = billOfSaleInfo.vin.trim().toUpperCase();
 
-    // 2. Find existing registry entry for this VIN
+    // 2. Find existing inventory vehicle and registry entry for this VIN
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { vin: cleanVin },
+      include: { 
+        purchase: true,
+        repairs: true,
+        sale: true
+      }
+    });
+
     let existingEntry = await prisma.documentRegistry.findFirst({
       where: { vin: cleanVin, documentType: 'Used Vehicle Record' },
       orderBy: { createdAt: 'desc' }
     });
 
     let mergedInfo;
+    
+    // We start with the information extracted from the Bill of Sale
+    mergedInfo = { ...billOfSaleInfo, vin: cleanVin };
+
+    // If we have inventory data, use it as the definitive source for Acquisition details
+    if (vehicle) {
+      mergedInfo = {
+        ...mergedInfo,
+        year: vehicle.year || mergedInfo.year,
+        make: vehicle.make || mergedInfo.make,
+        model: vehicle.model || mergedInfo.model,
+        color: vehicle.color || mergedInfo.color,
+        mileage: vehicle.mileage || mergedInfo.mileage,
+        titleNumber: vehicle.titleNumber || mergedInfo.titleNumber,
+        // Acquisition/Source fields
+        purchasedFrom: vehicle.purchase?.sellerName || mergedInfo.purchasedFrom,
+        purchaseDate: vehicle.purchaseDate || mergedInfo.purchaseDate,
+        purchasePrice: vehicle.purchase?.purchasePrice || mergedInfo.purchasePrice,
+        usedVehicleSourceAddress: vehicle.purchase?.sellerAddress || mergedInfo.usedVehicleSourceAddress,
+        usedVehicleSourceCity: vehicle.purchase?.sellerCity || mergedInfo.usedVehicleSourceCity,
+        usedVehicleSourceState: vehicle.purchase?.sellerState || mergedInfo.usedVehicleSourceState,
+        usedVehicleSourceZipCode: vehicle.purchase?.sellerZip || mergedInfo.usedVehicleSourceZipCode,
+        transportCost: vehicle.purchase?.transportCost || mergedInfo.transportCost,
+        inspectionCost: vehicle.purchase?.inspectionCost || mergedInfo.inspectionCost,
+        registrationCost: vehicle.purchase?.registrationCost || mergedInfo.registrationCost,
+      };
+    }
+
+    // Finally, layer on any existing registry data if it wasn't already covered
     if (existingEntry) {
       mergedInfo = {
         ...existingEntry,
-        vin: cleanVin,
-        disposedTo: billOfSaleInfo.disposedTo || existingEntry.disposedTo,
-        disposedAddress: billOfSaleInfo.disposedAddress || existingEntry.disposedAddress,
-        disposedCity: billOfSaleInfo.disposedCity || existingEntry.disposedCity,
-        disposedState: billOfSaleInfo.disposedState || existingEntry.disposedState,
-        disposedZip: billOfSaleInfo.disposedZip || existingEntry.disposedZip,
-        disposedDate: billOfSaleInfo.disposedDate || existingEntry.disposedDate,
-        disposedPrice: billOfSaleInfo.disposedPrice || existingEntry.disposedPrice,
-        disposedOdometer: billOfSaleInfo.disposedOdometer || existingEntry.disposedOdometer,
-        disposedDlNumber: billOfSaleInfo.disposedDlNumber || existingEntry.disposedDlNumber,
-        disposedDlState: billOfSaleInfo.disposedDlState || existingEntry.disposedDlState,
+        ...mergedInfo,
       };
-    } else {
-      mergedInfo = { ...billOfSaleInfo, vin: cleanVin };
     }
 
     // 3. Regenerate PDF

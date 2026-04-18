@@ -63,7 +63,7 @@ export default function Dashboard() {
       <div className="space-y-8 pb-12 animate-in fade-in duration-700">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold font-display text-white tracking-tight">Performance Overview</h1>
+            <h1 className="text-2xl md:text-4xl font-bold font-display text-white tracking-tight">Performance Overview</h1>
             <p className="text-zinc-400 mt-1 flex items-center gap-2">
               <Activity className="w-4 h-4 text-profit" />
               Real-time analytics for your dealership

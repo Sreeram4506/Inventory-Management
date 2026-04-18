@@ -219,7 +219,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-zinc-950 border-zinc-900 text-foreground custom-scrollbar">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-zinc-950 border-zinc-900 text-foreground custom-scrollbar p-0 md:p-6">
         <DialogHeader>
           <DialogDescription className="sr-only">Vehicle details and management tabs.</DialogDescription>
           <div className="flex items-start justify-between">
@@ -242,7 +242,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="border-border/50 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:bg-white/5"
+                      className="border-border/50 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:bg-white/5 hidden sm:flex"
                     >
                       <Download className="w-3.5 h-3.5 mr-2" /> Download
                     </Button>
@@ -324,7 +324,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
               <form onSubmit={handleUpdate} className="space-y-6">
                 <div className="space-y-4">
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-profit border-b border-profit/20 pb-2">Vehicle Details</h4>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Year</Label>
                        <Input value={editForm.year} onChange={e => setEditForm({...editForm, year: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
@@ -371,7 +371,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
 
                 <div className="space-y-4">
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-profit border-b border-profit/20 pb-2">Purchase & Seller Details</h4>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                      <div className="space-y-2 col-span-2">
                         <Label className="text-[10px] uppercase font-bold text-muted-foreground">Seller Name (Obtained From)</Label>
                         <Input value={editForm.purchasedFrom} onChange={e => setEditForm({...editForm, purchasedFrom: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
@@ -384,7 +384,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                         <Label className="text-[10px] uppercase font-bold text-muted-foreground">City</Label>
                         <Input value={editForm.sellerCity} onChange={e => setEditForm({...editForm, sellerCity: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
                      </div>
-                     <div className="grid grid-cols-2 gap-2">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                        <div className="space-y-2">
                           <Label className="text-[10px] uppercase font-bold text-muted-foreground">State</Label>
                           <Input value={editForm.sellerState} onChange={e => setEditForm({...editForm, sellerState: e.target.value})} maxLength={2} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
@@ -399,7 +399,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
 
                 <div className="space-y-4">
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-profit border-b border-profit/20 pb-2">Purchase Breakdown (Financials)</h4>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                     <div className="space-y-2">
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Purchase Price ($)</Label>
                        <Input type="number" value={editForm.purchasePrice} onChange={e => setEditForm({...editForm, purchasePrice: e.target.value})} className="bg-zinc-900 border-profit/20 h-9 text-sm font-bold text-profit" />
@@ -436,7 +436,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
           </TabsContent>
 
           <TabsContent value="financials" className="animate-in fade-in slide-in-from-top-2 duration-300">
-            <div className="grid grid-cols-2 gap-4 mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <div className="bg-secondary/10 border border-border/40 rounded-xl p-4 space-y-3">
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-profit">Purchase Breakdown</h4>
                 <div className="space-y-2">
@@ -511,7 +511,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
           <TabsContent value="repairs" className="animate-in fade-in slide-in-from-top-2 duration-300">
             <div className="bg-secondary/10 border border-border/40 rounded-xl p-5 mt-4 space-y-4">
               <h4 className="text-sm font-black uppercase tracking-widest text-profit">Add Post-Purchase Repair</h4>
-              <form onSubmit={handleRepairSubmit} className="grid grid-cols-2 gap-4">
+              <form onSubmit={handleRepairSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-xs font-bold uppercase text-muted-foreground">Repair Shop<span className="text-red-500 ml-1">*</span></Label>
                   <Input 
@@ -554,7 +554,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
           <TabsContent value="ads" className="animate-in fade-in slide-in-from-top-2 duration-300">
             <div className="bg-secondary/10 border border-border/40 rounded-xl p-5 mt-4 space-y-4">
               <h4 className="text-sm font-black uppercase tracking-widest text-profit">Link Advertising Campaign</h4>
-              <form onSubmit={handleAdSubmit} className="grid grid-cols-2 gap-4">
+              <form onSubmit={handleAdSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2 col-span-2">
                   <Label className="text-xs font-bold uppercase text-muted-foreground">Campaign Name</Label>
                   <Input 
@@ -606,7 +606,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
             <TabsContent value="sale" className="animate-in fade-in slide-in-from-top-2 duration-300">
               <div className="bg-secondary/10 border border-border/40 rounded-xl p-5 mt-4 space-y-4">
                 <h4 className="text-sm font-black uppercase tracking-widest text-info">Process Vehicle Sale</h4>
-                <form onSubmit={handleSaleSubmit} className="grid grid-cols-2 gap-4">
+                <form onSubmit={handleSaleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2 col-span-2 md:col-span-1">
                     <Label className="text-xs font-bold uppercase text-muted-foreground">Customer Name<span className="text-red-500 ml-1">*</span></Label>
                     <Input 

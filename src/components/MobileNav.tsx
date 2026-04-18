@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Car, ShoppingCart, 
-  BarChart3, Menu, LogOut, X, FileArchive
+  BarChart3, Menu, LogOut, X, FileArchive, FileText, Receipt
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -12,8 +12,17 @@ const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/inventory', icon: Car, label: 'Inventory' },
   { to: '/sales', icon: ShoppingCart, label: 'Sales' },
-  { to: '/registry', icon: FileArchive, label: 'Logs' },
-  { to: '/reports', icon: BarChart3, label: 'Reports' },
+  { to: '/used-vehicle-forms', icon: FileArchive, label: 'Forms' },
+];
+
+const drawerItems = [
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/inventory', icon: Car, label: 'Inventory' },
+  { to: '/sales', icon: ShoppingCart, label: 'Sales' },
+  { to: '/expenses', icon: Receipt, label: 'Expenses' },
+  { to: '/used-vehicle-forms', icon: FileText, label: 'Used Forms' },
+  { to: '/registry', icon: FileArchive, label: 'Registry Logs' },
+  { to: '/reports', icon: BarChart3, label: 'Analytics' },
 ];
 
 export default function MobileNav() {
@@ -60,18 +69,37 @@ export default function MobileNav() {
               </button>
             </div>
 
-            <div className="p-4 space-y-2">
+            <div className="flex-1 overflow-y-auto p-4 space-y-1">
               <div className="bg-sidebar-accent/50 rounded-xl p-4 mb-4">
                 <p className="text-xs text-sidebar-muted uppercase tracking-wider font-bold mb-1">Signed in as</p>
                 <p className="text-sm font-semibold text-sidebar-accent-foreground">{user?.name}</p>
                 <p className="text-[10px] text-profit font-bold">{user?.role}</p>
               </div>
 
-              {/* Additional Links or Info could go here */}
-              <div className="space-y-4 pt-4">
+              {drawerItems.map((item) => {
+                const isActive = location.pathname === item.to;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setIsOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all",
+                      isActive 
+                        ? "bg-sidebar-primary/10 text-sidebar-primary" 
+                        : "text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                    )}
+                  >
+                    <item.icon className="w-5 h-5" />
+                    {item.label}
+                  </NavLink>
+                );
+              })}
+
+              <div className="pt-4 mt-4 border-t border-sidebar-border">
                 <Button 
                   variant="destructive" 
-                  className="w-full justify-start gap-3 h-12"
+                  className="w-full justify-start gap-3 h-12 rounded-xl"
                   onClick={logout}
                 >
                   <LogOut className="w-5 h-5" />

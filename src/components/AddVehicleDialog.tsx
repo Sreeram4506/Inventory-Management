@@ -222,7 +222,7 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
                 </Button>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-zinc-300">VIN Number<span className="text-red-500 ml-1">*</span></Label>
                 <Input name="vin" value={formData.vin} onChange={handleInputChange} placeholder="Enter VIN" required className="bg-zinc-800 border-zinc-700 text-white" />
@@ -257,7 +257,7 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
           {/* Purchase Details */}
           <div>
             <h3 className="font-semibold text-sm text-profit uppercase tracking-wider mb-3">Purchase Details</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-zinc-300">Purchase Date<span className="text-red-500 ml-1">*</span></Label>
                 <Input name="purchaseDate" value={formData.purchaseDate} onChange={handleInputChange} type="date" required className="bg-zinc-800 border-zinc-700 text-white" />
@@ -298,7 +298,7 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
           {/* Additional Costs */}
           <div>
             <h3 className="font-semibold text-sm text-profit uppercase tracking-wider mb-3">Additional Costs</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-zinc-300">Transport Cost ($)</Label>
                 <Input name="transportCost" value={formData.transportCost} onChange={handleInputChange} type="number" placeholder="0" className="bg-zinc-800 border-zinc-700 text-white" />

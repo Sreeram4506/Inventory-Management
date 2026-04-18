@@ -319,14 +319,53 @@ router.patch('/:id', authenticateToken, async (req, res, next) => {
       if (updatedVehicle && updatedVehicle.purchase) {
         const templateBuffer = await readFile(defaultUsedVehicleTemplatePath);
         
-        // Prepare info object for the PDF service
+        // Look up DocumentRegistry for granular disposition fields
+        let registryEntry = null;
+        if (updatedVehicle.vin) {
+          registryEntry = await prisma.documentRegistry.findFirst({
+            where: { vin: updatedVehicle.vin, documentType: 'Used Vehicle Record' },
+            orderBy: { createdAt: 'desc' }
+          });
+        }
+
+        // Parse the combined Sale.address string into city/state/zip components
+        let parsedCity = '', parsedState = '', parsedZip = '';
+        if (updatedVehicle.sale?.address) {
+          const parts = updatedVehicle.sale.address.split(',').map(p => p.trim());
+          // Typical format: "121 WINSLOW AVE, Norwood, MA, 02062" or "Norwood, MA, 02062"
+          if (parts.length >= 3) {
+            parsedZip = parts[parts.length - 1] || '';
+            parsedState = parts[parts.length - 2] || '';
+            parsedCity = parts[parts.length - 3] || '';
+          } else if (parts.length === 2) {
+            parsedState = parts[1] || '';
+            parsedCity = parts[0] || '';
+          }
+        }
+
+        // Build the full address for disposition line (just the street part)
+        let disposedStreetAddress = updatedVehicle.sale?.address || '';
+        if (updatedVehicle.sale?.address) {
+          const parts = updatedVehicle.sale.address.split(',').map(p => p.trim());
+          // If there are 4+ parts, first part(s) are the street address
+          if (parts.length >= 4) {
+            disposedStreetAddress = parts.slice(0, parts.length - 3).join(', ');
+          } else {
+            disposedStreetAddress = parts[0] || '';
+          }
+        }
+
+        // Prepare info object for the PDF service — merging all sources
         const pdfInfo = {
+          // Vehicle identification
           vin: updatedVehicle.vin,
           make: updatedVehicle.make,
           model: updatedVehicle.model,
           year: updatedVehicle.year,
           color: updatedVehicle.color,
           mileage: updatedVehicle.mileage,
+          titleNumber: updatedVehicle.titleNumber || registryEntry?.titleNumber || '',
+          // Acquisition details
           purchaseDate: updatedVehicle.purchaseDate,
           purchasedFrom: updatedVehicle.purchase.sellerName,
           usedVehicleSourceAddress: updatedVehicle.purchase.sellerAddress,
@@ -337,13 +376,18 @@ router.patch('/:id', authenticateToken, async (req, res, next) => {
           transportCost: updatedVehicle.purchase.transportCost,
           inspectionCost: updatedVehicle.purchase.inspectionCost,
           registrationCost: updatedVehicle.purchase.registrationCost,
-          // Sale / Disposition details
-          disposedTo: updatedVehicle.sale?.customerName,
-          disposedAddress: updatedVehicle.sale?.address,
-          disposedDate: updatedVehicle.sale?.saleDate,
-          disposedPrice: updatedVehicle.sale?.salePrice,
-          paymentMethod: updatedVehicle.sale?.paymentMethod,
-          disposedDlNumber: updatedVehicle.sale?.driverLicense,
+          // Disposition details — prefer registry (granular) over parsed Sale address
+          disposedTo: updatedVehicle.sale?.customerName || registryEntry?.disposedTo || '',
+          disposedAddress: registryEntry?.disposedAddress || disposedStreetAddress || '',
+          disposedCity: registryEntry?.disposedCity || parsedCity || '',
+          disposedState: registryEntry?.disposedState || parsedState || '',
+          disposedZip: registryEntry?.disposedZip || parsedZip || '',
+          disposedDate: updatedVehicle.sale?.saleDate || (registryEntry?.disposedDate ? new Date(registryEntry.disposedDate) : null),
+          disposedPrice: updatedVehicle.sale?.salePrice || Number(registryEntry?.disposedPrice) || 0,
+          disposedOdometer: Number(registryEntry?.disposedOdometer) || 0,
+          disposedDlNumber: updatedVehicle.sale?.driverLicense || registryEntry?.disposedDlNumber || '',
+          disposedDlState: registryEntry?.disposedDlState || '',
+          paymentMethod: updatedVehicle.sale?.paymentMethod || '',
         };
 
         const newPdfBase64 = await fillUsedVehiclePdf(templateBuffer, pdfInfo, 'image/jpeg');
