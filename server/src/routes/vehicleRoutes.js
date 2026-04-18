@@ -247,7 +247,7 @@ router.patch('/:id', authenticateToken, async (req, res, next) => {
     const { 
       vin, make, model, year, mileage, color, status, purchaseDate,
       purchasedFrom, purchasePrice, paymentMethod, transportCost, buyerFee,
-      inspectionCost, registrationCost, 
+      inspectionCost, registrationCost, titleNumber,
       sellerAddress, sellerCity, sellerState, sellerZip
     } = req.body;
 
@@ -267,13 +267,14 @@ router.patch('/:id', authenticateToken, async (req, res, next) => {
       const v = await tx.vehicle.update({
         where: { id: vehicleId },
         data: {
-          ...(vin && { vin }),
-          ...(make && { make }),
-          ...(model && { model }),
-          ...(year && { year: Number(year) }),
-          ...(mileage && { mileage: Number(mileage) }),
-          ...(color && { color }),
-          ...(status && { status }),
+          ...(vin !== undefined && { vin }),
+          ...(make !== undefined && { make }),
+          ...(model !== undefined && { model }),
+          ...(year !== undefined && { year: Number(year) }),
+          ...(mileage !== undefined && { mileage: Number(mileage) }),
+          ...(color !== undefined && { color }),
+          ...(status !== undefined && { status }),
+          ...(titleNumber !== undefined && { titleNumber: titleNumber || null }),
           ...(purchaseDate && { purchaseDate: new Date(purchaseDate) }),
         },
         include: { purchase: true }
@@ -291,7 +292,7 @@ router.patch('/:id', authenticateToken, async (req, res, next) => {
         await tx.purchase.update({
           where: { id: v.purchase.id },
           data: {
-            ...(purchasedFrom && { sellerName: purchasedFrom }),
+            ...(purchasedFrom !== undefined && { sellerName: purchasedFrom }),
             ...(sellerAddress !== undefined && { sellerAddress }),
             ...(sellerCity !== undefined && { sellerCity }),
             ...(sellerState !== undefined && { sellerState }),
@@ -303,7 +304,7 @@ router.patch('/:id', authenticateToken, async (req, res, next) => {
             ...(registrationCost !== undefined && { registrationCost: rCost }),
             totalPurchaseCost: total,
             ...(purchaseDate && { purchaseDate: new Date(purchaseDate) }),
-            ...(paymentMethod && { paymentMethod }),
+            ...(paymentMethod !== undefined && { paymentMethod }),
           }
         });
       }
