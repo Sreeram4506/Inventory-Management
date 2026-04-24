@@ -1,9 +1,11 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { FileUp, CheckCircle2, FileText, Loader2 } from 'lucide-react';
+import { FileUp, CheckCircle2, FileText, Loader2, Fingerprint, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { apiUrl } from '@/lib/api';
+import { Input } from '@/components/ui/input';
 
 interface BillOfSaleUploaderProps {
   token: string | null;
@@ -15,9 +17,17 @@ export default function BillOfSaleUploader({
   onUploadComplete,
 }: BillOfSaleUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
+  const [vin, setVin] = useState('');
+  const [customerName, setCustomerName] = useState('');
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const urlVin = searchParams.get('vin');
+    if (urlVin) setVin(urlVin.toUpperCase());
+  }, [searchParams]);
 
   const handleUpload = async () => {
     if (!file) {
@@ -28,6 +38,8 @@ export default function BillOfSaleUploader({
     setLoading(true);
     const formData = new FormData();
     formData.append('file', file);
+    if (vin) formData.append('vin', vin.trim().toUpperCase());
+    if (customerName) formData.append('customerName', customerName.trim());
 
     try {
       const response = await fetch(apiUrl('/upload-bill-of-sale'), {
@@ -44,29 +56,28 @@ export default function BillOfSaleUploader({
       }
 
       const data = await response.json();
-      onUploadComplete(data.info);
-      
-      // Download the regenerated PDF
-      if (data.pdfBase64) {
-        downloadPdf(data.pdfBase64, data.fileName || 'updated-vehicle-record.pdf');
-      }
 
-      if (data.inventorySynced) {
+      if (data.status === 'success') {
+        onUploadComplete(data.info);
+
+        // Download the regenerated PDF
+        if (data.pdfBase64) {
+          downloadPdf(data.pdfBase64, data.fileName || `UsedVehicleRecord_${data.vin}.pdf`);
+        }
+
         // Refresh all relevant tables
         queryClient.invalidateQueries({ queryKey: ['vehicles'] });
         queryClient.invalidateQueries({ queryKey: ['sales'] });
         queryClient.invalidateQueries({ queryKey: ['registry'] });
-        
-        toast.success('Bill of Sale matched! Vehicle marked as SOLD and added to Sales.', {
+
+        toast.success(`VIN ${data.vin} matched! Vehicle marked as SOLD.`, {
           icon: <CheckCircle2 className="w-4 h-4 text-profit" />,
         });
-      } else {
-        toast.warning('Bill of Sale processed, but no matching vehicle was found in your Inventory.', {
-          description: 'The VIN on the Bill of Sale must exactly match a VIN in your Inventory list to auto-sync.',
-          duration: 6000,
-        });
       }
+
       setFile(null);
+      setVin('');
+      setCustomerName('');
     } catch (error: any) {
       console.error(error);
       toast.error(error.message || 'Could not process the Bill of Sale.');
@@ -79,31 +90,53 @@ export default function BillOfSaleUploader({
     <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5 space-y-4">
       <div>
         <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-profit">
-          Extract from Bill of Sale
+          Bill of Sale → Mark as Sold
         </h3>
         <p className="mt-2 text-sm text-zinc-400">
-          Already sold the vehicle? Upload the Bill of Sale here. 
-          AI will extract buyer info and update the Disposition section of the Used Vehicle Record automatically.
+          Upload a Bill of Sale. The VIN will be matched exactly against your inventory.
+          If found, the vehicle status changes to <span className="text-profit font-medium">SOLD</span> and a sales record is created.
         </p>
       </div>
 
-      <button
-        type="button"
-        onClick={() => fileInputRef.current?.click()}
-        className="w-full rounded-xl border border-zinc-800 bg-zinc-900/70 p-4 text-left transition hover:border-zinc-700 hover:bg-zinc-900"
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-profit/15 text-profit">
-            <FileUp className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-white">Bill of Sale Document</p>
-            <p className="text-xs text-zinc-500">
-              {file ? file.name : 'Click to select or drag and drop'}
-            </p>
-          </div>
+      <div className="space-y-3">
+        <div className="relative">
+          <Fingerprint className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+          <Input
+            placeholder="VIN (fallback if AI can't extract)"
+            value={vin}
+            onChange={(e) => setVin(e.target.value.toUpperCase())}
+            className="pl-10 bg-zinc-900/50 border-zinc-800 focus:border-profit/50 h-11"
+          />
         </div>
-      </button>
+
+        <div className="relative">
+          <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+          <Input
+            placeholder="Customer name (fallback if AI can't extract)"
+            value={customerName}
+            onChange={(e) => setCustomerName(e.target.value)}
+            className="pl-10 bg-zinc-900/50 border-zinc-800 focus:border-profit/50 h-11"
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="w-full rounded-xl border border-zinc-800 bg-zinc-900/70 p-4 text-left transition hover:border-zinc-700 hover:bg-zinc-900"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-profit/15 text-profit">
+              <FileUp className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-white">Bill of Sale Document</p>
+              <p className="text-xs text-zinc-500">
+                {file ? file.name : 'Click to select or drag and drop'}
+              </p>
+            </div>
+          </div>
+        </button>
+      </div>
 
       <Button
         type="button"
@@ -114,7 +147,7 @@ export default function BillOfSaleUploader({
         {loading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Matching VIN & Extracting...
+            Matching VIN & Processing...
           </>
         ) : (
           <>

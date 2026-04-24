@@ -76,7 +76,7 @@ export default function EditRegistryDialog({ log, open, onOpenChange }: EditRegi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-zinc-950 border-zinc-900 text-white">
+      <DialogContent className="max-w-md bg-zinc-950 border-zinc-900 text-white max-h-[90vh] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
         <DialogHeader>
           <DialogTitle className="font-display text-xl text-white">Edit Document Details</DialogTitle>
           <DialogDescription className="text-zinc-500">

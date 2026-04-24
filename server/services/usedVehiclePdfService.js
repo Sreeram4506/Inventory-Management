@@ -15,20 +15,20 @@ const basePageSize = {
 // ──────────────────────────────────────────────────────────────────────
 const fieldMap = {
   // Row: "Mfrs. Model Year: ___ Make: ___ Model: ___ Color: ___"
-  year:            { x: 132, y: 667, width: 50,  height: 14, font: 'helvetica' },
-  make:            { x: 224, y: 667, width: 110, height: 14, font: 'helvetica' },
-  model:           { x: 388, y: 667, width: 95,  height: 14, font: 'helvetica' },
-  color:           { x: 508, y: 667, width: 85,  height: 14, font: 'helvetica' },
+  year:            { x: 135, y: 667, width: 50,  height: 14, font: 'helvetica' },
+  make:            { x: 228, y: 667, width: 110, height: 14, font: 'helvetica' },
+  model:           { x: 392, y: 667, width: 95,  height: 14, font: 'helvetica' },
+  color:           { x: 512, y: 667, width: 85,  height: 14, font: 'helvetica' },
 
   // VIN box row (individual chars drawn separately by drawVin)
-  vinArea:         { x: 112, y: 611, width: 290, height: 16 },
+  vinArea:         { x: 114, y: 612, width: 290, height: 16 },
 
   // "Obtained From (Source): ___ Transaction Date: ___"
-  obtainedFrom:    { x: 188, y: 419, width: 185, height: 12, font: 'courier' },
+  obtainedFrom:    { x: 192, y: 419, width: 185, height: 12, font: 'courier' },
   transactionDate: { x: 448, y: 419, width: 130, height: 12, font: 'courier' },
 
   // "Address (number and street): ___"
-  address:         { x: 188, y: 389, width: 395, height: 12, font: 'courier' },
+  address:         { x: 192, y: 389, width: 395, height: 12, font: 'courier' },
 
   // "City or Town: ___ State: ___ Zip Code: ___ Odometer In: ___"
   city:            { x: 118, y: 359, width: 130, height: 12, font: 'courier' },
@@ -46,14 +46,14 @@ const fieldMap = {
   titleNo:         { x: 124, y: 751, width: 200, height: 14, font: 'helvetica' },
 
   // ── Disposition of Motor Vehicle/Part ──
-  disposedTo:      { x: 212, y: 201, width: 235, height: 12, font: 'courier' },
-  disposedAddress: { x: 212, y: 171, width: 380, height: 12, font: 'courier' },
-  disposedCity:    { x: 165, y: 141, width: 155, height: 12, font: 'courier' },
-  disposedState:   { x: 385, y: 141, width: 35,  height: 12, font: 'courier' },
-  disposedZip:     { x: 475, y: 141, width: 60,  height: 12, font: 'courier' },
-  disposedOdometer:{ x: 575, y: 141, width: 55,  height: 12, font: 'courier' },
-  disposedDate:    { x: 475, y: 201, width: 115, height: 12, font: 'courier' },
-  disposedPrice:   { x: 235, y: 111, width: 130, height: 12, font: 'courier' },
+  disposedTo:      { x: 192, y: 201, width: 235, height: 12, font: 'courier' },
+  disposedAddress: { x: 192, y: 171, width: 230, height: 12, font: 'courier' },
+  disposedCity:    { x: 118, y: 141, width: 155, height: 12, font: 'courier' },
+  disposedState:   { x: 300, y: 141, width: 35,  height: 12, font: 'courier' },
+  disposedZip:     { x: 375, y: 141, width: 60,  height: 12, font: 'courier' },
+  disposedOdometer:{ x: 498, y: 141, width: 85,  height: 12, font: 'courier' },
+  disposedDate:    { x: 448, y: 201, width: 115, height: 12, font: 'courier' },
+  disposedPrice:   { x: 235, y: 60,  width: 130, height: 12, font: 'courier' },
   
   // DL Info & Signature
   disposedDl:      { x: 195, y: 79,  width: 150, height: 11, font: 'courier' },
@@ -61,10 +61,9 @@ const fieldMap = {
   dealerSignature: { x: 412, y: 32,  width: 175, height: 12, font: 'courier' },
 };
 
-// VIN grid constants
-const VIN_START_X = 112;
-const VIN_START_Y = 611;
-const VIN_STEP_X  = 17.06;
+const VIN_START_X = 114;
+const VIN_START_Y = 612;
+const VIN_STEP_X  = 17.05;
 
 export async function fillUsedVehiclePdf(templateBuffer, vehicleInfo, templateMimeType = 'application/pdf') {
   const pdfDoc = await loadTemplateDocument(templateBuffer, templateMimeType);
@@ -161,7 +160,11 @@ function drawVin(page, vin, font) {
   const stepX = scaleSize(page, VIN_STEP_X, 'x');
   const fontSize = scaleFontSize(page, 10);
 
-  const sanitizedVin = (vin || '').replace(/[^A-HJ-NPR-Z0-9]/gi, '').slice(0, 17).toUpperCase();
+  const sanitizedVin = (vin || '').toUpperCase()
+    .replace(/^VIN[:\s-]*/, '') // Only strip exact "VIN:" prefix
+    .replace(/[^A-Z0-9]/g, '')
+    .replace(/[IOQ]/g, '')
+    .slice(0, 17);
 
   [...sanitizedVin].forEach((character, index) => {
     // Center each character within its box

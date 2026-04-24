@@ -10,7 +10,17 @@ import { Input } from '@/components/ui/input';
 import AddVehicleDialog from '@/components/AddVehicleDialog';
 import QueryErrorState from '@/components/QueryErrorState';
 import VehicleDetailDialog from '@/components/VehicleDetailDialog';
-import { Pencil, MoreVertical } from 'lucide-react';
+import { Pencil, MoreVertical, Trash2, AlertTriangle } from 'lucide-react';
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle 
+} from '@/components/ui/alert-dialog';
 
 const statusStyles: Record<string, string> = {
   Available: 'bg-profit/10 text-profit border-profit/20',
@@ -23,7 +33,8 @@ export default function Inventory() {
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
-  const { vehicles, isLoading, isError } = useInventory();
+  const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null);
+  const { vehicles, isLoading, isError, deleteVehicle } = useInventory();
 
   if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading inventory...</div>;
   if (isError) {
@@ -178,16 +189,57 @@ export default function Inventory() {
                         {vehicle.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                         <Pencil className="w-4 h-4 text-muted-foreground hover:text-profit" />
-                      </Button>
+                    <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setSelectedVehicle(vehicle)}>
+                           <Pencil className="w-4 h-4 text-muted-foreground hover:text-profit" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 w-8 p-0 text-destructive/70 hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => setVehicleToDelete(vehicle)}
+                        >
+                           <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          <AlertDialog open={!!vehicleToDelete} onOpenChange={(open) => !open && setVehicleToDelete(null)}>
+            <AlertDialogContent className="bg-zinc-950 border-zinc-800">
+              <AlertDialogHeader>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center">
+                    <AlertTriangle className="w-5 h-5 text-destructive" />
+                  </div>
+                  <AlertDialogTitle className="text-xl font-black uppercase tracking-tight text-white">Confirm Deletion</AlertDialogTitle>
+                </div>
+                <AlertDialogDescription className="text-zinc-400 font-medium">
+                  Are you sure you want to delete <span className="text-white font-bold">{vehicleToDelete?.year} {vehicleToDelete?.make} {vehicleToDelete?.model}</span>? 
+                  This will permanently remove all associated records including repairs, purchases, and sales. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter className="mt-6 gap-3">
+                <AlertDialogCancel className="bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 font-bold uppercase tracking-widest text-[10px] h-11">Cancel</AlertDialogCancel>
+                <AlertDialogAction 
+                  className="bg-destructive text-white hover:bg-destructive/90 font-black uppercase tracking-widest text-[10px] h-11 px-6"
+                  onClick={async () => {
+                    if (vehicleToDelete) {
+                      await deleteVehicle(vehicleToDelete.id);
+                      setVehicleToDelete(null);
+                    }
+                  }}
+                >
+                  Delete Vehicle
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
       <AddVehicleDialog 

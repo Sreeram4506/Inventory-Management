@@ -9,14 +9,25 @@ import prisma from '../db/prisma.js';
 const router = express.Router();
 const upload = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit for security
+  limits: { fileSize: 10 * 1024 * 1024 }
 });
 
 const defaultUsedVehicleTemplatePath = new URL('../../used-vechile-report.jpeg', import.meta.url);
+let cachedTemplateBuffer = null;
 
+async function getTemplateBuffer() {
+  if (!cachedTemplateBuffer) {
+    cachedTemplateBuffer = await readFile(defaultUsedVehicleTemplatePath);
+  }
+  return cachedTemplateBuffer;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ROUTE: /scan-document — Quick scan, no inventory action
+// ═══════════════════════════════════════════════════════════════
 router.post('/scan-document', authenticateToken, upload.single('file'), async (req, res, next) => {
   try {
-    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    if (!req.file) return res.status(400).json({ status: 'error', message: 'No file uploaded' });
     const info = await extractVehicleInfo(req.file.buffer, req.file.mimetype);
     res.json({ success: true, info });
   } catch (err) {
@@ -24,6 +35,11 @@ router.post('/scan-document', authenticateToken, upload.single('file'), async (r
   }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// ROUTE: /generate-used-vehicle-form — USER_FORM processing
+// Extracts: Motor Vehicle Details + Execution ONLY
+// Stores: INVENTORY with status = "Available"
+// ═══════════════════════════════════════════════════════════════
 router.post(
   '/generate-used-vehicle-form',
   authenticateToken,
@@ -44,77 +60,80 @@ router.post(
       ]);
 
       if (!sourceFile) {
-        return res.status(400).json({ message: 'Source document is required' });
+        return res.status(400).json({ status: 'error', message: 'Source document is required' });
       }
 
       if (templateFile && !supportedTemplateMimeTypes.has(templateFile.mimetype)) {
         return res.status(400).json({
+          status: 'error',
           message: 'Used vehicle template must be a PDF, JPG, or PNG',
         });
       }
 
+      // ── Extract data from document ──
       info = await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype);
-      
+      console.log(`[UserForm] Extracted VIN: ${info.vin}, Make: ${info.make}, Model: ${info.model}`);
+
+      // ── Generate PDF ──
       const templateBuffer = templateFile
         ? templateFile.buffer
-        : await readFile(defaultUsedVehicleTemplatePath);
+        : await getTemplateBuffer();
       const templateMimeType = templateFile?.mimetype || 'image/jpeg';
-      const filledPdf = await fillUsedVehiclePdf(
-        templateBuffer,
-        info,
-        templateMimeType
-      );
+      const filledPdf = await fillUsedVehiclePdf(templateBuffer, info, templateMimeType);
+      const pdfBase64Str = filledPdf;
 
       const isPushToInventory = req.body.pushToInventory === 'true';
       let vehicleId = null;
       let registryId = null;
 
-      const pdfBase64Str = filledPdf;
-
-      // 1. ALWAYS check if the vehicle already exists in the inventory, regardless of what we're doing.
-      // If it exists in the inventory, block the entire process and throw an error.
-      if (info.vin) {
-        const existingVehicle = await prisma.vehicle.findUnique({ where: { vin: info.vin } });
-        if (existingVehicle) {
-          throw new Error(`Vehicle with VIN ${info.vin} already exists in inventory.`);
-        }
-      } else if (isPushToInventory && !info.vin) {
-        throw new Error('Could not extract a valid VIN from the document. Unable to push to inventory.');
-      }
-
-      // 2. Check for exact duplicate document in registry to prevent log bloat
-      if (info.vin) {
-        const existingLog = await prisma.documentRegistry.findFirst({
-           where: { vin: info.vin, documentType: 'Used Vehicle Record' },
-           orderBy: { createdAt: 'desc' }
+      // ── Check for duplicate in inventory ──
+      const existingVehicle = await prisma.vehicle.findUnique({ where: { vin: info.vin } });
+      if (existingVehicle) {
+        return res.status(409).json({ 
+          status: 'error', 
+          message: `Vehicle with VIN ${info.vin} already exists in inventory.`,
+          existingId: existingVehicle.id
         });
-        
-        // If a registry entry exists from less than 5 minutes ago for this exact VIN, block it as duplicate
-        if (existingLog && (Date.now() - new Date(existingLog.createdAt).getTime()) < 5 * 60 * 1000) {
-           throw new Error(`Vehicle with VIN ${info.vin} already exists in inventory.`);
-        }
       }
 
-      // ALWAYS save to Document Registry (Logs) AFTER validation
+      // ── Check for duplicate in registry ──
+      const existingLog = await prisma.documentRegistry.findFirst({
+        where: { vin: info.vin, documentType: 'Used Vehicle Record' },
+        orderBy: { createdAt: 'desc' }
+      });
+      if (existingLog && (Date.now() - new Date(existingLog.createdAt).getTime()) < 5 * 60 * 1000) {
+        return res.status(409).json({ 
+          status: 'error', 
+          message: `Vehicle with VIN ${info.vin} already exists in inventory.` 
+        });
+      }
+
+      // ── Save to Document Registry ──
       try {
         await prisma.documentRegistry.create({
           data: {
-            vin: info.vin || null,
+            vin: info.vin,
             make: info.make || null,
             model: info.model || null,
             year: info.year ? String(info.year) : null,
             titleNumber: info.titleNumber || null,
+            purchasedFrom: info.purchasedFrom || null,
+            sellerAddress: info.usedVehicleSourceAddress || null,
+            sellerCity: info.usedVehicleSourceCity || null,
+            sellerState: info.usedVehicleSourceState || null,
+            sellerZip: info.usedVehicleSourceZipCode || null,
             documentType: 'Used Vehicle Record',
             documentBase64: pdfBase64Str,
             sourceFileName: sourceFile.originalname || null,
             sourceDocumentBase64: sourceFile.buffer.toString('base64'),
           }
         });
-        registryId = 'logged'; // Marker that registry was updated
+        registryId = 'logged';
       } catch (logErr) {
         console.error('Failed to save to DocumentRegistry:', logErr);
       }
 
+      // ── Push to Inventory with status = "Available" ──
       if (isPushToInventory) {
         const purchasePrice = Number(info.purchasePrice) || 0;
         const transportCost = Number(info.transportCost) || 0;
@@ -133,7 +152,7 @@ router.post(
             color: info.color || 'Unknown',
             purchaseDate: info.purchaseDate ? new Date(info.purchaseDate) : new Date(),
             titleNumber: info.titleNumber || null,
-            status: 'Available',
+            status: 'Available', // USER_FORM → status = AVAILABLE
             purchase: {
               create: {
                 sellerName: info.purchasedFrom || 'Auction',
@@ -166,12 +185,14 @@ router.post(
           }
         });
         vehicleId = vehicle.id;
+        vehicleCache.delete('vehicle-list'); // Invalidate cache
       }
 
       const fileName = buildUsedVehiclePdfFileName(info);
 
       res.json({
-        success: true,
+        status: 'success',
+        action: 'user_form_processed',
         info,
         fileName,
         pdfBase64: pdfBase64Str,
@@ -183,6 +204,7 @@ router.post(
          const vin = info?.vin;
          const existing = await prisma.vehicle.findUnique({ where: { vin } });
          return res.status(409).json({ 
+           status: 'error',
            message: err.message, 
            existingId: existing?.id 
          });
@@ -194,22 +216,36 @@ router.post(
 
 import { vehicleCache, salesCache } from '../utils/cache.js';
 
+// ═══════════════════════════════════════════════════════════════
+// ROUTE: /upload-bill-of-sale — BILL_OF_SALE processing
+// Extracts: Disposition + VIN ONLY
+// VIN Match: EXACT match in inventory required
+// Action: AVAILABLE → SOLD, move to SALES
+// ═══════════════════════════════════════════════════════════════
 router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), async (req, res, next) => {
   try {
-    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
-    
-    // 1. Extract info from Bill of Sale
-    const billOfSaleInfo = await extractVehicleInfo(req.file.buffer, req.file.mimetype);
-    
-    if (!billOfSaleInfo.vin) {
-      return res.status(400).json({ message: 'Could not extract VIN from Bill of Sale.' });
+    if (!req.file) {
+      return res.status(400).json({ status: 'error', message: 'No file uploaded' });
     }
 
-    const cleanVin = billOfSaleInfo.vin.trim().toUpperCase();
+    // ── Step 1: Extract ONLY Disposition + VIN from Bill of Sale ──
+    const billOfSaleInfo = await extractVehicleInfo(req.file.buffer, req.file.mimetype);
+    
+    console.log(`[BillOfSale] Extracted:`, JSON.stringify(billOfSaleInfo, null, 2));
 
-    // 2. Find existing inventory vehicle and registry entry for this VIN
+    // ── Step 2: Validate VIN ──
+    const extractedVin = billOfSaleInfo.vin || (req.body.vin ? req.body.vin.trim().toUpperCase() : null);
+    
+    if (!extractedVin || extractedVin.length !== 17) {
+      return res.status(400).json({ status: 'error', message: 'VIN not found in BILL_OF_SALE' });
+    }
+
+    // Use manual customer name fallback if AI didn't extract it
+    const customerName = billOfSaleInfo.disposedTo || req.body.customerName || 'Unknown Customer';
+
+    // ── Step 3: EXACT VIN match in inventory ──
     const vehicle = await prisma.vehicle.findUnique({
-      where: { vin: cleanVin },
+      where: { vin: extractedVin },
       include: { 
         purchase: true,
         repairs: true,
@@ -217,187 +253,167 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
       }
     });
 
-    let existingEntry = await prisma.documentRegistry.findFirst({
-      where: { vin: cleanVin, documentType: 'Used Vehicle Record' },
+    if (!vehicle) {
+      return res.status(404).json({ status: 'error', message: `VIN not found in inventory: ${extractedVin}` });
+    }
+
+    console.log(`[BillOfSale] EXACT VIN match found: ${extractedVin} → Vehicle ID: ${vehicle.id}`);
+
+    // ── Step 4: Update vehicle status: AVAILABLE → SOLD ──
+    await prisma.vehicle.update({
+      where: { id: vehicle.id },
+      data: { status: 'Sold' }
+    });
+    console.log(`[BillOfSale] Vehicle status updated: Available → Sold`);
+
+    // ── Step 5: Create Sale record (move to SALES) ──
+    const salePrice = Number(billOfSaleInfo.disposedPrice) || 0;
+    const purchaseCost = vehicle.purchase?.totalPurchaseCost || 0;
+    const repairCost = vehicle.repairs?.reduce((acc, r) => acc + (r.partsCost || 0) + (r.laborCost || 0), 0) || 0;
+    const profit = salePrice - purchaseCost - repairCost;
+
+    if (!vehicle.sale) {
+      await prisma.sale.create({
+        data: {
+          vehicleId: vehicle.id,
+          customerName: customerName,
+          phone: 'N/A',
+          address: [
+            billOfSaleInfo.disposedAddress,
+            billOfSaleInfo.disposedCity,
+            billOfSaleInfo.disposedState,
+            billOfSaleInfo.disposedZip
+          ].filter(Boolean).join(', ') || 'N/A',
+          driverLicense: billOfSaleInfo.disposedDlNumber || null,
+          saleDate: billOfSaleInfo.disposedDate ? new Date(billOfSaleInfo.disposedDate) : new Date(),
+          salePrice,
+          paymentMethod: 'Cash',
+          profit
+        }
+      });
+      console.log(`[BillOfSale] Sale record CREATED: price=${salePrice}, profit=${profit}`);
+    } else {
+      await prisma.sale.update({
+        where: { id: vehicle.sale.id },
+        data: {
+          customerName: customerName !== 'Unknown Customer' ? customerName : vehicle.sale.customerName,
+          address: billOfSaleInfo.disposedAddress ? [
+            billOfSaleInfo.disposedAddress,
+            billOfSaleInfo.disposedCity,
+            billOfSaleInfo.disposedState,
+            billOfSaleInfo.disposedZip
+          ].filter(Boolean).join(', ') : vehicle.sale.address,
+          driverLicense: billOfSaleInfo.disposedDlNumber || vehicle.sale.driverLicense,
+          saleDate: billOfSaleInfo.disposedDate ? new Date(billOfSaleInfo.disposedDate) : vehicle.sale.saleDate,
+          salePrice: salePrice || vehicle.sale.salePrice,
+          profit: salePrice ? (salePrice - purchaseCost - repairCost) : vehicle.sale.profit
+        }
+      });
+      console.log(`[BillOfSale] Sale record UPDATED`);
+    }
+
+    // ── Step 6: Update Registry entry with disposition data ──
+    const existingEntry = await prisma.documentRegistry.findFirst({
+      where: { vin: extractedVin, documentType: 'Used Vehicle Record' },
       orderBy: { createdAt: 'desc' }
     });
 
-    let mergedInfo;
-    
-    // We start with the information extracted from the Bill of Sale
-    mergedInfo = { ...billOfSaleInfo, vin: cleanVin };
-
-    // If we have inventory data, use it as the definitive source for Acquisition details
-    if (vehicle) {
-      mergedInfo = {
-        ...mergedInfo,
-        year: vehicle.year || mergedInfo.year,
-        make: vehicle.make || mergedInfo.make,
-        model: vehicle.model || mergedInfo.model,
-        color: vehicle.color || mergedInfo.color,
-        mileage: vehicle.mileage || mergedInfo.mileage,
-        titleNumber: vehicle.titleNumber || mergedInfo.titleNumber,
-        // Acquisition/Source fields
-        purchasedFrom: vehicle.purchase?.sellerName || mergedInfo.purchasedFrom,
-        purchaseDate: vehicle.purchaseDate || mergedInfo.purchaseDate,
-        purchasePrice: vehicle.purchase?.purchasePrice || mergedInfo.purchasePrice,
-        usedVehicleSourceAddress: vehicle.purchase?.sellerAddress || mergedInfo.usedVehicleSourceAddress,
-        usedVehicleSourceCity: vehicle.purchase?.sellerCity || mergedInfo.usedVehicleSourceCity,
-        usedVehicleSourceState: vehicle.purchase?.sellerState || mergedInfo.usedVehicleSourceState,
-        usedVehicleSourceZipCode: vehicle.purchase?.sellerZip || mergedInfo.usedVehicleSourceZipCode,
-        transportCost: vehicle.purchase?.transportCost || mergedInfo.transportCost,
-        inspectionCost: vehicle.purchase?.inspectionCost || mergedInfo.inspectionCost,
-        registrationCost: vehicle.purchase?.registrationCost || mergedInfo.registrationCost,
+    let filledPdf;
+    if (existingEntry || vehicle) {
+      // Merge disposition data into existing registry entry (or build from scratch if none exists)
+      const mergedInfo = {
+        vin: extractedVin,
+        make: vehicle?.make || '',
+        model: vehicle?.model || '',
+        year: vehicle?.year || '',
+        color: vehicle?.color || '',
+        mileage: vehicle?.mileage || 0,
+        titleNumber: vehicle?.titleNumber || '',
+        purchasedFrom: vehicle?.purchase?.sellerName || '',
+        purchaseDate: vehicle?.purchaseDate?.toISOString(),
+        purchasePrice: vehicle?.purchase?.purchasePrice || 0,
+        usedVehicleSourceAddress: vehicle?.purchase?.sellerAddress || '',
+        usedVehicleSourceCity: vehicle?.purchase?.sellerCity || '',
+        usedVehicleSourceState: vehicle?.purchase?.sellerState || '',
+        usedVehicleSourceZipCode: vehicle?.purchase?.sellerZip || '',
+        // Disposition from Bill of Sale extraction
+        disposedTo: customerName,
+        disposedAddress: billOfSaleInfo.disposedAddress,
+        disposedCity: billOfSaleInfo.disposedCity,
+        disposedState: billOfSaleInfo.disposedState,
+        disposedZip: billOfSaleInfo.disposedZip,
+        disposedDate: billOfSaleInfo.disposedDate,
+        disposedPrice: billOfSaleInfo.disposedPrice,
+        disposedOdometer: billOfSaleInfo.disposedOdometer,
+        disposedDlNumber: billOfSaleInfo.disposedDlNumber,
+        disposedDlState: billOfSaleInfo.disposedDlState,
       };
-    }
 
-    // Finally, layer on any existing registry data if it wasn't already covered
-    if (existingEntry) {
-      mergedInfo = {
-        ...existingEntry,
-        ...mergedInfo,
-      };
-    }
+      const templateBuffer = await getTemplateBuffer();
+      filledPdf = await fillUsedVehiclePdf(templateBuffer, mergedInfo, 'image/jpeg');
 
-    // 3. Regenerate PDF
-    const templateBuffer = await readFile(defaultUsedVehicleTemplatePath);
-    const filledPdf = await fillUsedVehiclePdf(
-      templateBuffer,
-      mergedInfo,
-      'image/jpeg'
-    );
-
-    // 4. Update or Create Registry Entry
-    let result;
-    if (existingEntry) {
-      result = await prisma.documentRegistry.update({
-        where: { id: existingEntry.id },
-        data: {
-          disposedTo: String(mergedInfo.disposedTo || ''),
-          disposedAddress: String(mergedInfo.disposedAddress || ''),
-          disposedCity: String(mergedInfo.disposedCity || ''),
-          disposedState: String(mergedInfo.disposedState || ''),
-          disposedZip: String(mergedInfo.disposedZip || ''),
-          disposedDate: mergedInfo.disposedDate ? String(mergedInfo.disposedDate) : null,
-          disposedPrice: mergedInfo.disposedPrice ? String(mergedInfo.disposedPrice) : null,
-          disposedOdometer: mergedInfo.disposedOdometer ? String(mergedInfo.disposedOdometer) : null,
-          disposedDlNumber: String(mergedInfo.disposedDlNumber || ''),
-          disposedDlState: String(mergedInfo.disposedDlState || ''),
-          documentBase64: filledPdf
-        }
-      });
-    } else {
-      result = await prisma.documentRegistry.create({
-        data: {
-          vin: cleanVin,
-          make: mergedInfo.make,
-          model: mergedInfo.model,
-          year: String(mergedInfo.year),
-          documentType: 'Used Vehicle Record',
-          documentBase64: filledPdf,
-          disposedTo: String(mergedInfo.disposedTo || ''),
-          disposedAddress: String(mergedInfo.disposedAddress || ''),
-          disposedCity: String(mergedInfo.disposedCity || ''),
-          disposedState: String(mergedInfo.disposedState || ''),
-          disposedZip: String(mergedInfo.disposedZip || ''),
-          disposedDate: mergedInfo.disposedDate ? String(mergedInfo.disposedDate) : null,
-          disposedPrice: mergedInfo.disposedPrice ? String(mergedInfo.disposedPrice) : null,
-          disposedOdometer: mergedInfo.disposedOdometer ? String(mergedInfo.disposedOdometer) : null,
-          disposedDlNumber: String(mergedInfo.disposedDlNumber || ''),
-          disposedDlState: String(mergedInfo.disposedDlState || ''),
-          sourceFileName: req.file.originalname,
-          sourceDocumentBase64: req.file.buffer.toString('base64'),
-        }
-      });
-    }
-
-    const fileName = buildUsedVehiclePdfFileName(mergedInfo);
-    let inventorySynced = false;
-
-    // 5. If it's a Bill of Sale, we should also update the Vehicle status in Inventory
-    try {
-      const vehicle = await prisma.vehicle.findUnique({
-        where: { vin: cleanVin },
-        include: { 
-          purchase: true,
-          repairs: true,
-          sale: true
-        }
-      });
-
-      if (vehicle) {
-        console.log(`[Sync] Matching vehicle found for VIN ${cleanVin}. Updating status to Sold.`);
-        // Update vehicle status
-        await prisma.vehicle.update({
-          where: { id: vehicle.id },
-          data: { status: 'Sold' }
+      if (existingEntry) {
+        await prisma.documentRegistry.update({
+          where: { id: existingEntry.id },
+          data: {
+            disposedTo: String(customerName || ''),
+            disposedAddress: String(billOfSaleInfo.disposedAddress || ''),
+            disposedCity: String(billOfSaleInfo.disposedCity || ''),
+            disposedState: String(billOfSaleInfo.disposedState || ''),
+            disposedZip: String(billOfSaleInfo.disposedZip || ''),
+            disposedDate: billOfSaleInfo.disposedDate ? String(billOfSaleInfo.disposedDate) : null,
+            disposedPrice: billOfSaleInfo.disposedPrice ? String(billOfSaleInfo.disposedPrice) : null,
+            disposedOdometer: billOfSaleInfo.disposedOdometer ? String(billOfSaleInfo.disposedOdometer) : null,
+            disposedDlNumber: String(billOfSaleInfo.disposedDlNumber || ''),
+            disposedDlState: String(billOfSaleInfo.disposedDlState || ''),
+            documentBase64: filledPdf
+          }
         });
-
-        // Create or update Sale record
-        const salePrice = Number(billOfSaleInfo.disposedPrice) || 0;
-        const purchaseCost = vehicle.purchase?.totalPurchaseCost || 0;
-        const repairCost = vehicle.repairs?.reduce((acc, r) => acc + (r.partsCost || 0) + (r.laborCost || 0), 0) || 0;
-        const profit = salePrice - purchaseCost - repairCost;
-
-        if (!vehicle.sale) {
-          await prisma.sale.create({
-            data: {
-              vehicleId: vehicle.id,
-              customerName: billOfSaleInfo.disposedTo || 'Unknown Customer',
-              phone: 'N/A',
-              address: [
-                billOfSaleInfo.disposedAddress,
-                billOfSaleInfo.disposedCity,
-                billOfSaleInfo.disposedState,
-                billOfSaleInfo.disposedZip
-              ].filter(Boolean).join(', ') || 'N/A',
-              driverLicense: billOfSaleInfo.disposedDlNumber || null,
-              saleDate: billOfSaleInfo.disposedDate ? new Date(billOfSaleInfo.disposedDate) : new Date(),
-              salePrice,
-              paymentMethod: 'Cash',
-              profit
-            }
-          });
-        } else {
-          await prisma.sale.update({
-            where: { id: vehicle.sale.id },
-            data: {
-              customerName: billOfSaleInfo.disposedTo || vehicle.sale.customerName,
-              address: [
-                billOfSaleInfo.disposedAddress,
-                billOfSaleInfo.disposedCity,
-                billOfSaleInfo.disposedState,
-                billOfSaleInfo.disposedZip
-              ].filter(Boolean).join(', ') || vehicle.sale.address,
-              driverLicense: billOfSaleInfo.disposedDlNumber || vehicle.sale.driverLicense,
-              saleDate: billOfSaleInfo.disposedDate ? new Date(billOfSaleInfo.disposedDate) : vehicle.sale.saleDate,
-              salePrice: salePrice || vehicle.sale.salePrice,
-              profit: salePrice ? (salePrice - purchaseCost - repairCost) : vehicle.sale.profit
-            }
-          });
-        }
-        
-        // IMPORTANT: Invalidate both caches so the frontend sees the change
-        vehicleCache.delete('vehicle-list');
-        salesCache.delete('sales-list');
-        inventorySynced = true;
-        console.log(`[Sync] Caches invalidated for VIN ${cleanVin}`);
+        console.log(`[BillOfSale] Registry entry UPDATED with disposition data`);
       } else {
-        console.warn(`[Sync] No vehicle found in inventory matching VIN ${cleanVin}`);
+        await prisma.documentRegistry.create({
+          data: {
+            vin: extractedVin,
+            make: vehicle?.make || '',
+            model: vehicle?.model || '',
+            year: String(vehicle?.year || ''),
+            documentType: 'Used Vehicle Record',
+            documentBase64: filledPdf,
+            disposedTo: String(customerName || ''),
+            disposedAddress: String(billOfSaleInfo.disposedAddress || ''),
+            disposedCity: String(billOfSaleInfo.disposedCity || ''),
+            disposedState: String(billOfSaleInfo.disposedState || ''),
+            disposedZip: String(billOfSaleInfo.disposedZip || ''),
+            disposedDate: billOfSaleInfo.disposedDate ? String(billOfSaleInfo.disposedDate) : null,
+            disposedPrice: billOfSaleInfo.disposedPrice ? String(billOfSaleInfo.disposedPrice) : null,
+            disposedOdometer: billOfSaleInfo.disposedOdometer ? String(billOfSaleInfo.disposedOdometer) : null,
+            disposedDlNumber: String(billOfSaleInfo.disposedDlNumber || ''),
+            disposedDlState: String(billOfSaleInfo.disposedDlState || ''),
+            sourceFileName: req.file.originalname,
+            sourceDocumentBase64: req.file.buffer.toString('base64'),
+          }
+        });
+        console.log(`[BillOfSale] New Registry entry CREATED with disposition data`);
       }
-    } catch (syncErr) {
-      console.error('[Sync Error] Failed to sync Bill of Sale with Inventory:', syncErr);
     }
 
+    // ── Step 7: Invalidate caches ──
+    vehicleCache.delete('vehicle-list');
+    salesCache.delete('sales-list');
+
+    // ── Step 8: Return strict JSON response ──
+    const fileName = `UsedVehicleRecord_${extractedVin}.pdf`;
     res.json({
-      success: true,
-      info: mergedInfo,
-      fileName,
-      pdfBase64: filledPdf,
-      registryId: result.id,
-      inventorySynced
+      status: 'success',
+      action: 'updated_inventory_and_sales',
+      vin: extractedVin,
+      info: billOfSaleInfo,
+      pdfBase64: typeof filledPdf !== 'undefined' ? filledPdf : null,
+      fileName
     });
+
   } catch (err) {
+    console.error('[BillOfSale] ERROR:', err);
     next(err);
   }
 });

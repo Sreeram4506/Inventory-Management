@@ -1,7 +1,7 @@
 import path from 'path';
 import { createRequire } from 'module';
 import mammoth from 'mammoth';
-import { createCanvas } from '@napi-rs/canvas';
+import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { createWorker } from 'tesseract.js';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import dotenv from 'dotenv';
@@ -15,71 +15,110 @@ const ocrLangPath = path.dirname(
   require.resolve('@tesseract.js-data/eng/4.0.0/eng.traineddata.gz')
 );
 
+// ═══════════════════════════════════════════════════════════════
+// SINGLE ENTRY POINT — Extract everything from any document
+// ═══════════════════════════════════════════════════════════════
 export async function extractVehicleInfo(fileBuffer, mimetype) {
-  // First, see if Vision API can handle it (images, or we'll convert PDF first page if scanned)
-  const aiInfo = await parseVehicleInfoFromDocument(fileBuffer, mimetype);
-  if (aiInfo) {
-    return normalizeVehicleInfo(aiInfo);
+  console.log(`[Parser] START | mime=${mimetype} | nvidia=${hasNvidiaKey}`);
+
+  // For images — go straight to Vision AI
+  if (mimetype.startsWith('image/')) {
+    const visionResult = await visionExtract(fileBuffer, mimetype);
+    if (visionResult) return visionResult;
+    // Fallback: OCR the image then send text to LLM
+    const ocrText = await ocrImage(fileBuffer);
+    if (hasNvidiaKey && ocrText.length > 30) {
+      const textResult = await textExtract(ocrText);
+      if (textResult) return textResult;
+    }
+    return {};
   }
 
+  // For PDFs
   if (mimetype === 'application/pdf') {
     const { pages, combinedText } = await extractPdfTextPages(fileBuffer);
-    
-    // If we have native text and NVIDIA is enabled, use the fast Text LLM
-    if (combinedText.replace(/\s/g, '').length >= 40 && hasNvidiaKey) {
-       const textAiInfo = await parseVehicleInfo(combinedText);
-       if (textAiInfo && textAiInfo.vin) return textAiInfo;
+    console.log(`[Parser] PDF native text: ${combinedText.length} chars`);
+
+    // If PDF has native text, use text LLM
+    if (combinedText.replace(/\s/g, '').length > 30 && hasNvidiaKey) {
+      const textResult = await textExtract(combinedText);
+      if (textResult) return textResult;
     }
 
-    const pageCandidates = (pages.length ? pages : [combinedText]).map((pageText) => {
-      const info = normalizeVehicleInfo(mockExtraction(pageText));
-      return {
-        info,
-        score: scoreVehicleInfo(info, pageText),
-      };
-    });
-    const bestCandidate = [...pageCandidates].sort((left, right) => right.score - left.score)[0];
+    // Scanned PDF — render to image, use vision
+    const visionResult = await visionExtract(fileBuffer, mimetype);
+    if (visionResult) return visionResult;
 
-    if (bestCandidate?.score > 0) {
-      return bestCandidate.info;
-    }
+    return {};
   }
 
+  // Word docs and other text
   const text = await extractText(fileBuffer, mimetype);
-  
-  // Last resort: use Text LLM if previously skipped, otherwise mock extraction
-  if (hasNvidiaKey && text.replace(/\s/g, '').length >= 40) {
-      const finalTry = await parseVehicleInfo(text);
-      if (finalTry && finalTry.vin) return finalTry;
+  if (hasNvidiaKey && text.length > 30) {
+    const textResult = await textExtract(text);
+    if (textResult) return textResult;
   }
-  
-  return normalizeVehicleInfo(mockExtraction(text));
+  return {};
 }
 
-export async function extractText(fileBuffer, mimetype) {
-  if (mimetype === 'application/pdf') {
-    const { combinedText } = await extractPdfTextPages(fileBuffer);
-    return combinedText;
-  } else if (
-    mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-    mimetype === 'application/msword'
-  ) {
-    const result = await mammoth.extractRawText({ buffer: fileBuffer });
-    return result.value;
-  } else if (mimetype.startsWith('image/')) {
-    return ocrImage(fileBuffer);
-  } else {
-    return fileBuffer.toString('utf-8');
-  }
-}
-
-export async function parseVehicleInfo(text) {
-  if (!hasNvidiaKey) {
-    console.warn('NVIDIA API key not found, falling back to mock extraction');
-    return normalizeVehicleInfo(mockExtraction(text));
-  }
-
+// ═══════════════════════════════════════════════════════════════
+// TEXT LLM — One simple prompt, extract ALL fields
+// ═══════════════════════════════════════════════════════════════
+async function textExtract(text) {
   try {
+    const prompt = `Read this vehicle document carefully and extract ALL information. Return ONLY a JSON object.
+    
+    VIN EXTRACTION RULE:
+    - You MUST extract exactly 17 characters for the VIN.
+    - CRITICAL: The first character of the VIN (often 1, 2, 3, 4, 5, J, W, etc.) is frequently printed VERY CLOSE to the left vertical line or boundary. Look extremely closely.
+    - If you extract only 16 characters, YOU HAVE MISSED THE FIRST CHARACTER. Look again at the far left edge.
+    - Do NOT include any labels like "VIN:" or "V.I.N. No." in the output.
+
+{
+  "vin": "5FNYF4H61BB077174",
+  "make": "Honda",
+  "model": "Fit",
+  "year": 2013,
+  "color": "Black",
+  "mileage": 135182,
+  "titleNumber": "BN815993",
+  "stockNumber": "477843",
+  "purchasedFrom": "name of the SELLER of the vehicle",
+  "purchasePrice": 4100,
+  "purchaseDate": "2024-08-23",
+  "usedVehicleSourceAddress": "seller street address",
+  "usedVehicleSourceCity": "Norwood",
+  "usedVehicleSourceState": "MA",
+  "usedVehicleSourceZipCode": "02062",
+  "disposedTo": "name of the BUYER/PURCHASER/CUSTOMER",
+  "disposedAddress": "buyer street address",
+  "disposedCity": "buyer city",
+  "disposedState": "MA",
+  "disposedZip": "02703",
+  "disposedDate": "2025-02-11",
+  "disposedPrice": 5300,
+  "disposedOdometer": 135361,
+  "disposedDlNumber": "S29353237",
+  "disposedDlState": "MA"
+}
+
+IMPORTANT INSTRUCTIONS:
+- "purchasePrice" = The TOTAL COST of the vehicle (look for 'Total Price', 'Grand Total', or the final bottom-line amount including any buyer fees).
+- "disposedPrice" = The TOTAL SELLING PRICE for the customer (look for the 'Total' or 'Final Price' at the bottom of the costs section).
+- "purchasedFrom" = whoever is labeled SELLER on the document. 
+- "disposedTo" = whoever is labeled BUYER, PURCHASER, or "Print Name(s) of Purchaser(s)" on the document.
+- If both SELLER and BUYER are shown, extract both.
+- If this is an auction document (ADESA, Manheim, etc.), the SELLER is listed under "SELLER:" and the BUYER is listed under "BUYER:".
+- If this is a retail Bill of Sale, look for "Seller's Printed Name" and "Purchaser's Printed Name".
+- VIN must be exactly 17 characters. Remove spaces/dashes.
+- All money values as plain numbers: 5300 not $5,300.00
+- Dates as ISO 8601 (YYYY-MM-DD)
+- Use null for any field not found. Do NOT guess.
+
+Document text:
+${text}`;
+
+    console.log(`[Parser:Text] Sending ${text.length} chars to LLM...`);
     const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -89,281 +128,72 @@ export async function parseVehicleInfo(text) {
       body: JSON.stringify({
         model: "meta/llama-3.1-8b-instruct",
         messages: [
-          {
-            role: "system",
-            content: "You are a precise vehicle document data extractor. You ONLY output valid JSON with no extra text, markdown, or explanation. Every field must be present in the output."
-          },
-          {
-            role: "user",
-            content: `Extract vehicle information from the text below. Return ONLY a JSON object.
-
-Required keys (use null when not found):
-- vin (string, exactly 17 alphanumeric chars, letters I/O/Q are never valid in VINs)
-- make (string, e.g. "Honda", "Toyota", "Ford")
-- model (string, e.g. "Civic", "Camry", "F-150")
-- year (number, 4-digit year)
-- color (string)
-- mileage (number, odometer reading)
-- purchasedFrom (string, the SELLER name, auction house, or dealership)
-- purchasePrice (number, the dollar amount paid)
-- purchaseDate (string, ISO 8601 format YYYY-MM-DDTHH:mm:ss.sssZ)
-- paymentMethod (string, e.g. "Cash", "Check", "Bank Transfer")
-- usedVehicleSourceAddress (string, seller street address)
-- usedVehicleSourceCity (string)
-- usedVehicleSourceState (string, 2-letter state code)
-- usedVehicleSourceZipCode (string, 5-digit zip)
-- transportCost (number)
-- repairCost (number)
-- inspectionCost (number)
-- registrationCost (number)
-- titleNumber (string)
-- disposedTo (string, the BUYER/PURCHASER name)
-- disposedAddress (string, buyer street address)
-- disposedCity (string)
-- disposedState (string, 2-letter state code)
-- disposedZip (string, 5-digit zip)
-- disposedDate (string, ISO 8601 format)
-- disposedPrice (number, selling price to the customer)
-- disposedOdometer (number, odometer reading at time of sale)
-- disposedDlNumber (string, driver's license number of buyer)
-- disposedDlState (string, DL state)
-
-Rules:
-1. VIN must be exactly 17 characters. Remove spaces/dashes. Never include letters I, O, or Q.
-2. All monetary values must be plain numbers (no $ or commas). Example: 15000 not $15,000.
-3. "purchasedFrom" is the SELLER of the vehicle, NOT the buyer/purchaser.
-4. Look for "Bill of Sale", "Seller:", "Obtained From", "Sold By" to find the seller.
-5. Look for "Selling Price", "Purchase Price", "Sale Price", "Total" for the price.
-6. Dates: convert any format (MM/DD/YYYY, DD-MON-YYYY, etc.) to ISO 8601.
-
-Document text:
-${text}`
-          }
+          { role: "system", content: "You are a document data extractor. Output ONLY valid JSON. No markdown, no explanation, no extra text." },
+          { role: "user", content: prompt }
         ],
-        temperature: 0.1,
-        max_tokens: 1024,
+        temperature: 0.05,
+        max_tokens: 1500,
         stream: false
       })
     });
 
     const data = await response.json();
-    if (data.error) {
-      throw new Error(`NVIDIA API Error: ${data.error.message || JSON.stringify(data.error)}`);
-    }
-    const resultText = data.choices[0].message.content;
-    const jsonMatch = resultText.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? jsonMatch[0] : resultText;
-    return normalizeVehicleInfo(JSON.parse(jsonStr));
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+
+    const raw = data.choices[0].message.content;
+    console.log(`[Parser:Text] Raw AI response: ${raw.substring(0, 800)}`);
+
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON in response');
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    const result = clean(parsed);
+    console.log(`[Parser:Text] Cleaned result:`, JSON.stringify(result, null, 2));
+    return result;
   } catch (err) {
-    console.error('NVIDIA Text Extraction failed:', err);
+    console.error('[Parser:Text] FAILED:', err.message);
     return null;
   }
 }
 
-function mockExtraction(text) {
-  const normalizedText = text
-    .replace(/\r/g, '')
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .replace(/[^\S\n]+/g, ' ');
-  const condensedText = normalizedText.replace(/\n+/g, '\n');
-  const flattenedText = normalizedText.replace(/\s+/g, ' ');
-
-  const getFirstMatch = (patterns, defaultValue = '') => {
-    for (const pattern of patterns) {
-      const match = condensedText.match(pattern) || flattenedText.match(pattern);
-      if (match?.[1]) {
-        return match[1].trim();
-      }
-    }
-
-    return defaultValue;
-  };
-
-  const cleanMoney = (value) => {
-    const rawValue = (value || '').replace(/[^0-9.]/g, '');
-    const normalizedValue = /^\d{1,3}\.\d{4,5}$/.test(rawValue)
-      ? String(Number(rawValue.replace('.', '')) / 100)
-      : rawValue;
-    const parsed = parseFloat(normalizedValue || '0');
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-
-  const cleanNumber = (value) => {
-    const parsed = parseInt((value || '0').replace(/[^\d]/g, ''), 10);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-
-  const cleanVehicleToken = (value) =>
-    value
-      .replace(/\s+/g, ' ')
-      .replace(/\b(?:stock number|vin|color)\b.*$/i, '')
-      .replace(/\b[xX]\b$/g, '')
-      .replace(/[^\w\s/-]/g, '')
-      .replace(/\s+-\s*$/g, '')
-      .trim();
-
-  const vehicleLine =
-    condensedText.match(/(?:Mfrs\.?\s*)?(?:Model\s*)?Year\s*:?\s*(\d{4})\s+Make\s*:?\s*(.+?)\s+Model\s*:?\s*(.+?)(?=\s+(?:VIN|Color|Stock|Ident))/is) ||
-    flattenedText.match(/(?:Mfrs\.?\s*)?(?:Model\s*)?Year\s*:?\s*(\d{4})\s+Make\s*:?\s*(.+?)\s+Model\s*:?\s*(.+?)(?=\s+(?:VIN|Color|Stock|Ident))/is) ||
-    condensedText.match(/Year\s+(\d{4})\s+Make\s+(.+?)\s+Model\s+(.+?)(?=\s+VIN|\s+Color|\s+Stock Number)/is) ||
-    flattenedText.match(/Year\s+(\d{4})\s+Make\s+(.+?)\s+Model\s+(.+?)(?=\s+VIN|\s+Color|\s+Stock Number)/is) ||
-    // Alternative patterns for different document formats
-    condensedText.match(/(?:Vehicle|Car|Auto).*?(\d{4})\s+(.+?)\s+(.+?)(?=\s+VIN|\s+Color|\s+Mileage)/is) ||
-    flattenedText.match(/(?:Vehicle|Car|Auto).*?(\d{4})\s+(.+?)\s+(.+?)(?=\s+VIN|\s+Color|\s+Mileage)/is);
-
-  // Enhanced VIN extraction with better pattern matching
-  // Try multiple patterns from most specific to least specific
-  const vinMatch =
-    condensedText.match(/(?:Vehicle\s*Ident(?:ification)?\s*N(?:o|umber)\.?)\s*[:#]?\s*([A-HJ-NPR-Z0-9][A-HJ-NPR-Z0-9\s-]{15,23})/i) ||
-    flattenedText.match(/(?:Vehicle\s*Ident(?:ification)?\s*N(?:o|umber)\.?)\s*[:#]?\s*([A-HJ-NPR-Z0-9][A-HJ-NPR-Z0-9\s-]{15,23})/i) ||
-    condensedText.match(/VIN\s*[:#]?\s*([A-HJ-NPR-Z0-9][A-HJ-NPR-Z0-9\s-]{15,23})/i) ||
-    flattenedText.match(/VIN\s*[:#]?\s*([A-HJ-NPR-Z0-9][A-HJ-NPR-Z0-9\s-]{15,23})/i) ||
-    // Standalone 17-char alphanumeric (likely a VIN)
-    flattenedText.match(/\b([A-HJ-NPR-Z0-9]{17})\b/i);
-  const normalizedVin = vinMatch
-    ? vinMatch[1].replace(/[^A-HJ-NPR-Z0-9]/gi, '').slice(0, 17).toUpperCase()
-    : '';
-
-  // Improved seller/address extraction with better alignment
-  const sellerBlock =
-    condensedText.match(/seller:\s*([^\n]+)\n([^\n]+)\n([A-Za-z .'-]+),\s*([A-Z]{2})\s*(\d{5})/i) ||
-    flattenedText.match(/seller:\s*(.+?)\s+(?:Purchaser's Name \(Print\)\s+)?(\d+[A-Za-z0-9 .'-]+?)\s+([A-Za-z .'-]+),\s*([A-Z]{2})\s*(\d{5})/i) ||
-    // Alternative seller patterns
-    condensedText.match(/(?:Sold By|Seller|From):\s*([^\n]+)\n([^\n]*)\n([^\n]*)/i) ||
-    flattenedText.match(/(?:Sold By|Seller|From):\s*(.+?)(?:\s+(?:Address|Location):\s*(.+?))?(?:\s+(?:City|State):\s*(.+?),\s*([A-Z]{2}))?(?:\s+(\d{5}))?/i);
-
-  const dateText = getFirstMatch([
-    /(?:Transaction Date|Date of Sale|Date Sold|Dated)[:\s]*([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/i,
-    /dated\s+([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/i,
-    /(?:Date)[:\s]*([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4})/i,
-    /\b([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})\b/i,
-    /\b([0-9]{2}-[A-Z]{3}-[0-9]{4})\b/i,
-    /\b([A-Z][a-z]{2,8}\s+\d{1,2},?\s+\d{4})\b/,
-  ]);
-
-  return {
-    vin: normalizedVin,
-    make: cleanVehicleToken(
-      vehicleLine?.[2] ||
-        getFirstMatch([/Make[:\s]+([A-Za-z0-9 .'-]+)/i], '')
-    ),
-    model: cleanVehicleToken(
-      vehicleLine?.[3] ||
-        getFirstMatch([/Model[:\s]+([A-Za-z0-9 .'-]+)/i], '')
-    ),
-    year: cleanNumber(
-      vehicleLine?.[1] ||
-        getFirstMatch([/(?:Model Year|Year)[:\s]+(\d{4})/i], '0')
-    ),
-    color: cleanVehicleToken(
-      getFirstMatch([
-        /Color[:\s]+([A-Za-z0-9 .'-]+)/i,
-        /Color\s+([A-Za-z0-9 .'-]+?)(?=\s+(?:EXCEPT|VIN|Stock Number|x\b))/i,
-      ])
-    ),
-    mileage: cleanNumber(
-      getFirstMatch([
-        /now reads\s+([0-9,]{3,8})\b/i,
-        /Odometer\s*(?:In|Out|Reading)?\.?\s*[:#]?\s*([0-9,]{3,8})\b/i,
-        /Mileage[:\s]+([0-9,]{3,8})\b/i,
-        /(?:Miles|MI)[:\s]+([0-9,]{3,8})\b/i,
-      ], '0')
-    ),
-    purchasePrice: cleanMoney(
-      getFirstMatch([
-        /(?:selling\s*price|purchase\s*price|sale\s*price|total\s*price|amount\s*paid)\s*[:$~©]*\s*\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/i,
-        /(?:sellingprice|selling price).*?\$([0-9][0-9.,]{3,})/i,
-        /(?:seilingprice|sellingprice|selling price)[^0-9$]{0,20}\$?\s*([0-9][0-9.,]{3,})/i,
-        /\$\s*([0-9][0-9,]*\.?[0-9]{0,2})\s*(?:dollars|paid|total)/i,
-        /(?:for the sum of|sum of|amount of)\s*\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/i,
-      ], '0')
-    ),
-    purchaseDate: parseDateToIso(dateText) || new Date().toISOString(),
-    purchasedFrom: cleanVehicleToken(
-      sellerBlock?.[1] ||
-        getFirstMatch([
-          /Obtained From \(Source\):\s*(.+?)(?=\s+Transaction Date)/i,
-          /seller:\s*([^\n]+)/i,
-          /(?:Purchased From|Seller)[:\s]+([A-Za-z0-9 .&'-]+)/i,
-        ], 'Auction')
-    ).replace(/\s*-\s*$/, ''),
-    paymentMethod: getFirstMatch([/Payment Method[:\s]+([A-Za-z\s]+)/i], 'Bank Transfer'),
-    usedVehicleSourceAddress: (sellerBlock?.[2] || getFirstMatch([/(?:Address|Location)[:\s]+([A-Za-z0-9 .'-]+)/i], '')).replace(/^Purchaser's Name \(Print\)\s*/i, '').trim(),
-    usedVehicleSourceCity: (sellerBlock?.[3] || getFirstMatch([/(?:City or Town|City|Town)[:\s]+([A-Za-z .'-]+)/i], '')).trim(),
-    usedVehicleSourceState: (sellerBlock?.[4] || getFirstMatch([/(?:State)[:\s]+([A-Z]{2})\b/i], '')).trim(),
-    usedVehicleSourceZipCode: (sellerBlock?.[5] || getFirstMatch([/(?:Zip Code|Zip|Postal)[:\s]+(\d{5}(?:-\d{4})?)/i], '')).trim(),
-    // Additional cost extraction
-    transportCost: cleanMoney(
-      getFirstMatch([
-        /transport(?:ation)?(?: cost| fee)?\s*[:$~©]*\s*\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/i,
-        /shipping(?: cost| fee)?\s*[:$~©]*\s*\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/i,
-      ], '0')
-    ),
-    repairCost: cleanMoney(
-      getFirstMatch([
-        /repair(?:s)?(?: cost| fee)?\s*[:$~©]*\s*\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/i,
-        /maintenance(?: cost| fee)?\s*[:$~©]*\s*\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/i,
-      ], '0')
-    ),
-    inspectionCost: cleanMoney(
-      getFirstMatch([
-        /inspection(?: cost| fee)?\s*[:$~©]*\s*\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/i,
-        /certification(?: cost| fee)?\s*[:$~©]*\s*\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/i,
-      ], '0')
-    ),
-    registrationCost: cleanMoney(
-      getFirstMatch([
-        /registration(?: cost| fee)?\s*[:$~©]*\s*\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/i,
-        /title(?: cost| fee)?\s*[:$~©]*\s*\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/i,
-        /dmv(?: cost| fee)?\s*[:$~©]*\s*\$?\s*([0-9][0-9,]*\.?[0-9]{0,2})/i,
-      ], '0')
-    ),
-    titleNumber: getFirstMatch([
-      /(?:Title No|Title Number|Certificate of Title|Title#)[:\s]*([A-Z0-9]{5,20})/i,
-      /Title\s*[:#]?\s*([A-Z0-9]{5,20})/i
-    ], null),
-  };
-}
-
-async function parseVehicleInfoFromDocument(fileBuffer, mimetype) {
+// ═══════════════════════════════════════════════════════════════
+// VISION LLM — For images and scanned PDFs
+// ═══════════════════════════════════════════════════════════════
+async function visionExtract(fileBuffer, mimetype) {
   if (!hasNvidiaKey) return null;
 
   let base64Image = '';
-  let queryMimeType = mimetype;
+  let imgMime = mimetype;
 
   if (mimetype === 'application/pdf') {
     try {
-      // Load PDF and check if it has text layer
       const loadingTask = getDocument({ data: new Uint8Array(fileBuffer), useSystemFonts: true, disableFontFace: true });
-      const document = await loadingTask.promise;
-      const page = await document.getPage(1);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items.map((item) => ('str' in item ? item.str : '')).join(' ').trim();
-      
-      // If native text exists, handle via text LLM later
-      if (pageText.length > 40) {
-        return null; 
-      }
+      const doc = await loadingTask.promise;
+      const page = await doc.getPage(1);
+      const tc = await page.getTextContent();
+      const txt = tc.items.map(i => ('str' in i ? i.str : '')).join(' ').trim();
+      if (txt.length > 40) return null; // has native text, skip vision
 
-      // NO NATIVE TEXT: Render first page directly to PNG for ultra-fast Vision AI
-      const viewport = page.getViewport({ scale: 1.5 });
-      const canvasFactory = createCanvasFactory();
-      const { canvas, context } = canvasFactory.create(
-        Math.ceil(viewport.width),
-        Math.ceil(viewport.height)
-      );
-
-      await page.render({ canvasContext: context, viewport, canvasFactory }).promise;
-      base64Image = canvas.toBuffer('image/png').toString('base64');
-      queryMimeType = 'image/png';
-      canvasFactory.destroy({ canvas, context });
-    } catch (err) {
-      console.warn('PDF to Image conversion failed:', err);
+      const vp = page.getViewport({ scale: 1.5 });
+      const cf = createCanvasFactory();
+      const { canvas, context } = cf.create(Math.ceil(vp.width), Math.ceil(vp.height));
+      await page.render({ canvasContext: context, viewport: vp, canvasFactory: cf }).promise;
+      base64Image = canvas.toBuffer('image/jpeg', { quality: 0.8 }).toString('base64');
+      imgMime = 'image/jpeg';
+      cf.destroy({ canvas, context });
+    } catch (e) {
+      console.warn('[Parser:Vision] PDF render fail:', e.message);
       return null;
     }
   } else if (mimetype.startsWith('image/')) {
-    base64Image = fileBuffer.toString('base64');
+    try {
+      const resizedBuffer = await resizeImageIfNeeded(fileBuffer);
+      base64Image = resizedBuffer.toString('base64');
+      imgMime = 'image/jpeg';
+    } catch (e) {
+      console.warn('[Parser:Vision] Image resize fail:', e.message);
+      base64Image = fileBuffer.toString('base64');
+    }
   } else {
     return null;
   }
@@ -371,45 +201,52 @@ async function parseVehicleInfoFromDocument(fileBuffer, mimetype) {
   if (!base64Image) return null;
 
   try {
-    const prompt = `You are a precise vehicle document data extractor. Analyze this vehicle purchase document image and return ONLY a valid JSON object with NO extra text.
+    const prompt = `Read this vehicle document image and extract ALL data. Return ONLY a JSON object.
 
-Required keys (use null when not found):
-- vin: string, exactly 17 alphanumeric characters (no I, O, or Q)
-- make: string (e.g. "Honda")
-- model: string (e.g. "Civic")
-- year: number (4-digit)
-- color: string
-- mileage: number (odometer reading)
-- purchasedFrom: string (SELLER name — look for "Seller:", "Obtained From", "Sold By")
-- purchasePrice: number (dollar amount, no $ sign)
-- purchaseDate: string (ISO 8601 format)
-- paymentMethod: string
-- usedVehicleSourceAddress: string (seller street address)
-- usedVehicleSourceCity: string
-- usedVehicleSourceState: string (2-letter code)
-- usedVehicleSourceZipCode: string (5-digit)
-- transportCost: number
-- repairCost: number
-- inspectionCost: number
-- registrationCost: number
-- titleNumber: string
-- disposedTo: string (BUYER name — look for "Purchaser(s)", "Buyer", "Sold To")
-- disposedAddress: string (buyer street address)
-- disposedCity: string
-- disposedState: string
-- disposedZip: string
-- disposedDate: string (ISO 8601 format)
-- disposedPrice: number (selling price)
-- disposedOdometer: number (odometer at sale)
-- disposedDlNumber: string (buyer's DL)
-- disposedDlState: string
+    VIN EXTRACTION RULE:
+    - You MUST extract exactly 17 characters for the VIN.
+    - CRITICAL: The first character of the VIN (often 1, 2, 3, 4, 5, J, W, etc.) is frequently printed VERY CLOSE to the left vertical line or boundary. Look extremely closely.
+    - If you extract only 16 characters, YOU HAVE MISSED THE FIRST CHARACTER. Look again at the far left edge.
+    - Do NOT include any labels like "VIN:" or "V.I.N. No." in the output.
 
-Critical rules:
-1. VIN is exactly 17 characters. Remove any spaces or dashes. Never include I, O, or Q.
-2. "purchasedFrom" is the SELLER, not the buyer.
-3. All dollar amounts as plain numbers (15000 not $15,000).
-4. Read every single character carefully — OCR errors are common.`;
+{
+  "vin": "5FNYF4H61BB077174",
+  "make": "Honda",
+  "model": "Fit",
+  "year": 2013,
+  "color": "Black",
+  "mileage": 135182,
+  "titleNumber": "BN815993",
+  "purchasedFrom": "SELLER name",
+  "purchasePrice": 4100,
+  "purchaseDate": "2024-08-23",
+  "usedVehicleSourceAddress": "seller address",
+  "usedVehicleSourceCity": "city",
+  "usedVehicleSourceState": "MA",
+  "usedVehicleSourceZipCode": "02062",
+  "disposedTo": "BUYER/PURCHASER name",
+  "disposedAddress": "buyer address",
+  "disposedCity": "city",
+  "disposedState": "MA",
+  "disposedZip": "02703",
+  "disposedDate": "2025-02-11",
+  "disposedPrice": 5300,
+  "disposedOdometer": 135361,
+  "disposedDlNumber": "S29353237",
+  "disposedDlState": "MA"
+}
 
+RULES:
+- "purchasePrice" = The TOTAL amount paid (look for 'Total Price' or bottom-line amount).
+- "disposedPrice" = The TOTAL amount sold for (look for 'Total' or 'Final Balance').
+- "purchasedFrom" = SELLER on the document
+- "disposedTo" = BUYER/PURCHASER on the document
+- VIN = exactly 17 chars, no I/O/Q
+- Money = plain numbers (5300 not $5,300)
+- Use null if not found
+- Return ONLY JSON`;
+
+    console.log(`[Parser:Vision] Sending image to Vision AI...`);
     const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -417,212 +254,164 @@ Critical rules:
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "meta/llama-3.2-11b-vision-instruct",
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: prompt },
-              { type: "image_url", image_url: { url: `data:${queryMimeType};base64,${base64Image}` } }
-            ]
-          }
-        ],
-        max_tokens: 1024,
+        model: "meta/llama-3.2-90b-vision-instruct",
+        messages: [{
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: `data:${imgMime};base64,${base64Image}` } }
+          ]
+        }],
+        max_tokens: 1500,
         stream: false
       })
     });
 
     const data = await response.json();
-    if (data.error) {
-      throw new Error(`NVIDIA Vision Error: ${data.error.message || JSON.stringify(data.error)}`);
-    }
-    const resultText = data.choices[0].message.content;
-    
-    // Attempt to extract JSON if it's wrapped in markers or text
-    let jsonStr = resultText;
-    const jsonMatch = resultText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      jsonStr = jsonMatch[0];
-    }
+    if (data.error) throw new Error(data.error.message);
 
-    try {
-      return JSON.parse(jsonStr);
-    } catch (parseErr) {
-      console.error('Failed to parse AI response as JSON:', resultText);
-      throw new Error('AI returned an invalid format. Please try again or enter details manually.');
-    }
+    const raw = data.choices[0].message.content;
+    console.log(`[Parser:Vision] Raw response: ${raw.substring(0, 800)}`);
+
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON in vision response');
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    const result = clean(parsed);
+    console.log(`[Parser:Vision] Cleaned result:`, JSON.stringify(result, null, 2));
+    return result;
   } catch (err) {
-    console.error('NVIDIA Vision extraction failed:', err);
+    console.error('[Parser:Vision] FAILED:', err.message);
     return null;
   }
 }
 
-async function ocrPdf(fileBuffer) {
-  const { combinedText } = await extractPdfTextPages(fileBuffer, { forceOcr: true });
-  return combinedText;
+// ═══════════════════════════════════════════════════════════════
+// CLEAN — Normalize all extracted data
+// ═══════════════════════════════════════════════════════════════
+function clean(d) {
+  if (!d) return {};
+  const s = v => String(v || '').trim();
+  const n = v => { const x = parseFloat(String(v || '0').replace(/[^0-9.]/g, '')); return Number.isFinite(x) ? x : 0; };
+  const i = v => { const x = parseInt(String(v || '0').replace(/\D/g, ''), 10); return Number.isFinite(x) ? x : 0; };
+  const vin = s(d.vin).toUpperCase()
+    .replace(/^VIN[:\s-]*/, '') // Only strip exact "VIN:" prefix if AI accidentally includes it
+    .replace(/[^A-Z0-9]/g, '')
+    .replace(/[IOQ]/g, '')
+    .slice(0, 17);
+  const dt = v => {
+    if (!v) return null;
+    const t = String(v).trim();
+    const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) return new Date(Date.UTC(+m[3], +m[1]-1, +m[2])).toISOString();
+    const dd = new Date(t);
+    return isNaN(dd.getTime()) ? null : dd.toISOString();
+  };
+
+  return {
+    vin,
+    make: s(d.make) || null,
+    model: s(d.model) || null,
+    year: i(d.year) || null,
+    color: s(d.color) || null,
+    mileage: i(d.mileage),
+    titleNumber: s(d.titleNumber) || null,
+    stockNumber: s(d.stockNumber) || null,
+    purchasedFrom: s(d.purchasedFrom) || null,
+    purchasePrice: n(d.purchasePrice),
+    purchaseDate: dt(d.purchaseDate),
+    usedVehicleSourceAddress: s(d.usedVehicleSourceAddress) || null,
+    usedVehicleSourceCity: s(d.usedVehicleSourceCity) || null,
+    usedVehicleSourceState: s(d.usedVehicleSourceState).toUpperCase().slice(0, 2) || null,
+    usedVehicleSourceZipCode: s(d.usedVehicleSourceZipCode) || null,
+    disposedTo: s(d.disposedTo) || null,
+    disposedAddress: s(d.disposedAddress) || null,
+    disposedCity: s(d.disposedCity) || null,
+    disposedState: s(d.disposedState).toUpperCase().slice(0, 2) || null,
+    disposedZip: s(d.disposedZip) || null,
+    disposedDate: dt(d.disposedDate),
+    disposedPrice: n(d.disposedPrice),
+    disposedOdometer: i(d.disposedOdometer),
+    disposedDlNumber: s(d.disposedDlNumber) || null,
+    disposedDlState: s(d.disposedDlState).toUpperCase().slice(0, 2) || null,
+    transportCost: n(d.transportCost),
+    repairCost: n(d.repairCost),
+    inspectionCost: n(d.inspectionCost),
+    registrationCost: n(d.registrationCost),
+    paymentMethod: s(d.paymentMethod) || null,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TEXT EXTRACTION HELPERS
+// ═══════════════════════════════════════════════════════════════
+export async function extractText(fileBuffer, mimetype) {
+  if (mimetype === 'application/pdf') {
+    const { combinedText } = await extractPdfTextPages(fileBuffer);
+    return combinedText;
+  } else if (mimetype?.includes('word')) {
+    const result = await mammoth.extractRawText({ buffer: fileBuffer });
+    return result.value;
+  } else if (mimetype?.startsWith('image/')) {
+    return ocrImage(fileBuffer);
+  } else {
+    return fileBuffer.toString('utf-8');
+  }
 }
 
 async function ocrImage(fileBuffer) {
-  const worker = await createOcrWorker();
-
+  const worker = await createWorker('eng', 1, { langPath: ocrLangPath, gzip: true });
   try {
-    const {
-      data: { text },
-    } = await worker.recognize(fileBuffer);
+    const { data: { text } } = await worker.recognize(fileBuffer);
     return text;
   } finally {
     await worker.terminate();
   }
 }
 
+
+
+async function resizeImageIfNeeded(fileBuffer) {
+  try {
+    const img = await loadImage(fileBuffer);
+    const maxDim = 2048; // Higher resolution to prevent OCR/Vision issues with spaced characters
+    if (img.width <= maxDim && img.height <= maxDim) return fileBuffer;
+
+    let w = img.width;
+    let h = img.height;
+    if (w > h) {
+      h = Math.floor((h * maxDim) / w);
+      w = maxDim;
+    } else {
+      w = Math.floor((w * maxDim) / h);
+      h = maxDim;
+    }
+
+    const canvas = createCanvas(w, h);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas.toBuffer('image/jpeg', { quality: 0.8 });
+  } catch (err) {
+    console.error('[Resize] Failed:', err.message);
+    return fileBuffer;
+  }
+}
+
 function createCanvasFactory() {
   return {
-    create: (width, height) => {
-      const canvas = createCanvas(width, height);
-      return {
-        canvas,
-        context: canvas.getContext('2d'),
-      };
-    },
-    reset: (target, width, height) => {
-      target.canvas.width = width;
-      target.canvas.height = height;
-    },
-    destroy: (target) => {
-      target.canvas.width = 0;
-      target.canvas.height = 0;
-    },
+    create: (w, h) => { const c = createCanvas(w, h); return { canvas: c, context: c.getContext('2d') }; },
+    destroy: (t) => { t.canvas.width = 0; t.canvas.height = 0; },
   };
 }
 
-async function extractPdfTextPages(fileBuffer, options = {}) {
-  const loadingTask = getDocument({
-    data: new Uint8Array(fileBuffer),
-    useSystemFonts: true,
-    disableFontFace: true,
-  });
-  const document = await loadingTask.promise;
+async function extractPdfTextPages(fileBuffer) {
+  const loadingTask = getDocument({ data: new Uint8Array(fileBuffer), useSystemFonts: true, disableFontFace: true });
+  const doc = await loadingTask.promise;
   const pages = [];
-
-  for (let index = 1; index <= document.numPages; index += 1) {
-    const page = await document.getPage(index);
-    const textContent = await page.getTextContent();
-    const pageText = textContent.items
-      .map((item) => ('str' in item ? item.str : ''))
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    pages.push(pageText);
+  for (let i = 1; i <= doc.numPages; i++) {
+    const page = await doc.getPage(i);
+    const tc = await page.getTextContent();
+    pages.push(tc.items.map(item => ('str' in item ? item.str : '')).join(' ').replace(/\s+/g, ' ').trim());
   }
-
-  const combinedText = pages.join('\n').trim();
-  
-  // Return early, skipping slow Tesseract OCR.
-  // Vision LLM has already covered scanned documents.
-  return { pages, combinedText };
-}
-
-function createOcrWorker() {
-  return createWorker('eng', 1, {
-    langPath: ocrLangPath,
-    gzip: true,
-  });
-}
-
-function parseDateToIso(value) {
-  if (!value) {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  const slashDate = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (slashDate) {
-    const [, month, day, year] = slashDate;
-    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day))).toISOString();
-  }
-
-  const nativeDate = new Date(trimmed);
-  return Number.isNaN(nativeDate.getTime()) ? null : nativeDate.toISOString();
-}
-
-function normalizeVehicleInfo(info) {
-  let rawVin = sanitizeString(info?.vin).toUpperCase();
-  // Map common OCR mistakes in VINs
-  rawVin = rawVin.replace(/[IOQ]/g, match => {
-    if (match === 'I') return '1';
-    if (match === 'O' || match === 'Q') return '0';
-    return match;
-  });
-
-  const normalized = {
-    ...info,
-    vin: rawVin.replace(/[^A-HJ-NPR-Z0-9]/g, '').slice(0, 17),
-    make: sanitizeString(info?.make),
-    model: sanitizeString(info?.model),
-    color: sanitizeString(info?.color),
-    purchasedFrom: sanitizeString(info?.purchasedFrom),
-    paymentMethod: sanitizeString(info?.paymentMethod) || 'Bank Transfer',
-    usedVehicleSourceAddress: sanitizeString(info?.usedVehicleSourceAddress),
-    usedVehicleSourceCity: sanitizeString(info?.usedVehicleSourceCity),
-    usedVehicleSourceState: sanitizeString(info?.usedVehicleSourceState).toUpperCase().slice(0, 2),
-    usedVehicleSourceZipCode: sanitizeString(info?.usedVehicleSourceZipCode).replace(/[^\d-]/g, '').slice(0, 10),
-    year: normalizeNumber(info?.year),
-    mileage: normalizeNumber(info?.mileage),
-    purchasePrice: normalizeFloat(info?.purchasePrice),
-    purchaseDate: parseDateToIso(info?.purchaseDate) || new Date().toISOString(),
-    // Additional cost fields
-    transportCost: normalizeFloat(info?.transportCost),
-    repairCost: normalizeFloat(info?.repairCost),
-    inspectionCost: normalizeFloat(info?.inspectionCost),
-    registrationCost: normalizeFloat(info?.registrationCost),
-    titleNumber: sanitizeString(info?.titleNumber),
-    // Disposition details
-    disposedTo: sanitizeString(info?.disposedTo),
-    disposedAddress: sanitizeString(info?.disposedAddress),
-    disposedCity: sanitizeString(info?.disposedCity),
-    disposedState: sanitizeString(info?.disposedState).toUpperCase().slice(0, 2),
-    disposedZip: sanitizeString(info?.disposedZip).replace(/[^\d-]/g, '').slice(0, 10),
-    disposedDate: parseDateToIso(info?.disposedDate),
-    disposedPrice: normalizeFloat(info?.disposedPrice),
-    disposedOdometer: normalizeNumber(info?.disposedOdometer),
-    disposedDlNumber: sanitizeString(info?.disposedDlNumber),
-    disposedDlState: sanitizeString(info?.disposedDlState).toUpperCase().slice(0, 2),
-  };
-
-  return normalized;
-}
-
-function scoreVehicleInfo(info, text) {
-  let score = 0;
-
-  if (info.vin?.length === 17) score += 5;
-  if (info.year) score += 3;
-  if (info.make) score += 2;
-  if (info.model) score += 2;
-  if (info.color) score += 1;
-  if (info.mileage) score += 2;
-  if (info.purchasedFrom) score += 2;
-  if (info.usedVehicleSourceAddress) score += 1;
-  if (info.purchasePrice) score += 1;
-
-  if (/bill of sale|seller|purchaser|transferor|obtained from/i.test(text)) score += 3;
-  if (/year\s+\d{4}\s+make\s+/i.test(text)) score += 2;
-  if (/collision center|final bill|estimate totals|insurance total/i.test(text)) score -= 4;
-  if (/powered by carstrade|certificate of title number/i.test(text)) score -= 1;
-
-  return score;
-}
-
-function sanitizeString(value) {
-  return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
-}
-
-function normalizeNumber(value) {
-  const parsed = parseInt(String(value ?? '').replace(/[^\d-]/g, ''), 10);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function normalizeFloat(value) {
-  const parsed = parseFloat(String(value ?? '').replace(/[^0-9.-]/g, ''));
-  return Number.isFinite(parsed) ? parsed : 0;
+  return { pages, combinedText: pages.join('\n').trim() };
 }

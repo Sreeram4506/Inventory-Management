@@ -10,7 +10,18 @@ import { useRepairs } from '@/hooks/useRepairs';
 import { useAdvertising } from '@/hooks/useAdvertising';
 import { useSales } from '@/hooks/useSales';
 import { toast } from '@/components/ui/toast-utils';
-import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download, ShoppingCart } from 'lucide-react';
+import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download, ShoppingCart, Trash2, AlertTriangle } from 'lucide-react';
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle 
+} from '@/components/ui/alert-dialog';
+import { useInventory } from '@/hooks/useInventory';
 import { useAuth } from '@/context/auth-hooks';
 import { apiUrl } from '@/lib/api';
 import DocumentViewerDialog from './DocumentViewerDialog';
@@ -26,10 +37,14 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
   const { addRepair } = useRepairs();
   const { addAd } = useAdvertising();
   const { addSale } = useSales();
+  const { deleteVehicle } = useInventory();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   
   const [isEditing, setIsEditing] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleView = async (isSource = false) => {
     if (!token || !vehicle) return;
@@ -99,6 +114,19 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
     saleDate: new Date().toISOString().split('T')[0],
     paymentMethod: 'Cash',
   });
+
+  const handleDelete = async () => {
+    if (!vehicle) return;
+    try {
+      await deleteVehicle(vehicle.id);
+      toast.success('Vehicle deleted successfully');
+      onOpenChange(false);
+      setShowDeleteConfirm(false);
+    } catch (err) {
+      toast.error('Failed to delete vehicle');
+      console.error(err);
+    }
+  };
 
   if (!vehicle) return null;
 
@@ -236,6 +264,17 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
               >
                 {isEditing ? 'Cancel' : <><Pencil className="w-3.5 h-3.5 mr-2" /> Edit Details</>}
               </Button>
+              {isAdmin && !isEditing && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="text-destructive hover:bg-destructive/10 text-xs font-bold uppercase tracking-widest h-8"
+                  title="Delete from Inventory"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
               {(vehicle.hasDocument || vehicle.hasSourceDocument) && !isEditing && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -677,6 +716,32 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
           vehicleName={viewerDoc?.name || ''}
           documentType={viewerDoc?.type || ''}
         />
+
+        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <AlertDialogContent className="bg-zinc-950 border-zinc-800">
+            <AlertDialogHeader>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5 text-destructive" />
+                </div>
+                <AlertDialogTitle className="text-xl font-black uppercase tracking-tight text-white">Confirm Deletion</AlertDialogTitle>
+              </div>
+              <AlertDialogDescription className="text-zinc-400 font-medium">
+                Are you sure you want to delete <span className="text-white font-bold">{vehicle?.year} {vehicle?.make} {vehicle?.model}</span>? 
+                This will permanently remove all associated records including repairs, purchases, and sales. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="mt-6 gap-3">
+              <AlertDialogCancel className="bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 font-bold uppercase tracking-widest text-[10px] h-11">Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                className="bg-destructive text-white hover:bg-destructive/90 font-black uppercase tracking-widest text-[10px] h-11 px-6"
+                onClick={handleDelete}
+              >
+                Delete Vehicle
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );
@@ -723,3 +788,4 @@ function BuyerInfoSection({ vehicleId }: { vehicleId: string }) {
     </div>
   );
 }
+

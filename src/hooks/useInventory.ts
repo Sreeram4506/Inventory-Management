@@ -49,6 +49,18 @@ export function useInventory() {
     },
   });
 
+  const deleteVehicleMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiFetch(`/vehicles/${id}`, token, {
+        method: 'DELETE',
+      });
+      return handleApiResponse(response, logout);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+    },
+  });
+
   return {
     vehicles: vehiclesQuery.data || [],
     isLoading: vehiclesQuery.isLoading,
@@ -56,5 +68,6 @@ export function useInventory() {
     error: vehiclesQuery.error,
     addVehicle: addVehicleMutation.mutateAsync,
     updateVehicle: updateVehicleMutation.mutateAsync,
+    deleteVehicle: deleteVehicleMutation.mutateAsync,
   };
 }
