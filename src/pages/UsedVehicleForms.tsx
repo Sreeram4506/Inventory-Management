@@ -72,15 +72,20 @@ export default function UsedVehicleForms() {
   return (
     <AppLayout>
       <div className="space-y-8">
-        <section className="rounded-[28px] border border-zinc-800 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.16),_transparent_32%),linear-gradient(135deg,_rgba(24,24,27,0.98),_rgba(9,9,11,1))] p-8 text-white shadow-2xl shadow-black/20">
-          <div className="max-w-3xl space-y-4">
-            <span className="inline-flex items-center rounded-full border border-profit/30 bg-profit/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-profit">
-              PDF Workflow
-            </span>
-            <h1 className="font-display text-4xl font-bold tracking-tight">
-              Manage Used Vehicle Records
+        <section className="relative overflow-hidden rounded-[32px] border border-border bg-white p-8 md:p-12 shadow-xl shadow-black/[0.03]">
+          {/* Decorative background elements */}
+          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-profit/10 blur-3xl" />
+          <div className="absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-info/10 blur-3xl" />
+          
+          <div className="relative z-10 max-w-3xl space-y-5">
+            <div className="inline-flex items-center gap-2 rounded-full border border-profit/20 bg-profit/5 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-profit shadow-sm">
+              <FileBadge2 className="h-3.5 w-3.5" />
+              PDF Workflow Automation
+            </div>
+            <h1 className="font-display text-3xl md:text-5xl font-black tracking-tight text-foreground leading-[1.1]">
+              Manage Used <span className="text-transparent bg-clip-text bg-gradient-to-r from-profit to-info">Vehicle Records</span>
             </h1>
-            <p className="max-w-2xl text-sm leading-6 text-zinc-300">
+            <p className="max-w-2xl text-base md:text-lg leading-relaxed text-muted-foreground font-medium">
               Generate or update Used Vehicle forms automatically. Upload a purchase document to log a new vehicle, 
               or a Bill of Sale to fill in the disposition details for an existing vehicle.
             </p>
@@ -101,17 +106,22 @@ export default function UsedVehicleForms() {
             </div>
 
             {/* Recent Activity Section */}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <FileArchive className="w-5 h-5 text-profit" />
-                  Recent Records
-                </h2>
-                <div className="flex items-center gap-4">
+            <div className="rounded-[24px] border border-border bg-white p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-profit/10 text-profit">
+                    <FileArchive className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-foreground tracking-tight">Recent Records</h2>
+                    <p className="text-xs text-muted-foreground font-medium">Your latest generated PDF forms</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
                   {recentLogs.length > 0 && (
                     <Button 
                       variant="ghost" 
-                      className="text-destructive/60 hover:text-destructive hover:bg-destructive/10 text-[10px] uppercase font-bold tracking-widest h-7 px-2"
+                      className="text-destructive/80 hover:text-destructive hover:bg-destructive/10 text-[10px] uppercase font-black tracking-widest h-8 px-3 rounded-lg"
                       onClick={async () => {
                         if (confirm('Are you sure you want to clear these recent records?')) {
                           for (const log of recentLogs) {
@@ -124,7 +134,7 @@ export default function UsedVehicleForms() {
                       Clear Recent
                     </Button>
                   )}
-                  <Button variant="link" className="text-profit hover:text-profit/80 text-[10px] uppercase font-bold tracking-widest p-0 h-auto" onClick={() => window.location.href='/registry'}>
+                  <Button variant="outline" className="border-border hover:bg-muted text-[10px] uppercase font-black tracking-widest h-8 px-3 rounded-lg" onClick={() => window.location.href='/registry'}>
                     Full Registry →
                   </Button>
                 </div>
@@ -133,21 +143,24 @@ export default function UsedVehicleForms() {
               <div className="space-y-3">
                 {recentLogs.length > 0 ? (
                   recentLogs.map((log) => (
-                    <div key={log.id} className="flex items-center justify-between p-4 rounded-xl bg-zinc-900/50 border border-zinc-800 hover:border-zinc-700 transition-colors group/row">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-lg bg-profit/10 flex items-center justify-center text-profit">
-                          <FileText className="w-5 h-5" />
+                    <div key={log.id} className="flex items-center justify-between p-4 rounded-2xl bg-muted/30 border border-border/60 hover:border-primary/30 hover:bg-white hover:shadow-md transition-all duration-300 group/row">
+                      <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-xl bg-white border border-border shadow-sm flex items-center justify-center text-profit group-hover/row:scale-110 transition-transform">
+                          <FileText className="w-6 h-6" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-white">{log.year} {log.make} {log.model}</p>
-                          <p className="text-[10px] text-zinc-500 font-mono tracking-wider">{log.vin?.slice(-8)} • {new Date(log.createdAt).toLocaleDateString()}</p>
+                          <p className="text-sm font-bold text-foreground leading-tight">{log.year} {log.make} {log.model}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded uppercase tracking-wider">{log.vin?.slice(-8)}</span>
+                            <span className="text-[10px] font-medium text-muted-foreground/60">{new Date(log.createdAt).toLocaleDateString()}</span>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <Button 
-                          size="sm" 
+                          size="icon" 
                           variant="ghost" 
-                          className="h-8 w-8 p-0 text-zinc-400 hover:text-profit hover:bg-profit/10"
+                          className="h-9 w-9 rounded-lg text-muted-foreground hover:text-profit hover:bg-profit/10"
                           title="Download PDF"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -166,9 +179,9 @@ export default function UsedVehicleForms() {
                           <Download className="w-4 h-4" />
                         </Button>
                         <Button 
-                          size="sm" 
+                          size="icon" 
                           variant="ghost" 
-                          className="h-8 w-8 p-0 text-zinc-400 hover:text-profit hover:bg-profit/10"
+                          className="h-9 w-9 rounded-lg text-muted-foreground hover:text-profit hover:bg-profit/10"
                           title="Preview"
                           onClick={() => {
                             setExtractedInfo({
@@ -195,9 +208,9 @@ export default function UsedVehicleForms() {
                           <Eye className="w-4 h-4" />
                         </Button>
                         <Button 
-                          size="sm" 
+                          size="icon" 
                           variant="ghost" 
-                          className="h-8 w-8 p-0 text-destructive/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover/row:opacity-100 transition-opacity"
+                          className="h-9 w-9 rounded-lg text-destructive/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover/row:opacity-100 transition-all"
                           title="Delete Record"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -210,7 +223,7 @@ export default function UsedVehicleForms() {
                     </div>
                   ))
                 ) : (
-                  <div className="py-8 text-center text-zinc-500 border border-dashed border-zinc-800 rounded-xl">
+                  <div className="py-8 text-center text-muted-foreground border border-dashed border-border rounded-xl">
                     No recent records found. Push a document to start logging.
                   </div>
                 )}
@@ -222,18 +235,18 @@ export default function UsedVehicleForms() {
           <aside 
             onClick={handleSidebarClick}
             className={cn(
-              "rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5 overflow-y-auto max-h-[80vh] transition-all relative group/sidebar",
-              extractedInfo?.vin && "cursor-pointer hover:bg-zinc-900/80 hover:border-zinc-700 active:scale-[0.99]"
+              "rounded-[28px] border border-border bg-white p-6 overflow-y-auto max-h-[85vh] transition-all relative group/sidebar shadow-xl shadow-black/[0.02]",
+              extractedInfo?.vin && "cursor-pointer hover:border-primary/20 hover:shadow-2xl hover:shadow-primary/5 active:scale-[0.99]"
             )}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-profit/15 text-profit">
-                  <FileCheck className="h-5 w-5" />
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-profit/10 text-profit shadow-inner">
+                  <FileCheck className="h-6 w-6" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-white">Extracted Details</h2>
-                  <p className="text-sm text-zinc-500">Preview of the values going into the PDF.</p>
+                  <h2 className="text-xl font-black text-foreground tracking-tight">Extracted Details</h2>
+                  <p className="text-xs text-muted-foreground font-medium">Verified vehicle data</p>
                 </div>
               </div>
               
@@ -246,7 +259,7 @@ export default function UsedVehicleForms() {
                       e.stopPropagation();
                       handleDownloadLast();
                     }}
-                    className="border-profit/30 text-profit hover:bg-profit/10 h-9"
+                    className="border-border text-foreground hover:bg-muted h-9 rounded-lg"
                   >
                     <Download className="w-4 h-4" />
                   </Button>
@@ -256,7 +269,7 @@ export default function UsedVehicleForms() {
                       e.stopPropagation();
                       setViewerOpen(true);
                     }}
-                    className="bg-profit/10 hover:bg-profit/20 text-profit border-profit/20 gap-2 h-9"
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 h-9 rounded-lg shadow-sm"
                   >
                     <Eye className="w-4 h-4" />
                     Preview
@@ -268,31 +281,31 @@ export default function UsedVehicleForms() {
             {extractedInfo ? (
                 <div className="space-y-6 mt-6">
                   {/* Vehicle Section */}
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2 font-semibold">Vehicle Identification</p>
-                    <p className="font-display text-xl font-bold text-white leading-tight">
+                  <div className="rounded-2xl border border-border bg-muted/60 p-4">
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2 font-semibold">Vehicle Identification</p>
+                    <p className="font-display text-xl font-bold text-foreground leading-tight">
                       {[extractedInfo.year, extractedInfo.make, extractedInfo.model].filter(Boolean).join(' ')}
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-2">
-                      <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/50 p-2">
-                        <p className="text-[10px] uppercase text-zinc-500">VIN</p>
-                        <p className="text-xs font-medium text-zinc-200 mt-1 truncate" title={extractedInfo.vin}>{extractedInfo.vin || '—'}</p>
+                      <div className="rounded-xl border border-border/60 bg-card/50 p-2">
+                        <p className="text-[10px] uppercase text-muted-foreground">VIN</p>
+                        <p className="text-xs font-medium text-muted-foreground mt-1 truncate" title={extractedInfo.vin}>{extractedInfo.vin || '—'}</p>
                       </div>
-                      <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/50 p-2">
-                        <p className="text-[10px] uppercase text-zinc-500">Color</p>
-                        <p className="text-xs font-medium text-zinc-200 mt-1">{extractedInfo.color || '—'}</p>
+                      <div className="rounded-xl border border-border/60 bg-card/50 p-2">
+                        <p className="text-[10px] uppercase text-muted-foreground">Color</p>
+                        <p className="text-xs font-medium text-muted-foreground mt-1">{extractedInfo.color || '—'}</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Seller/Acquisition Section */}
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+                  <div className="rounded-2xl border border-border bg-muted/60 p-4">
                     <div className="flex items-center gap-2 mb-2">
                        <MapPin className="w-3.5 h-3.5 text-profit" />
-                       <p className="text-xs uppercase tracking-[0.2em] text-zinc-500 font-semibold">Acquisition</p>
+                       <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-semibold">Acquisition</p>
                     </div>
-                    <p className="font-semibold text-sm text-white">{extractedInfo.purchasedFrom || 'Auction / Dealer'}</p>
-                    <p className="mt-1 text-xs text-zinc-400">
+                    <p className="font-semibold text-sm text-foreground">{extractedInfo.purchasedFrom || 'Auction / Dealer'}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {[
                         extractedInfo.usedVehicleSourceAddress, 
                         extractedInfo.usedVehicleSourceCity, 
@@ -301,27 +314,27 @@ export default function UsedVehicleForms() {
                     </p>
                     <div className="mt-3 flex gap-4 section-meta">
                        <div>
-                         <p className="text-[10px] uppercase text-zinc-500">Date</p>
-                         <p className="text-xs font-medium text-zinc-200">
+                         <p className="text-[10px] uppercase text-muted-foreground">Date</p>
+                         <p className="text-xs font-medium text-muted-foreground">
                            {extractedInfo.purchaseDate ? new Date(extractedInfo.purchaseDate).toLocaleDateString() : '—'}
                          </p>
                        </div>
                        <div>
-                         <p className="text-[10px] uppercase text-zinc-500">In Odometer</p>
-                         <p className="text-xs font-medium text-zinc-200">{extractedInfo.mileage?.toLocaleString() || '—'}</p>
+                         <p className="text-[10px] uppercase text-muted-foreground">In Odometer</p>
+                         <p className="text-xs font-medium text-muted-foreground">{extractedInfo.mileage?.toLocaleString() || '—'}</p>
                        </div>
                     </div>
                   </div>
 
                   {/* Disposition Section - ONLY SHOW IF DISPOSED INFO EXISTS */}
                   {(extractedInfo.disposedTo || extractedInfo.disposedPrice) && (
-                    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 ring-1 ring-profit/20">
+                    <div className="rounded-2xl border border-border bg-muted/60 p-4 ring-1 ring-profit/20">
                       <div className="flex items-center gap-2 mb-2">
                          <UserCheck className="w-3.5 h-3.5 text-profit" />
                          <p className="text-xs uppercase tracking-[0.2em] text-profit font-semibold">Disposition (Sale)</p>
                       </div>
-                      <p className="font-semibold text-sm text-white">{extractedInfo.disposedTo || 'Cash Customer'}</p>
-                      <p className="mt-1 text-xs text-zinc-400">
+                      <p className="font-semibold text-sm text-foreground">{extractedInfo.disposedTo || 'Cash Customer'}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
                         {[
                           extractedInfo.disposedAddress, 
                           extractedInfo.disposedCity, 
@@ -330,27 +343,27 @@ export default function UsedVehicleForms() {
                       </p>
                       
                       <div className="mt-4 grid grid-cols-2 gap-3">
-                        <div className="flex items-center gap-2 bg-zinc-950/50 p-2 rounded-lg border border-zinc-800/60">
+                        <div className="flex items-center gap-2 bg-card/50 p-2 rounded-lg border border-border/60">
                            <DollarSign className="w-3.5 h-3.5 text-profit" />
                            <div>
-                             <p className="text-[9px] uppercase text-zinc-500 leading-none">Price</p>
-                             <p className="text-sm font-bold text-white mt-0.5">
+                             <p className="text-[9px] uppercase text-muted-foreground leading-none">Price</p>
+                             <p className="text-sm font-bold text-foreground mt-0.5">
                                {extractedInfo.disposedPrice ? `$${extractedInfo.disposedPrice.toLocaleString()}` : '—'}
                              </p>
                            </div>
                         </div>
-                        <div className="flex items-center gap-2 bg-zinc-950/50 p-2 rounded-lg border border-zinc-800/60">
+                        <div className="flex items-center gap-2 bg-card/50 p-2 rounded-lg border border-border/60">
                            <Gauge className="w-3.5 h-3.5 text-profit" />
                            <div>
-                             <p className="text-[9px] uppercase text-zinc-500 leading-none">Out Miles</p>
-                             <p className="text-sm font-bold text-white mt-0.5">
+                             <p className="text-[9px] uppercase text-muted-foreground leading-none">Out Miles</p>
+                             <p className="text-sm font-bold text-foreground mt-0.5">
                                {extractedInfo.disposedOdometer?.toLocaleString() || '—'}
                              </p>
                            </div>
                         </div>
                       </div>
 
-                      <div className="mt-3 flex justify-between items-center text-[10px] text-zinc-500 bg-zinc-950/30 p-2 rounded-md">
+                      <div className="mt-3 flex justify-between items-center text-[10px] text-muted-foreground bg-card/30 p-2 rounded-md">
                          <span>Date: {extractedInfo.disposedDate ? new Date(extractedInfo.disposedDate).toLocaleDateString() : '—'}</span>
                          <span>DL: {extractedInfo.disposedDlNumber || '—'}</span>
                       </div>
@@ -358,7 +371,7 @@ export default function UsedVehicleForms() {
                   )}
                 </div>
             ) : (
-              <div className="mt-5 rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 p-6 text-sm leading-6 text-zinc-500">
+              <div className="mt-5 rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-sm leading-6 text-muted-foreground">
                 Generate or update a form once and the extracted vehicle information will appear here so
                 you can quickly verify the filled values.
               </div>

@@ -29,22 +29,29 @@ export default function ChartsSection({ salesHistory, inventoryStatusData, profi
           <AreaChart data={salesHistory}>
             <defs>
               <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0.2}/>
-                <stop offset="95%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0}/>
+                <stop offset="5%" stopColor="hsl(var(--info))" stopOpacity={0.15}/>
+                <stop offset="95%" stopColor="hsl(var(--info))" stopOpacity={0}/>
               </linearGradient>
               <linearGradient id="colorProf" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="hsl(152, 60%, 40%)" stopOpacity={0.2}/>
-                <stop offset="95%" stopColor="hsl(152, 60%, 40%)" stopOpacity={0}/>
+                <stop offset="5%" stopColor="hsl(var(--profit))" stopOpacity={0.15}/>
+                <stop offset="95%" stopColor="hsl(var(--profit))" stopOpacity={0}/>
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(222, 14%, 15%)" vertical={false} />
-            <XAxis dataKey="date" stroke="hsl(220, 8%, 42%)" fontSize={11} tickLine={false} axisLine={false} />
-            <YAxis stroke="hsl(220, 8%, 42%)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+            <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} dy={10} />
+            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
             <Tooltip
-              contentStyle={{ backgroundColor: 'hsl(222, 22%, 8%)', border: '1px solid hsl(222, 14%, 15%)', borderRadius: '8px', fontSize: '12px' }}
+              contentStyle={{ 
+                backgroundColor: 'hsl(var(--card))', 
+                border: '1px solid hsl(var(--border))', 
+                borderRadius: '12px', 
+                fontSize: '12px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+              }}
+              itemStyle={{ fontWeight: 600 }}
             />
-            <Area type="monotone" dataKey="revenue" stroke="hsl(217, 91%, 60%)" fillOpacity={1} fill="url(#colorRev)" strokeWidth={2} />
-            <Area type="monotone" dataKey="profit" stroke="hsl(152, 60%, 40%)" fillOpacity={1} fill="url(#colorProf)" strokeWidth={2} />
+            <Area type="monotone" dataKey="revenue" stroke="hsl(var(--info))" fillOpacity={1} fill="url(#colorRev)" strokeWidth={3} />
+            <Area type="monotone" dataKey="profit" stroke="hsl(var(--profit))" fillOpacity={1} fill="url(#colorProf)" strokeWidth={3} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -60,7 +67,13 @@ export default function ChartsSection({ salesHistory, inventoryStatusData, profi
               ))}
             </Pie>
             <Tooltip
-              contentStyle={{ backgroundColor: 'hsl(222, 22%, 8%)', border: '1px solid hsl(222, 14%, 15%)', borderRadius: '8px', fontSize: '12px' }}
+              contentStyle={{ 
+                backgroundColor: 'hsl(var(--card))', 
+                border: '1px solid hsl(var(--border))', 
+                borderRadius: '12px', 
+                fontSize: '12px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+              }}
             />
           </PieChart>
         </ResponsiveContainer>
@@ -79,14 +92,20 @@ export default function ChartsSection({ salesHistory, inventoryStatusData, profi
         <h3 className="font-semibold text-foreground mb-4">Top Vehicle Profits</h3>
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={profitData} layout="vertical" margin={{ left: 10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(222, 14%, 15%)" horizontal={false} />
-            <XAxis type="number" stroke="hsl(220, 8%, 42%)" fontSize={11} tickLine={false} axisLine={false} />
-            <YAxis type="category" dataKey="vehicle" stroke="hsl(220, 8%, 42%)" fontSize={11} tickLine={false} axisLine={false} width={110} />
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+            <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
+            <YAxis type="category" dataKey="vehicle" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} width={110} />
             <Tooltip
-              cursor={{ fill: 'rgba(255,255,255,0.03)' }}
-              contentStyle={{ backgroundColor: 'hsl(222, 22%, 8%)', border: '1px solid hsl(222, 14%, 15%)', borderRadius: '8px', fontSize: '12px' }}
+              cursor={{ fill: 'hsl(var(--muted)/0.3)' }}
+              contentStyle={{ 
+                backgroundColor: 'hsl(var(--card))', 
+                border: '1px solid hsl(var(--border))', 
+                borderRadius: '12px', 
+                fontSize: '12px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+              }}
             />
-            <Bar dataKey="profit" fill="hsl(152, 60%, 40%)" radius={[0, 4, 4, 0]} barSize={20} />
+            <Bar dataKey="profit" fill="hsl(var(--profit))" radius={[0, 4, 4, 0]} barSize={20} />
           </BarChart>
         </ResponsiveContainer>
       </div>

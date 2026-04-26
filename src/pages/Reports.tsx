@@ -36,7 +36,7 @@ export default function Reports() {
           <div className="flex items-center gap-3">
             <Button 
               onClick={() => setAdvertisingDialogOpen(true)}
-              className="bg-profit text-zinc-950 hover:bg-profit/90 h-11 px-6 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-profit/20 transition-all hover:scale-105 active:scale-95"
+              className="bg-profit text-primary-foreground hover:bg-profit/90 h-11 px-6 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-profit/20 transition-all hover:scale-105 active:scale-95"
             >
               <Megaphone className="w-4 h-4 mr-2" />
               Add Advertising
@@ -54,7 +54,7 @@ export default function Reports() {
             <TabsList className="bg-secondary/50 border border-border p-1.5 h-16 w-full md:w-auto grid grid-cols-4 md:flex gap-2">
             <TabsTrigger 
               value="financial-summary" 
-              className="data-[state=active]:bg-profit data-[state=active]:text-zinc-950 flex items-center gap-2 px-6 rounded-lg text-sm font-black uppercase tracking-widest transition-all duration-300 shadow-sm"
+              className="data-[state=active]:bg-profit data-[state=active]:text-primary-foreground flex items-center gap-2 px-6 rounded-lg text-sm font-black uppercase tracking-widest transition-all duration-300 shadow-sm"
             >
               <PieChart className="w-5 h-5" />
               <span className="hidden md:inline">P&L Report</span>
@@ -62,7 +62,7 @@ export default function Reports() {
             </TabsTrigger>
             <TabsTrigger 
               value="cash-flow" 
-              className="data-[state=active]:bg-profit data-[state=active]:text-zinc-950 flex items-center gap-2 px-6 rounded-lg text-sm font-black uppercase tracking-widest transition-all duration-300 shadow-sm"
+              className="data-[state=active]:bg-profit data-[state=active]:text-primary-foreground flex items-center gap-2 px-6 rounded-lg text-sm font-black uppercase tracking-widest transition-all duration-300 shadow-sm"
             >
               <TrendingUp className="w-5 h-5" />
               <span className="hidden md:inline">Cash Flow</span>
@@ -70,7 +70,7 @@ export default function Reports() {
             </TabsTrigger>
             <TabsTrigger 
               value="advertising" 
-              className="data-[state=active]:bg-profit data-[state=active]:text-zinc-950 flex items-center gap-2 px-6 rounded-lg text-sm font-black uppercase tracking-widest transition-all duration-300 shadow-sm"
+              className="data-[state=active]:bg-profit data-[state=active]:text-primary-foreground flex items-center gap-2 px-6 rounded-lg text-sm font-black uppercase tracking-widest transition-all duration-300 shadow-sm"
             >
               <Megaphone className="w-5 h-5" />
               <span className="hidden md:inline">Advertising</span>
@@ -78,7 +78,7 @@ export default function Reports() {
             </TabsTrigger>
           </TabsList>
 
-          <div className="mt-8 bg-zinc-900/20 rounded-2xl border border-zinc-800/50 p-1 min-h-[600px]">
+          <div className="mt-8 bg-muted/20 rounded-2xl border border-border/50 p-1 min-h-[600px]">
              <TabsContent value="financial-summary" className="m-0 focus-visible:ring-0">
                 <FinancialSummaryContent />
              </TabsContent>

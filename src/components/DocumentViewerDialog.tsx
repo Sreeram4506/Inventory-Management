@@ -31,8 +31,8 @@ export default function DocumentViewerDialog({ open, onOpenChange, documentBase6
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] bg-zinc-950 border-zinc-800 text-white p-0 overflow-hidden">
-        <DialogHeader className="p-5 pb-3 border-b border-zinc-800">
+      <DialogContent className="max-w-4xl max-h-[90vh] bg-card border-border text-foreground p-0 overflow-hidden">
+        <DialogHeader className="p-5 pb-3 border-b border-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
@@ -40,7 +40,7 @@ export default function DocumentViewerDialog({ open, onOpenChange, documentBase6
               </div>
               <div>
                 <DialogTitle className="text-lg font-display font-bold">{vehicleName}</DialogTitle>
-                <DialogDescription className="text-xs text-zinc-500 uppercase tracking-widest font-bold">{documentType}</DialogDescription>
+                <DialogDescription className="text-xs text-muted-foreground uppercase tracking-widest font-bold">{documentType}</DialogDescription>
               </div>
             </div>
             <Button onClick={handleDownload} variant="outline" size="sm" className="border-profit/30 text-profit hover:bg-profit/10">
@@ -53,7 +53,7 @@ export default function DocumentViewerDialog({ open, onOpenChange, documentBase6
           {isPdf ? (
             <iframe 
               src={dataUrl} 
-              className="w-full h-full rounded-lg border border-zinc-800"
+              className="w-full h-full rounded-lg border border-border"
               title="Document Preview"
             />
           ) : (

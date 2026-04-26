@@ -106,37 +106,36 @@ export default function BillOfSaleUploader({
   };
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5 space-y-4">
+    <div className="rounded-[24px] border border-border bg-white p-6 space-y-6 shadow-sm">
       <div>
-        <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-profit">
+        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-profit mb-2">
           Mark as Sold (Bulk)
         </h3>
-        <p className="mt-2 text-sm text-zinc-400">
-          Upload Bills of Sale. VINs will be matched against your inventory.
-          Matched vehicles will be moved to <span className="text-profit font-medium">SOLD</span>.
+        <p className="text-sm text-muted-foreground font-medium leading-relaxed">
+          Upload Bills of Sale. VINs will be matched against your inventory automatically.
         </p>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         {files.length <= 1 && (
           <div className="grid gap-3 animate-in fade-in slide-in-from-top-1 duration-300">
             <div className="relative">
-              <Fingerprint className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+              <Fingerprint className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="VIN Fallback (Single file only)"
+                placeholder="VIN Fallback (Optional)"
                 value={vin}
                 onChange={(e) => setVin(e.target.value.toUpperCase())}
-                className="pl-10 bg-zinc-900/50 border-zinc-800 focus:border-profit/50 h-11"
+                className="pl-11 bg-muted/30 border-border rounded-xl h-11 text-sm font-medium focus-visible:ring-primary/20"
               />
             </div>
 
             <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+              <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Customer Fallback (Single file only)"
+                placeholder="Customer Name Fallback"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
-                className="pl-10 bg-zinc-900/50 border-zinc-800 focus:border-profit/50 h-11"
+                className="pl-11 bg-muted/30 border-border rounded-xl h-11 text-sm font-medium focus-visible:ring-primary/20"
               />
             </div>
           </div>
@@ -146,18 +145,18 @@ export default function BillOfSaleUploader({
           type="button"
           disabled={loading}
           onClick={() => fileInputRef.current?.click()}
-          className="w-full rounded-xl border border-zinc-800 bg-zinc-900/70 p-4 text-left transition hover:border-zinc-700 hover:bg-zinc-900 disabled:opacity-50"
+          className="w-full rounded-[20px] border border-border bg-muted/30 p-5 text-left transition-all hover:border-primary/40 hover:bg-white hover:shadow-md disabled:opacity-50 group"
         >
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-profit/15 text-profit">
-              <FileUp className="h-5 w-5" />
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-profit/10 text-profit shadow-inner group-hover:scale-110 transition-transform">
+              <FileUp className="h-6 w-6" />
             </div>
             <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-medium text-white">Bill of Sale Document(s)</p>
-              <p className="text-xs text-zinc-500 truncate">
+              <p className="text-sm font-bold text-foreground">Bill of Sale Document(s)</p>
+              <p className="text-xs text-muted-foreground font-medium truncate mt-0.5">
                 {files.length > 0 
-                  ? `${files.length} files selected (${files.map(f => f.name).join(', ')})` 
-                  : 'Click to select or drag multiple files'}
+                  ? `${files.length} files selected` 
+                  : 'Click to select or drag files'}
               </p>
             </div>
           </div>
@@ -165,14 +164,14 @@ export default function BillOfSaleUploader({
       </div>
 
       {loading && (
-        <div className="space-y-2">
-          <div className="flex justify-between text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+        <div className="space-y-2 py-2">
+          <div className="flex justify-between text-[10px] uppercase tracking-widest text-muted-foreground font-black">
             <span>Marking Sold...</span>
             <span>{progress.current} / {progress.total}</span>
           </div>
-          <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+          <div className="h-2 w-full bg-muted/50 rounded-full overflow-hidden shadow-inner">
             <div 
-              className="h-full bg-profit transition-all duration-500" 
+              className="h-full bg-gradient-to-r from-profit to-info transition-all duration-500 rounded-full" 
               style={{ width: `${(progress.current / progress.total) * 100}%` }}
             />
           </div>
@@ -183,12 +182,12 @@ export default function BillOfSaleUploader({
         type="button"
         disabled={loading || files.length === 0}
         onClick={handleUpload}
-        className="w-full bg-profit hover:bg-profit/90 text-black font-semibold h-11"
+        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl h-12 text-xs font-black uppercase tracking-widest shadow-lg shadow-primary/20"
       >
         {loading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Processing Batch...
+            Processing...
           </>
         ) : (
           <>

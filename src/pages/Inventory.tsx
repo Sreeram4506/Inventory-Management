@@ -87,28 +87,32 @@ export default function Inventory() {
   return (
     <AppLayout>
       <div className="space-y-5 page-enter">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold text-foreground">Inventory</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">
-              {vehicles.length} vehicles · {vehicles.filter(v => v.status === 'Available').length} available
-            </p>
+        {/* Header & Search */}
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black text-foreground tracking-tight">Inventory</h1>
+              <p className="text-muted-foreground text-sm font-medium mt-1">
+                <span className="text-primary font-bold">{vehicles.length}</span> total vehicles <span className="text-border mx-2">|</span> <span className="text-profit font-bold">{vehicles.filter(v => v.status === 'Available').length}</span> ready for sale
+              </p>
+            </div>
+            <Button 
+              onClick={() => setDialogOpen(true)} 
+              className="gap-2 h-11 px-6 rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
+            >
+              <Plus className="w-5 h-5" /> Add New Vehicle
+            </Button>
           </div>
-          <Button onClick={() => setDialogOpen(true)} className="gap-2 h-9 text-sm font-medium">
-            <Plus className="w-4 h-4" /> Add Vehicle
-          </Button>
-        </div>
 
-        {/* Search */}
-        <div className="relative w-full md:max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search make, model, VIN..."
-            className="pl-9 h-9 bg-muted/30 border-border/60 text-sm"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <div className="relative w-full max-w-xl group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+            <Input
+              placeholder="Search by make, model, VIN or status..."
+              className="pl-12 h-12 bg-card border-border shadow-sm rounded-2xl text-base focus-visible:ring-primary/20 focus-visible:border-primary transition-all"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
         </div>
 
         {/* Quick Stats */}
@@ -203,7 +207,7 @@ export default function Inventory() {
         </div>
 
         {/* Desktop View: Table */}
-        <div className="hidden md:block bg-card rounded-xl border border-border/60 overflow-hidden">
+        <div className="hidden md:block bg-card rounded-xl border border-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -227,7 +231,7 @@ export default function Inventory() {
                   <tr 
                     key={vehicle.id} 
                     onClick={() => setSelectedVehicle(vehicle)}
-                    className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors cursor-pointer group"
+                    className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors cursor-pointer group"
                   >
                     <td className="px-4 py-3">
                       <p className="font-medium text-foreground text-sm">{vehicle.make} {vehicle.model}</p>
@@ -305,7 +309,7 @@ export default function Inventory() {
               <AlertDialogFooter className="mt-4 gap-2">
                 <AlertDialogCancel className="h-9 text-sm">Cancel</AlertDialogCancel>
                 <AlertDialogAction 
-                  className="bg-destructive text-white hover:bg-destructive/90 h-9 text-sm"
+                  className="bg-destructive text-foreground hover:bg-destructive/90 h-9 text-sm"
                   onClick={async () => {
                     if (vehicleToDelete) {
                       await deleteVehicle(vehicleToDelete.id);

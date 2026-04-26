@@ -76,10 +76,10 @@ export default function EditRegistryDialog({ log, open, onOpenChange }: EditRegi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-zinc-950 border-zinc-900 text-white max-h-[90vh] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+      <DialogContent className="max-w-md bg-card border-border text-foreground max-h-[90vh] overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl text-white">Edit Document Details</DialogTitle>
-          <DialogDescription className="text-zinc-500">
+          <DialogTitle className="font-display text-xl text-foreground">Edit Document Details</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
             Updating these details will automatically regenerate the associated PDF document.
           </DialogDescription>
         </DialogHeader>
@@ -87,157 +87,157 @@ export default function EditRegistryDialog({ log, open, onOpenChange }: EditRegi
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">VIN</Label>
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">VIN</Label>
               <Input
                 value={formData.vin}
                 onChange={(e) => setFormData({ ...formData, vin: e.target.value })}
-                className="bg-zinc-900 border-zinc-800 text-white"
+                className="bg-muted border-border text-foreground"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Year</Label>
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">Year</Label>
               <Input
                 value={formData.year}
                 onChange={(e) => setFormData({ ...formData, year: e.target.value })}
-                className="bg-zinc-900 border-zinc-800 text-white"
+                className="bg-muted border-border text-foreground"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Make</Label>
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">Make</Label>
               <Input
                 value={formData.make}
                 onChange={(e) => setFormData({ ...formData, make: e.target.value })}
-                className="bg-zinc-900 border-zinc-800 text-white"
+                className="bg-muted border-border text-foreground"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Model</Label>
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">Model</Label>
               <Input
                 value={formData.model}
                 onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                className="bg-zinc-900 border-zinc-800 text-white"
+                className="bg-muted border-border text-foreground"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Color</Label>
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">Color</Label>
               <Input
                 value={formData.color}
                 onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                className="bg-zinc-900 border-zinc-800 text-white"
+                className="bg-muted border-border text-foreground"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Mileage</Label>
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">Mileage</Label>
               <Input
                 value={formData.mileage}
                 onChange={(e) => setFormData({ ...formData, mileage: e.target.value })}
-                className="bg-zinc-900 border-zinc-800 text-white"
+                className="bg-muted border-border text-foreground"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-zinc-400 text-xs uppercase tracking-wider">Title Number</Label>
+            <Label className="text-muted-foreground text-xs uppercase tracking-wider">Title Number</Label>
             <Input
               value={formData.titleNumber}
               onChange={(e) => setFormData({ ...formData, titleNumber: e.target.value })}
-              className="bg-zinc-900 border-zinc-800 text-white"
+              className="bg-muted border-border text-foreground"
               placeholder="e.g. TITLE123456"
             />
           </div>
 
           <div className="space-y-2">
-            <Label className="text-zinc-400 text-xs uppercase tracking-wider">Purchased From</Label>
+            <Label className="text-muted-foreground text-xs uppercase tracking-wider">Purchased From</Label>
             <Input
               value={formData.purchasedFrom}
               onChange={(e) => setFormData({ ...formData, purchasedFrom: e.target.value })}
-              className="bg-zinc-900 border-zinc-800 text-white"
+              className="bg-muted border-border text-foreground"
             />
           </div>
 
           <div className="space-y-2">
-            <Label className="text-zinc-400 text-xs uppercase tracking-wider">Purchase Date</Label>
+            <Label className="text-muted-foreground text-xs uppercase tracking-wider">Purchase Date</Label>
             <Input
               type="date"
               value={formData.purchaseDate}
               onChange={(e) => setFormData({ ...formData, purchaseDate: e.target.value })}
-              className="bg-zinc-900 border-zinc-800 text-white"
+              className="bg-muted border-border text-foreground"
             />
           </div>
 
-          <div className="pt-4 pb-2 border-t border-zinc-800">
+          <div className="pt-4 pb-2 border-t border-border">
             <h4 className="text-sm font-semibold text-profit uppercase tracking-widest">Sale / Disposition Details</h4>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-zinc-400 text-xs uppercase tracking-wider">Disposed To (Buyer)</Label>
+            <Label className="text-muted-foreground text-xs uppercase tracking-wider">Disposed To (Buyer)</Label>
             <Input
               value={formData.disposedTo}
               onChange={(e) => setFormData({ ...formData, disposedTo: e.target.value })}
-              className="bg-zinc-900 border-zinc-800 text-white"
+              className="bg-muted border-border text-foreground"
               placeholder="Customer Name"
             />
           </div>
 
           <div className="space-y-2">
-            <Label className="text-zinc-400 text-xs uppercase tracking-wider">Buyer Address</Label>
+            <Label className="text-muted-foreground text-xs uppercase tracking-wider">Buyer Address</Label>
             <Input
               value={formData.disposedAddress}
               onChange={(e) => setFormData({ ...formData, disposedAddress: e.target.value })}
-              className="bg-zinc-900 border-zinc-800 text-white"
+              className="bg-muted border-border text-foreground"
             />
           </div>
 
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-2 col-span-1">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">City</Label>
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">City</Label>
               <Input
                 value={formData.disposedCity}
                 onChange={(e) => setFormData({ ...formData, disposedCity: e.target.value })}
-                className="bg-zinc-900 border-zinc-800 text-white"
+                className="bg-muted border-border text-foreground"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">State</Label>
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">State</Label>
               <Input
                 value={formData.disposedState}
                 onChange={(e) => setFormData({ ...formData, disposedState: e.target.value })}
-                className="bg-zinc-900 border-zinc-800 text-white"
+                className="bg-muted border-border text-foreground"
                 maxLength={2}
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Zip</Label>
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">Zip</Label>
               <Input
                 value={formData.disposedZip}
                 onChange={(e) => setFormData({ ...formData, disposedZip: e.target.value })}
-                className="bg-zinc-900 border-zinc-800 text-white"
+                className="bg-muted border-border text-foreground"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Sale Date</Label>
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">Sale Date</Label>
               <Input
                 type="date"
                 value={formData.disposedDate}
                 onChange={(e) => setFormData({ ...formData, disposedDate: e.target.value })}
-                className="bg-zinc-900 border-zinc-800 text-white"
+                className="bg-muted border-border text-foreground"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Sale Price</Label>
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">Sale Price</Label>
               <Input
                 value={formData.disposedPrice}
                 onChange={(e) => setFormData({ ...formData, disposedPrice: e.target.value })}
-                className="bg-zinc-900 border-zinc-800 text-white"
+                className="bg-muted border-border text-foreground"
                 placeholder="$"
               />
             </div>
@@ -245,19 +245,19 @@ export default function EditRegistryDialog({ log, open, onOpenChange }: EditRegi
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Disposal Odometer</Label>
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">Disposal Odometer</Label>
               <Input
                 value={formData.disposedOdometer}
                 onChange={(e) => setFormData({ ...formData, disposedOdometer: e.target.value })}
-                className="bg-zinc-900 border-zinc-800 text-white"
+                className="bg-muted border-border text-foreground"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-zinc-400 text-xs uppercase tracking-wider">DL Number</Label>
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">DL Number</Label>
               <Input
                 value={formData.disposedDlNumber}
                 onChange={(e) => setFormData({ ...formData, disposedDlNumber: e.target.value })}
-                className="bg-zinc-900 border-zinc-800 text-white"
+                className="bg-muted border-border text-foreground"
               />
             </div>
           </div>
@@ -267,7 +267,7 @@ export default function EditRegistryDialog({ log, open, onOpenChange }: EditRegi
               type="button"
               variant="ghost"
               onClick={() => onOpenChange(false)}
-              className="text-zinc-400 hover:text-white"
+              className="text-muted-foreground hover:text-foreground"
             >
               Cancel
             </Button>

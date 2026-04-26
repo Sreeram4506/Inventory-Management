@@ -79,13 +79,13 @@ export default function AddAdvertisingDialog({ open, onOpenChange, ad }: AddAdve
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-zinc-950 border-zinc-900 text-foreground">
+      <DialogContent className="max-w-md bg-card border-border text-foreground">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-2">
             <span className="p-2 bg-profit/10 rounded-lg">
               <Megaphone className="text-profit w-5 h-5" />
             </span>
-            <DialogTitle className="text-xl font-black font-display tracking-tight text-white uppercase">
+            <DialogTitle className="text-xl font-black font-display tracking-tight text-foreground uppercase">
               {ad ? 'Edit Campaign' : 'Launch Campaign'}
             </DialogTitle>
           </div>
@@ -100,7 +100,7 @@ export default function AddAdvertisingDialog({ open, onOpenChange, ad }: AddAdve
             <Input 
               value={formData.campaignName} 
               onChange={e => setFormData({...formData, campaignName: e.target.value})}
-              placeholder="e.g. Summer Blowout, FB Marketplace Promo" required className="bg-zinc-900 border-zinc-800 focus:ring-profit/50"
+              placeholder="e.g. Summer Blowout, FB Marketplace Promo" required className="bg-muted border-border focus:ring-profit/50"
             />
           </div>
           
@@ -108,10 +108,10 @@ export default function AddAdvertisingDialog({ open, onOpenChange, ad }: AddAdve
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Platform</Label>
               <Select value={formData.platform} onValueChange={v => setFormData({...formData, platform: v})}>
-                <SelectTrigger className="bg-zinc-900 border-zinc-800">
+                <SelectTrigger className="bg-muted border-border">
                   <SelectValue placeholder="Select Platform" />
                 </SelectTrigger>
-                <SelectContent className="bg-zinc-950 border-zinc-900">
+                <SelectContent className="bg-card border-border">
                   <SelectItem value="Facebook">Facebook</SelectItem>
                   <SelectItem value="Google">Google</SelectItem>
                   <SelectItem value="Instagram">Instagram</SelectItem>
@@ -125,7 +125,7 @@ export default function AddAdvertisingDialog({ open, onOpenChange, ad }: AddAdve
               <Input 
                 type="number" value={formData.amountSpent} 
                 onChange={e => setFormData({...formData, amountSpent: e.target.value})}
-                placeholder="0.00" required className="bg-zinc-900 border-zinc-800 focus:ring-profit/50"
+                placeholder="0.00" required className="bg-muted border-border focus:ring-profit/50"
               />
             </div>
           </div>
@@ -136,7 +136,7 @@ export default function AddAdvertisingDialog({ open, onOpenChange, ad }: AddAdve
               <Input 
                 type="date" value={formData.startDate} 
                 onChange={e => setFormData({...formData, startDate: e.target.value})}
-                required className="bg-zinc-900 border-zinc-800 focus:ring-profit/50"
+                required className="bg-muted border-border focus:ring-profit/50"
               />
             </div>
             <div className="space-y-2">
@@ -144,7 +144,7 @@ export default function AddAdvertisingDialog({ open, onOpenChange, ad }: AddAdve
               <Input 
                 type="date" value={formData.endDate} 
                 onChange={e => setFormData({...formData, endDate: e.target.value})}
-                required className="bg-zinc-900 border-zinc-800 focus:ring-profit/50"
+                required className="bg-muted border-border focus:ring-profit/50"
               />
             </div>
           </div>
@@ -152,10 +152,10 @@ export default function AddAdvertisingDialog({ open, onOpenChange, ad }: AddAdve
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Link to Vehicle (Optional)</Label>
             <Select value={formData.linkedVehicleId} onValueChange={v => setFormData({...formData, linkedVehicleId: v})}>
-              <SelectTrigger className="bg-zinc-900 border-zinc-800">
+              <SelectTrigger className="bg-muted border-border">
                 <SelectValue placeholder="Select a Vehicle" />
               </SelectTrigger>
-              <SelectContent className="bg-zinc-950 border-zinc-900">
+              <SelectContent className="bg-card border-border">
                 <SelectItem value="none">General / No Vehicle</SelectItem>
                 {vehicles.map(v => (
                   <SelectItem key={v.id} value={v.id}>{v.year} {v.make} {v.model} ({v.vin.slice(-6)})</SelectItem>
@@ -164,7 +164,7 @@ export default function AddAdvertisingDialog({ open, onOpenChange, ad }: AddAdve
             </Select>
           </div>
 
-          <Button className="w-full bg-profit text-zinc-950 font-black h-12 uppercase tracking-widest text-xs mt-2" type="submit">
+          <Button className="w-full bg-profit text-primary-foreground font-black h-12 uppercase tracking-widest text-xs mt-2" type="submit">
             {ad ? <Plus className="w-4 h-4 mr-2 hidden" /> : <Plus className="w-4 h-4 mr-2" />}
             {ad ? 'Save Changes' : 'Launch Campaign'}
           </Button>

@@ -113,7 +113,7 @@ export default function RevenueReportDialog({ open, onOpenChange, sales }: Reven
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] bg-zinc-950 border-zinc-800 text-white">
+      <DialogContent className="sm:max-w-[700px] bg-card border-border text-foreground">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="p-3 bg-profit/10 rounded-xl border border-profit/20">
@@ -121,7 +121,7 @@ export default function RevenueReportDialog({ open, onOpenChange, sales }: Reven
             </div>
             <div>
               <DialogTitle className="text-2xl font-display">Revenue Analysis</DialogTitle>
-              <DialogDescription className="text-zinc-400">
+              <DialogDescription className="text-muted-foreground">
                 Breakdown of your historical gross revenue and net profit.
               </DialogDescription>
             </div>
@@ -129,13 +129,13 @@ export default function RevenueReportDialog({ open, onOpenChange, sales }: Reven
         </DialogHeader>
         
         <div className="py-4 space-y-4">
-          <div className="flex justify-between items-center bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
-            <span className="text-sm font-semibold text-zinc-300 uppercase tracking-widest text-[10px]">Grouping Filter</span>
+          <div className="flex justify-between items-center bg-muted/50 p-3 rounded-lg border border-border">
+            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-widest text-[10px]">Grouping Filter</span>
             <Select value={filter} onValueChange={(val: any) => setFilter(val)}>
-              <SelectTrigger className="w-[180px] bg-zinc-950 border-zinc-700 h-8 text-xs">
+              <SelectTrigger className="w-[180px] bg-card border-border h-8 text-xs">
                 <SelectValue placeholder="Select period" />
               </SelectTrigger>
-              <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+              <SelectContent className="bg-muted border-border text-foreground">
                 <SelectItem value="all">All Time Aggregate</SelectItem>
                 <SelectItem value="yearly">Yearly Breakdown</SelectItem>
                 <SelectItem value="monthly">Monthly Breakdown</SelectItem>
@@ -145,15 +145,15 @@ export default function RevenueReportDialog({ open, onOpenChange, sales }: Reven
 
           <div className="max-h-[300px] overflow-y-auto pr-2 custom-scrollbar space-y-2">
             {aggregatedData.map((item, idx) => (
-              <div key={idx} className="flex flex-col md:flex-row md:items-center justify-between p-4 rounded-xl border border-zinc-800/50 bg-zinc-950 hover:bg-zinc-900/50 transition-colors gap-4">
+              <div key={idx} className="flex flex-col md:flex-row md:items-center justify-between p-4 rounded-xl border border-border/50 bg-card hover:bg-muted/50 transition-colors gap-4">
                 <div className="flex-1">
-                  <p className="font-bold text-white uppercase tracking-wider text-sm">{item.period}</p>
-                  <p className="text-xs text-zinc-500">{item.count} unit{item.count !== 1 ? 's' : ''} sold</p>
+                  <p className="font-bold text-foreground uppercase tracking-wider text-sm">{item.period}</p>
+                  <p className="text-xs text-muted-foreground">{item.count} unit{item.count !== 1 ? 's' : ''} sold</p>
                 </div>
                 <div className="flex gap-4 md:gap-8 items-center text-right">
                   <div>
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Revenue</p>
-                    <p className="font-display font-medium text-white">${item.revenue.toLocaleString()}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Revenue</p>
+                    <p className="font-display font-medium text-foreground">${item.revenue.toLocaleString()}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-profit uppercase font-bold tracking-widest">Profit</p>
@@ -164,18 +164,18 @@ export default function RevenueReportDialog({ open, onOpenChange, sales }: Reven
             ))}
             
             {aggregatedData.length === 0 && (
-              <div className="text-center p-8 text-zinc-500 text-sm">No sales data found to generate revenue report.</div>
+              <div className="text-center p-8 text-muted-foreground text-sm">No sales data found to generate revenue report.</div>
             )}
           </div>
           
         </div>
 
-        <DialogFooter className="sm:justify-between items-center border-t border-zinc-800/50 pt-4 mt-2">
+        <DialogFooter className="sm:justify-between items-center border-t border-border/50 pt-4 mt-2">
           <div className="flex flex-col text-sm">
-            <span className="text-zinc-500 text-xs uppercase tracking-widest font-bold">Total Gross</span>
+            <span className="text-muted-foreground text-xs uppercase tracking-widest font-bold">Total Gross</span>
             <span className="text-xl font-display font-bold">${totalRev.toLocaleString()}</span>
           </div>
-          <Button onClick={generatePDF} className="bg-profit hover:bg-profit/90 text-zinc-950 font-bold tracking-wide">
+          <Button onClick={generatePDF} className="bg-profit hover:bg-profit/90 text-primary-foreground font-bold tracking-wide">
             <FileDown className="w-4 h-4 mr-2" />
             Download PDF Report
           </Button>

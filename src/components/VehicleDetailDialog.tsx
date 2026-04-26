@@ -247,11 +247,11 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-zinc-950 border-zinc-900 text-foreground custom-scrollbar p-0 md:p-6">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-card border-border text-foreground custom-scrollbar p-0 md:p-6">
         <DialogHeader>
           <DialogDescription className="sr-only">Vehicle details and management tabs.</DialogDescription>
           <div className="flex items-start justify-between">
-            <DialogTitle className="flex items-center gap-3 text-2xl font-black font-display tracking-tight text-white line-clamp-1">
+            <DialogTitle className="flex items-center gap-3 text-2xl font-black font-display tracking-tight text-foreground line-clamp-1">
               <span className="p-2 bg-profit/10 rounded-lg"><Info className="text-profit" /></span>
               {isEditing ? 'Editing Vehicle Record' : `${vehicle.year} ${vehicle.make} ${vehicle.model}`}
             </DialogTitle>
@@ -260,7 +260,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                 variant="outline" 
                 size="sm" 
                 onClick={isEditing ? () => setIsEditing(false) : startEditing}
-                className="border-profit/30 text-xs font-bold uppercase tracking-widest text-white/70 hover:bg-profit/10"
+                className="border-profit/30 text-xs font-bold uppercase tracking-widest text-foreground/70 hover:bg-profit/10"
               >
                 {isEditing ? 'Cancel' : <><Pencil className="w-3.5 h-3.5 mr-2" /> Edit Details</>}
               </Button>
@@ -286,34 +286,34 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                       <Download className="w-3.5 h-3.5 mr-2" /> Download
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800 text-white">
+                  <DropdownMenuContent align="end" className="bg-muted border-border text-foreground">
                     {vehicle.hasDocument && (
                       <>
                         <DropdownMenuItem 
-                          className="hover:bg-zinc-800 focus:bg-zinc-800 cursor-pointer text-xs font-bold uppercase tracking-widest text-profit"
+                          className="hover:bg-muted/50 focus:bg-muted/50 cursor-pointer text-xs font-bold uppercase tracking-widest text-profit"
                           onClick={() => handleView(false)}
                         >
                           Preview Record
                         </DropdownMenuItem>
                         <DropdownMenuItem 
-                          className="hover:bg-zinc-800 focus:bg-zinc-800 cursor-pointer text-xs font-bold uppercase tracking-widest text-profit"
+                          className="hover:bg-muted/50 focus:bg-muted/50 cursor-pointer text-xs font-bold uppercase tracking-widest text-profit"
                           onClick={() => window.open(apiUrl(`/vehicles/${vehicle.id}/document?token=${token}`), '_blank')}
                         >
                           Download Record (PDF)
                         </DropdownMenuItem>
-                        <div className="h-px bg-zinc-800 my-1" />
+                        <div className="h-px bg-muted/50 my-1" />
                       </>
                     )}
                     {vehicle.hasSourceDocument && (
                       <>
                         <DropdownMenuItem 
-                          className="hover:bg-zinc-800 focus:bg-zinc-800 cursor-pointer text-xs font-bold uppercase tracking-widest text-blue-400"
+                          className="hover:bg-muted/50 focus:bg-muted/50 cursor-pointer text-xs font-bold uppercase tracking-widest text-blue-400"
                           onClick={() => handleView(true)}
                         >
                           Preview Source Doc
                         </DropdownMenuItem>
                         <DropdownMenuItem 
-                          className="hover:bg-zinc-800 focus:bg-zinc-800 cursor-pointer text-xs font-bold uppercase tracking-widest text-blue-400"
+                          className="hover:bg-muted/50 focus:bg-muted/50 cursor-pointer text-xs font-bold uppercase tracking-widest text-blue-400"
                           onClick={() => window.open(apiUrl(`/vehicles/${vehicle.id}/document?token=${token}&type=source`), '_blank')}
                         >
                           Download Source Doc
@@ -334,7 +334,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                 Title #: {vehicle.titleNumber}
               </span>
             )}
-            <span className="text-xs font-bold uppercase tracking-widest text-white/90 bg-profit/80 px-3 py-1 rounded-full">
+            <span className="text-xs font-bold uppercase tracking-widest text-foreground/90 bg-profit/80 px-3 py-1 rounded-full">
                Total Cost: ${((vehicle.totalPurchaseCost || 0) + (vehicle.repairCost || 0)).toLocaleString()}
             </span>
           </div>
@@ -342,17 +342,17 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
 
         <Tabs defaultValue={isEditing ? "edit" : "financials"} value={isEditing ? "edit" : undefined} className="mt-6">
           <TabsList className={`bg-secondary/20 border border-border/50 p-1 rounded-xl h-auto flex flex-wrap gap-1 ${isEditing ? 'hidden' : ''}`}>
-            <TabsTrigger value="financials" className="data-[state=active]:bg-profit data-[state=active]:text-zinc-950 px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
+            <TabsTrigger value="financials" className="data-[state=active]:bg-profit data-[state=active]:text-primary-foreground px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
               <Receipt className="w-3.5 h-3.5" /> Financials
             </TabsTrigger>
-            <TabsTrigger value="repairs" className="data-[state=active]:bg-profit data-[state=active]:text-zinc-950 px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
+            <TabsTrigger value="repairs" className="data-[state=active]:bg-profit data-[state=active]:text-primary-foreground px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
               <Pencil className="w-3.5 h-3.5" /> Manage Repairs
             </TabsTrigger>
-            <TabsTrigger value="ads" className="data-[state=active]:bg-profit data-[state=active]:text-zinc-950 px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
+            <TabsTrigger value="ads" className="data-[state=active]:bg-profit data-[state=active]:text-primary-foreground px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
               <Megaphone className="w-3.5 h-3.5" /> Advertising
             </TabsTrigger>
             {vehicle.status !== 'Sold' && (
-              <TabsTrigger value="sale" className="data-[state=active]:bg-info data-[state=active]:text-zinc-950 px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
+              <TabsTrigger value="sale" className="data-[state=active]:bg-info data-[state=active]:text-primary-foreground px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
                 <ShoppingCart className="w-3.5 h-3.5" /> Record Sale
               </TabsTrigger>
             )}
@@ -366,38 +366,38 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Year</Label>
-                       <Input value={editForm.year} onChange={e => setEditForm({...editForm, year: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                       <Input value={editForm.year} onChange={e => setEditForm({...editForm, year: e.target.value})} className="bg-muted border-border h-9 text-sm" />
                     </div>
                     <div className="space-y-2">
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Make</Label>
-                       <Input value={editForm.make} onChange={e => setEditForm({...editForm, make: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                       <Input value={editForm.make} onChange={e => setEditForm({...editForm, make: e.target.value})} className="bg-muted border-border h-9 text-sm" />
                     </div>
                     <div className="space-y-2">
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Model</Label>
-                       <Input value={editForm.model} onChange={e => setEditForm({...editForm, model: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                       <Input value={editForm.model} onChange={e => setEditForm({...editForm, model: e.target.value})} className="bg-muted border-border h-9 text-sm" />
                     </div>
                     <div className="space-y-2">
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Color</Label>
-                       <Input value={editForm.color} onChange={e => setEditForm({...editForm, color: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                       <Input value={editForm.color} onChange={e => setEditForm({...editForm, color: e.target.value})} className="bg-muted border-border h-9 text-sm" />
                     </div>
                     <div className="space-y-2">
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Mileage (In)</Label>
-                       <Input type="number" value={editForm.mileage} onChange={e => setEditForm({...editForm, mileage: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                       <Input type="number" value={editForm.mileage} onChange={e => setEditForm({...editForm, mileage: e.target.value})} className="bg-muted border-border h-9 text-sm" />
                     </div>
                     <div className="space-y-2">
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">VIN</Label>
-                       <Input value={editForm.vin} onChange={e => setEditForm({...editForm, vin: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                       <Input value={editForm.vin} onChange={e => setEditForm({...editForm, vin: e.target.value})} className="bg-muted border-border h-9 text-sm" />
                     </div>
                     <div className="space-y-2">
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Title Number</Label>
-                       <Input value={editForm.titleNumber} onChange={e => setEditForm({...editForm, titleNumber: e.target.value})} placeholder="e.g. T-12345678" className="bg-zinc-900 border-blue-500/20 h-9 text-sm" />
+                       <Input value={editForm.titleNumber} onChange={e => setEditForm({...editForm, titleNumber: e.target.value})} placeholder="e.g. T-12345678" className="bg-muted border-blue-500/20 h-9 text-sm" />
                     </div>
                     <div className="space-y-2">
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground font-semibold text-profit">Current Status</Label>
                        <select 
                          value={editForm.status} 
                          onChange={e => setEditForm({...editForm, status: e.target.value})}
-                         className="flex h-9 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-profit/50 disabled:cursor-not-allowed disabled:opacity-50"
+                         className="flex h-9 w-full rounded-md border border-border bg-muted px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-profit/50 disabled:cursor-not-allowed disabled:opacity-50"
                        >
                          <option value="Available">Available</option>
                          <option value="Reserved">Reserved</option>
@@ -413,24 +413,24 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                      <div className="space-y-2 col-span-2">
                         <Label className="text-[10px] uppercase font-bold text-muted-foreground">Seller Name (Obtained From)</Label>
-                        <Input value={editForm.purchasedFrom} onChange={e => setEditForm({...editForm, purchasedFrom: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                        <Input value={editForm.purchasedFrom} onChange={e => setEditForm({...editForm, purchasedFrom: e.target.value})} className="bg-muted border-border h-9 text-sm" />
                      </div>
                      <div className="space-y-2 col-span-2">
                         <Label className="text-[10px] uppercase font-bold text-muted-foreground">Seller Address</Label>
-                        <Input value={editForm.sellerAddress} onChange={e => setEditForm({...editForm, sellerAddress: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                        <Input value={editForm.sellerAddress} onChange={e => setEditForm({...editForm, sellerAddress: e.target.value})} className="bg-muted border-border h-9 text-sm" />
                      </div>
                      <div className="space-y-2">
                         <Label className="text-[10px] uppercase font-bold text-muted-foreground">City</Label>
-                        <Input value={editForm.sellerCity} onChange={e => setEditForm({...editForm, sellerCity: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                        <Input value={editForm.sellerCity} onChange={e => setEditForm({...editForm, sellerCity: e.target.value})} className="bg-muted border-border h-9 text-sm" />
                      </div>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                        <div className="space-y-2">
                           <Label className="text-[10px] uppercase font-bold text-muted-foreground">State</Label>
-                          <Input value={editForm.sellerState} onChange={e => setEditForm({...editForm, sellerState: e.target.value})} maxLength={2} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                          <Input value={editForm.sellerState} onChange={e => setEditForm({...editForm, sellerState: e.target.value})} maxLength={2} className="bg-muted border-border h-9 text-sm" />
                        </div>
                        <div className="space-y-2">
                           <Label className="text-[10px] uppercase font-bold text-muted-foreground">Zip</Label>
-                          <Input value={editForm.sellerZip} onChange={e => setEditForm({...editForm, sellerZip: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                          <Input value={editForm.sellerZip} onChange={e => setEditForm({...editForm, sellerZip: e.target.value})} className="bg-muted border-border h-9 text-sm" />
                        </div>
                      </div>
                   </div>
@@ -441,29 +441,29 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                     <div className="space-y-2">
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Purchase Price ($)</Label>
-                       <Input type="number" value={editForm.purchasePrice} onChange={e => setEditForm({...editForm, purchasePrice: e.target.value})} className="bg-zinc-900 border-profit/20 h-9 text-sm font-bold text-profit" />
+                       <Input type="number" value={editForm.purchasePrice} onChange={e => setEditForm({...editForm, purchasePrice: e.target.value})} className="bg-muted border-profit/20 h-9 text-sm font-bold text-profit" />
                     </div>
                     <div className="space-y-2">
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Transport ($)</Label>
-                       <Input type="number" value={editForm.transportCost} onChange={e => setEditForm({...editForm, transportCost: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                       <Input type="number" value={editForm.transportCost} onChange={e => setEditForm({...editForm, transportCost: e.target.value})} className="bg-muted border-border h-9 text-sm" />
                     </div>
                     <div className="space-y-2">
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Inspection ($)</Label>
-                       <Input type="number" value={editForm.inspectionCost} onChange={e => setEditForm({...editForm, inspectionCost: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                       <Input type="number" value={editForm.inspectionCost} onChange={e => setEditForm({...editForm, inspectionCost: e.target.value})} className="bg-muted border-border h-9 text-sm" />
                     </div>
                     <div className="space-y-2">
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Fees ($)</Label>
-                       <Input type="number" value={editForm.registrationCost} onChange={e => setEditForm({...editForm, registrationCost: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                       <Input type="number" value={editForm.registrationCost} onChange={e => setEditForm({...editForm, registrationCost: e.target.value})} className="bg-muted border-border h-9 text-sm" />
                     </div>
                     <div className="space-y-2">
                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Purchase Date</Label>
-                       <Input type="date" value={editForm.purchaseDate} onChange={e => setEditForm({...editForm, purchaseDate: e.target.value})} className="bg-zinc-900 border-zinc-800 h-9 text-sm" />
+                       <Input type="date" value={editForm.purchaseDate} onChange={e => setEditForm({...editForm, purchaseDate: e.target.value})} className="bg-muted border-border h-9 text-sm" />
                     </div>
                   </div>
                 </div>
 
                 <div className="flex gap-3 pt-2">
-                  <Button type="submit" className="flex-1 bg-profit text-zinc-950 font-black uppercase tracking-tighter h-12 hover:bg-profit/90">
+                  <Button type="submit" className="flex-1 bg-profit text-primary-foreground font-black uppercase tracking-tighter h-12 hover:bg-profit/90">
                     Update Vehicle & Regenerate PDF
                   </Button>
                   <Button type="button" variant="outline" onClick={() => setIsEditing(false)} className="px-8 border-border h-12 uppercase font-black text-xs tracking-widest">
@@ -481,19 +481,19 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Purchase Price</span>
-                    <span className="font-bold text-white">${vehicle.purchasePrice.toLocaleString()}</span>
+                    <span className="font-bold text-foreground">${vehicle.purchasePrice.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Transport</span>
-                    <span className="font-bold text-white">${vehicle.transportCost.toLocaleString()}</span>
+                    <span className="font-bold text-foreground">${vehicle.transportCost.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Inspection</span>
-                    <span className="font-bold text-white">${vehicle.inspectionCost.toLocaleString()}</span>
+                    <span className="font-bold text-foreground">${vehicle.inspectionCost.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Fees</span>
-                    <span className="font-bold text-white">${vehicle.registrationCost.toLocaleString()}</span>
+                    <span className="font-bold text-foreground">${vehicle.registrationCost.toLocaleString()}</span>
                   </div>
                   <div className="pt-2 border-t border-border/40 flex justify-between text-sm">
                     <span className="font-black uppercase tracking-widest text-[10px] text-profit">Initial Total</span>
@@ -507,11 +507,11 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Repair Total</span>
-                    <span className="font-bold text-white">${(vehicle.repairs?.reduce((acc, r) => acc + r.partsCost + r.laborCost, 0) || 0).toLocaleString()}</span>
+                    <span className="font-bold text-foreground">${(vehicle.repairs?.reduce((acc, r) => acc + r.partsCost + r.laborCost, 0) || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-xs border-t border-border/20 pt-2 mt-2">
                     <span className="text-muted-foreground font-bold">Total Investment</span>
-                    <span className="font-black text-white text-base">
+                    <span className="font-black text-foreground text-base">
                       ${(vehicle.totalPurchaseCost + (vehicle.repairs?.reduce((acc, r) => acc + r.partsCost + r.laborCost, 0) || 0)).toLocaleString()}
                     </span>
                   </div>
@@ -526,7 +526,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                   {vehicle.repairs.map((repair) => (
                     <div key={repair.id} className="flex justify-between items-center text-[11px] bg-black/20 p-2 rounded-lg border border-white/5">
                       <div>
-                        <p className="font-bold text-white">{repair.repairShop}</p>
+                        <p className="font-bold text-foreground">{repair.repairShop}</p>
                         <p className="text-muted-foreground italic">{repair.description}</p>
                       </div>
                       <div className="text-right">
@@ -556,7 +556,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                   <Input 
                     value={repairForm.shop} 
                     onChange={e => setRepairForm({...repairForm, shop: e.target.value})}
-                    placeholder="e.g. Master Auto" required className="bg-zinc-900 border-zinc-800"
+                    placeholder="e.g. Master Auto" required className="bg-muted border-border"
                   />
                 </div>
                 <div className="space-y-2">
@@ -564,7 +564,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                   <Input 
                     type="number" value={repairForm.parts} 
                     onChange={e => setRepairForm({...repairForm, parts: e.target.value})}
-                    placeholder="0.00" required className="bg-zinc-900 border-zinc-800"
+                    placeholder="0.00" required className="bg-muted border-border"
                   />
                 </div>
                 <div className="space-y-2">
@@ -572,7 +572,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                   <Input 
                     type="number" value={repairForm.labor} 
                     onChange={e => setRepairForm({...repairForm, labor: e.target.value})}
-                    placeholder="0.00" required className="bg-zinc-900 border-zinc-800"
+                    placeholder="0.00" required className="bg-muted border-border"
                   />
                 </div>
                 <div className="space-y-2">
@@ -580,10 +580,10 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                   <Input 
                     value={repairForm.desc} 
                     onChange={e => setRepairForm({...repairForm, desc: e.target.value})}
-                    placeholder="Brief description" required className="bg-zinc-900 border-zinc-800"
+                    placeholder="Brief description" required className="bg-muted border-border"
                   />
                 </div>
-                <Button className="col-span-2 bg-profit text-zinc-950 font-black h-11 uppercase" type="submit">
+                <Button className="col-span-2 bg-profit text-primary-foreground font-black h-11 uppercase" type="submit">
                   <Plus className="w-4 h-4 mr-2" /> Record Repair Cost
                 </Button>
               </form>
@@ -599,7 +599,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                   <Input 
                     value={adForm.name} 
                     onChange={e => setAdForm({...adForm, name: e.target.value})}
-                    placeholder="e.g. FB Ad for Honda Civic" required className="bg-zinc-900 border-zinc-800"
+                    placeholder="e.g. FB Ad for Honda Civic" required className="bg-muted border-border"
                   />
                 </div>
                 <div className="space-y-2">
@@ -607,7 +607,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                   <Input 
                     value={adForm.platform} 
                     onChange={e => setAdForm({...adForm, platform: e.target.value})}
-                    placeholder="Facebook / Google" required className="bg-zinc-900 border-zinc-800"
+                    placeholder="Facebook / Google" required className="bg-muted border-border"
                   />
                 </div>
                 <div className="space-y-2">
@@ -615,7 +615,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                   <Input 
                     type="number" value={adForm.amount} 
                     onChange={e => setAdForm({...adForm, amount: e.target.value})}
-                    placeholder="0.00" required className="bg-zinc-900 border-zinc-800"
+                    placeholder="0.00" required className="bg-muted border-border"
                   />
                 </div>
                 <div className="space-y-2">
@@ -623,7 +623,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                   <Input 
                     type="date" value={adForm.startDate} 
                     onChange={e => setAdForm({...adForm, startDate: e.target.value})}
-                    required className="bg-zinc-900 border-zinc-800"
+                    required className="bg-muted border-border"
                   />
                 </div>
                  <div className="space-y-2">
@@ -631,10 +631,10 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                   <Input 
                     type="date" value={adForm.endDate} 
                     onChange={e => setAdForm({...adForm, endDate: e.target.value})}
-                    required className="bg-zinc-900 border-zinc-800"
+                    required className="bg-muted border-border"
                   />
                 </div>
-                <Button className="col-span-2 bg-profit text-zinc-950 font-black h-11 uppercase" type="submit">
+                <Button className="col-span-2 bg-profit text-primary-foreground font-black h-11 uppercase" type="submit">
                   <Plus className="w-4 h-4 mr-2" /> Link Ad Campaign
                 </Button>
               </form>
@@ -651,7 +651,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                     <Input 
                       value={saleForm.customerName} 
                       onChange={e => setSaleForm({...saleForm, customerName: e.target.value})}
-                      placeholder="e.g. John Doe" required className="bg-zinc-900 border-zinc-800"
+                      placeholder="e.g. John Doe" required className="bg-muted border-border"
                     />
                   </div>
                   <div className="space-y-2 col-span-2 md:col-span-1">
@@ -659,7 +659,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                     <Input 
                       value={saleForm.phone} 
                       onChange={e => setSaleForm({...saleForm, phone: e.target.value})}
-                      placeholder="e.g. 555-0199" required className="bg-zinc-900 border-zinc-800"
+                      placeholder="e.g. 555-0199" required className="bg-muted border-border"
                     />
                   </div>
                   <div className="space-y-2 col-span-2">
@@ -667,7 +667,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                     <Input 
                       value={saleForm.address} 
                       onChange={e => setSaleForm({...saleForm, address: e.target.value})}
-                      placeholder="123 Main St, Springfield" required className="bg-zinc-900 border-zinc-800"
+                      placeholder="123 Main St, Springfield" required className="bg-muted border-border"
                     />
                   </div>
                   <div className="space-y-2">
@@ -675,7 +675,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                     <Input 
                       type="number" value={saleForm.salePrice} 
                       onChange={e => setSaleForm({...saleForm, salePrice: e.target.value})}
-                      placeholder="0.00" required className="bg-zinc-900 border-zinc-800"
+                      placeholder="0.00" required className="bg-muted border-border"
                     />
                   </div>
                   <div className="space-y-2">
@@ -683,7 +683,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                     <Input 
                       type="date" value={saleForm.saleDate} 
                       onChange={e => setSaleForm({...saleForm, saleDate: e.target.value})}
-                      required className="bg-zinc-900 border-zinc-800"
+                      required className="bg-muted border-border"
                     />
                   </div>
                   <div className="space-y-2 col-span-2">
@@ -691,7 +691,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                     <select
                       value={saleForm.paymentMethod}
                       onChange={e => setSaleForm({...saleForm, paymentMethod: e.target.value})}
-                      className="flex h-10 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-profit/50 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex h-10 w-full rounded-md border border-border bg-muted px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-profit/50 disabled:cursor-not-allowed disabled:opacity-50"
                       required
                     >
                       <option value="Cash">Cash</option>
@@ -700,7 +700,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                       <option value="Check">Check</option>
                     </select>
                   </div>
-                  <Button className="col-span-2 bg-info text-zinc-950 hover:bg-info/90 font-black h-11 uppercase mt-2" type="submit">
+                  <Button className="col-span-2 bg-info text-primary-foreground hover:bg-info/90 font-black h-11 uppercase mt-2" type="submit">
                     <ShoppingCart className="w-4 h-4 mr-2" /> Mark as Sold
                   </Button>
                 </form>
@@ -718,23 +718,23 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
         />
 
         <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-          <AlertDialogContent className="bg-zinc-950 border-zinc-800">
+          <AlertDialogContent className="bg-card border-border">
             <AlertDialogHeader>
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center">
                   <AlertTriangle className="w-5 h-5 text-destructive" />
                 </div>
-                <AlertDialogTitle className="text-xl font-black uppercase tracking-tight text-white">Confirm Deletion</AlertDialogTitle>
+                <AlertDialogTitle className="text-xl font-black uppercase tracking-tight text-foreground">Confirm Deletion</AlertDialogTitle>
               </div>
-              <AlertDialogDescription className="text-zinc-400 font-medium">
-                Are you sure you want to delete <span className="text-white font-bold">{vehicle?.year} {vehicle?.make} {vehicle?.model}</span>? 
+              <AlertDialogDescription className="text-muted-foreground font-medium">
+                Are you sure you want to delete <span className="text-foreground font-bold">{vehicle?.year} {vehicle?.make} {vehicle?.model}</span>? 
                 This will permanently remove all associated records including repairs, purchases, and sales. This action cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter className="mt-6 gap-3">
-              <AlertDialogCancel className="bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 font-bold uppercase tracking-widest text-[10px] h-11">Cancel</AlertDialogCancel>
+              <AlertDialogCancel className="bg-muted border-border text-muted-foreground hover:text-foreground hover:bg-muted/50 font-bold uppercase tracking-widest text-[10px] h-11">Cancel</AlertDialogCancel>
               <AlertDialogAction 
-                className="bg-destructive text-white hover:bg-destructive/90 font-black uppercase tracking-widest text-[10px] h-11 px-6"
+                className="bg-destructive text-foreground hover:bg-destructive/90 font-black uppercase tracking-widest text-[10px] h-11 px-6"
                 onClick={handleDelete}
               >
                 Delete Vehicle
@@ -759,15 +759,15 @@ function BuyerInfoSection({ vehicleId }: { vehicleId: string }) {
     <div className="space-y-2">
       <div className="flex justify-between text-xs">
         <span className="text-muted-foreground">Buyer Name</span>
-        <span className="font-bold text-white">{sale.customerName}</span>
+        <span className="font-bold text-foreground">{sale.customerName}</span>
       </div>
       <div className="flex justify-between text-xs">
         <span className="text-muted-foreground">Phone</span>
-        <span className="font-bold text-white">{sale.phone}</span>
+        <span className="font-bold text-foreground">{sale.phone}</span>
       </div>
       <div className="flex justify-between text-xs">
         <span className="text-muted-foreground">Address</span>
-        <span className="font-bold text-white">{sale.address}</span>
+        <span className="font-bold text-foreground">{sale.address}</span>
       </div>
       <div className="flex justify-between text-xs">
         <span className="text-muted-foreground">Sale Price</span>
@@ -775,11 +775,11 @@ function BuyerInfoSection({ vehicleId }: { vehicleId: string }) {
       </div>
       <div className="flex justify-between text-xs">
         <span className="text-muted-foreground">Sale Date</span>
-        <span className="font-bold text-white">{new Date(sale.saleDate).toLocaleDateString()}</span>
+        <span className="font-bold text-foreground">{new Date(sale.saleDate).toLocaleDateString()}</span>
       </div>
       <div className="flex justify-between text-xs">
         <span className="text-muted-foreground">Payment Method</span>
-        <span className="font-bold text-white">{sale.paymentMethod}</span>
+        <span className="font-bold text-foreground">{sale.paymentMethod}</span>
       </div>
       <div className="flex justify-between text-xs pt-2 border-t border-border/40">
         <span className="font-black uppercase tracking-widest text-[10px] text-info">Net Profit</span>

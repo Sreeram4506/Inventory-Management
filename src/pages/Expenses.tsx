@@ -72,12 +72,12 @@ export default function Expenses({ isSubpage = false }: ExpensesProps) {
           
           <div className="flex items-center gap-3">
             <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search expenses..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full border-zinc-800 bg-zinc-900/50 pl-10 text-white focus-visible:ring-profit/50"
+                className="w-full border-border bg-muted/50 pl-10 text-foreground focus-visible:ring-profit/50"
               />
             </div>
             <Button 
@@ -85,7 +85,7 @@ export default function Expenses({ isSubpage = false }: ExpensesProps) {
                 setSelectedExpense(null);
                 setIsDialogOpen(true);
               }}
-              className="bg-profit text-zinc-950 hover:bg-profit/90 h-11 px-6 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-profit/20 flex-shrink-0"
+              className="bg-profit text-primary-foreground hover:bg-profit/90 h-11 px-6 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-profit/20 flex-shrink-0"
             >
               <Plus className="w-4 h-4 mr-2" />
               Add Expense
@@ -134,7 +134,7 @@ export default function Expenses({ isSubpage = false }: ExpensesProps) {
                         variant="ghost" 
                         size="icon" 
                         onClick={() => handleEdit(exp)}
-                        className="w-8 h-8 text-muted-foreground hover:text-white hover:bg-zinc-800"
+                        className="w-8 h-8 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </Button>

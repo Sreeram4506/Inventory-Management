@@ -112,7 +112,7 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
       <div 
         className={cn(
           "relative border-2 border-dashed rounded-2xl p-8 transition-all duration-300 text-center",
-          dragActive ? "border-profit bg-profit/5 scale-[0.99]" : "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700",
+          dragActive ? "border-profit bg-profit/5 scale-[0.99]" : "border-border bg-muted/50 hover:border-border",
           scanning && "opacity-50 pointer-events-none"
         )}
         onDragOver={onDragOver}
@@ -126,34 +126,34 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
               <FileText className="absolute inset-0 m-auto w-6 h-6 text-profit animate-pulse" />
             </div>
             <div>
-              <p className="text-white font-medium">AI is reading your document...</p>
-              <p className="text-zinc-500 text-sm">Extracting VIN, Price, and Vehicle info</p>
+              <p className="text-foreground font-medium">AI is reading your document...</p>
+              <p className="text-muted-foreground text-sm">Extracting VIN, Price, and Vehicle info</p>
             </div>
           </div>
         ) : (
           <div className="space-y-6">
             <div className="flex justify-center -space-x-3">
-              <div className="w-12 h-12 rounded-2xl bg-zinc-800 flex items-center justify-center rotate-[-10deg] border border-zinc-700 shadow-xl">
-                <FileText className="text-zinc-400 w-6 h-6" />
+              <div className="w-12 h-12 rounded-2xl bg-muted/50 flex items-center justify-center rotate-[-10deg] border border-border shadow-xl">
+                <FileText className="text-muted-foreground w-6 h-6" />
               </div>
               <div className="w-12 h-12 rounded-2xl bg-profit/20 flex items-center justify-center translate-y-[-4px] border border-profit/30 shadow-2xl z-10">
                 <Upload className="text-profit w-6 h-6" />
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-zinc-800 flex items-center justify-center rotate-[10deg] border border-zinc-700 shadow-xl">
-                <Camera className="text-zinc-400 w-6 h-6" />
+              <div className="w-12 h-12 rounded-2xl bg-muted/50 flex items-center justify-center rotate-[10deg] border border-border shadow-xl">
+                <Camera className="text-muted-foreground w-6 h-6" />
               </div>
             </div>
             
             <div className="space-y-1">
-              <p className="text-white font-medium text-lg">Drop your documents here</p>
-              <p className="text-zinc-400 text-sm">Select multiple files for bulk push</p>
+              <p className="text-foreground font-medium text-lg">Drop your documents here</p>
+              <p className="text-muted-foreground text-sm">Select multiple files for bulk push</p>
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-3">
               <Button 
                 onClick={() => fileInputRef.current?.click()}
                 variant="outline" 
-                className="bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-white h-11 px-6 rounded-xl"
+                className="bg-muted/50 border-border text-muted-foreground hover:bg-muted hover:text-foreground h-11 px-6 rounded-xl"
               >
                 <Upload className="w-4 h-4 mr-2" />
                 Upload Files

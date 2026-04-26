@@ -16,24 +16,31 @@ export default function StatCard({ label, value, icon: Icon, trend, className, i
     <div 
       className={cn(
         "stat-card page-enter", 
-        onClick && "cursor-pointer hover:border-primary/30 active:scale-[0.98]",
+        onClick && "cursor-pointer active:scale-[0.98]",
         className
       )}
       onClick={onClick}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="stat-label">{label}</p>
-          <p className="stat-value mt-1.5 truncate" title={value}>{value}</p>
-          {trend && (
-            <p className={cn("text-xs mt-1 font-medium", trend.positive ? "text-profit" : "text-loss")}>
-              {trend.positive ? '↑' : '↓'} {trend.value}
-            </p>
-          )}
+      <div className="flex items-center justify-between mb-4">
+        <div className={cn(
+          "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm", 
+          iconClassName || "bg-primary/10 text-primary"
+        )}>
+          <Icon className="w-5 h-5" />
         </div>
-        <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", iconClassName || "bg-primary/10")}>
-          <Icon className={cn("w-4 h-4", iconClassName ? "text-primary-foreground" : "text-primary")} />
-        </div>
+        {trend && (
+          <div className={cn(
+            "px-2 py-0.5 rounded-full text-[10px] font-bold tracking-tight",
+            trend.positive ? "bg-profit/10 text-profit" : "bg-loss/10 text-loss"
+          )}>
+            {trend.positive ? '+' : ''}{trend.value}
+          </div>
+        )}
+      </div>
+      
+      <div className="min-w-0">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-1">{label}</p>
+        <p className="text-2xl font-black text-foreground tabular-nums tracking-tight truncate" title={value}>{value}</p>
       </div>
     </div>
   );

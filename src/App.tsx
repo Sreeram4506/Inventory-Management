@@ -45,10 +45,10 @@ function PreloadManager() {
 
 // Loading component
 const PageLoader = () => (
-  <div className="flex h-screen items-center justify-center bg-zinc-950 text-white">
+  <div className="flex h-screen items-center justify-center bg-card text-foreground">
     <div className="flex flex-col items-center gap-4">
       <div className="w-12 h-12 rounded-full border-4 border-profit/20 border-t-profit animate-spin" />
-      <p className="text-zinc-400 font-display animate-pulse font-bold tracking-widest text-xs uppercase">Loading Hub...</p>
+      <p className="text-muted-foreground font-display animate-pulse font-bold tracking-widest text-xs uppercase">Loading Hub...</p>
     </div>
   </div>
 );

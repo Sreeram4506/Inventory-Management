@@ -72,21 +72,21 @@ export default function AIChatAssistant() {
     <div className="fixed bottom-24 md:bottom-6 right-6 z-50 flex flex-col items-end">
       {/* Chat Window */}
       {isOpen && (
-        <div className="bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl w-80 sm:w-96 h-[500px] max-h-[80vh] flex flex-col mb-4 overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300">
+        <div className="bg-card border border-border rounded-2xl shadow-2xl w-80 sm:w-96 h-[500px] max-h-[80vh] flex flex-col mb-4 overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300">
           {/* Header */}
-          <div className="bg-zinc-900 border-b border-zinc-800 p-4 flex items-center justify-between">
+          <div className="bg-muted border-b border-border p-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-profit/20 rounded-lg text-profit">
                 <Bot className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-display font-bold text-white text-sm">Profit Engine AI</h3>
+                <h3 className="font-display font-bold text-foreground text-sm">Profit Engine AI</h3>
                 <p className="text-[10px] text-profit uppercase tracking-widest font-black">Growth Expert</p>
               </div>
             </div>
             <button 
               onClick={() => setIsOpen(false)}
-              className="text-zinc-500 hover:text-white transition-colors p-1"
+              className="text-muted-foreground hover:text-foreground transition-colors p-1"
             >
               <X className="w-5 h-5" />
             </button>
@@ -97,9 +97,9 @@ export default function AIChatAssistant() {
             {messages.map((msg, idx) => (
               <div key={idx} className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
                 <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${msg.role === 'user' ? 'bg-blue-600' : 'bg-profit/20 text-profit'}`}>
-                  {msg.role === 'user' ? <User className="w-4 h-4 text-white" /> : <Bot className="w-4 h-4" />}
+                  {msg.role === 'user' ? <User className="w-4 h-4 text-foreground" /> : <Bot className="w-4 h-4" />}
                 </div>
-                <div className={`max-w-[75%] rounded-2xl p-3 text-sm ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-tl-none'}`}>
+                <div className={`max-w-[75%] rounded-2xl p-3 text-sm ${msg.role === 'user' ? 'bg-blue-600 text-foreground rounded-tr-none' : 'bg-muted text-muted-foreground border border-border rounded-tl-none'}`}>
                    {/* Simple line break rendering for text */}
                    {msg.content.split('\n').map((line, i) => (
                       <React.Fragment key={i}>
@@ -115,7 +115,7 @@ export default function AIChatAssistant() {
                 <div className="w-8 h-8 rounded-full bg-profit/20 text-profit flex items-center justify-center">
                   <Bot className="w-4 h-4" />
                 </div>
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 rounded-tl-none flex items-center gap-1">
+                <div className="bg-muted border border-border rounded-2xl p-4 rounded-tl-none flex items-center gap-1">
                   <span className="w-1.5 h-1.5 bg-profit rounded-full animate-bounce [animation-delay:-0.3s]"></span>
                   <span className="w-1.5 h-1.5 bg-profit rounded-full animate-bounce [animation-delay:-0.15s]"></span>
                   <span className="w-1.5 h-1.5 bg-profit rounded-full animate-bounce"></span>
@@ -126,14 +126,14 @@ export default function AIChatAssistant() {
           </div>
 
           {/* Input Area */}
-          <form onSubmit={handleSend} className="p-3 bg-zinc-950 border-t border-zinc-800">
+          <form onSubmit={handleSend} className="p-3 bg-card border-t border-border">
             <div className="relative flex items-center">
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask about inventory or profit..."
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-full pl-4 pr-12 py-3 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-profit/50 focus:ring-1 focus:ring-profit/50 transition-all font-body"
+                className="w-full bg-muted border border-border rounded-full pl-4 pr-12 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-profit/50 focus:ring-1 focus:ring-profit/50 transition-all font-body"
                 disabled={isLoading}
               />
               <button

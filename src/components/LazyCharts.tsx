@@ -5,8 +5,8 @@ const ChartsLoader = lazy(() => import('./ChartsLoader'));
 
 // Loading component for charts
 const ChartSkeleton = () => (
-  <div className="w-full h-80 bg-zinc-900/50 rounded-xl animate-pulse flex items-center justify-center">
-    <div className="text-zinc-500">Loading chart...</div>
+  <div className="w-full h-80 bg-muted/50 rounded-xl animate-pulse flex items-center justify-center">
+    <div className="text-muted-foreground">Loading chart...</div>
   </div>
 );
 

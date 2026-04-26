@@ -67,13 +67,13 @@ export default function AddExpenseDialog({ open, onOpenChange, expense }: AddExp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-zinc-950 border-zinc-900 text-foreground">
+      <DialogContent className="max-w-md bg-card border-border text-foreground">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-2">
             <span className="p-2 bg-profit/10 rounded-lg">
               <Receipt className="text-profit w-5 h-5" />
             </span>
-            <DialogTitle className="text-xl font-black font-display tracking-tight text-white uppercase">
+            <DialogTitle className="text-xl font-black font-display tracking-tight text-foreground uppercase">
               {expense ? 'Edit Expense' : 'Add Business Expense'}
             </DialogTitle>
           </div>
@@ -88,7 +88,7 @@ export default function AddExpenseDialog({ open, onOpenChange, expense }: AddExp
             <Input 
               value={formData.category} 
               onChange={e => setFormData({...formData, category: e.target.value})}
-              placeholder="e.g. Rent, Utilities, Software" required className="bg-zinc-900 border-zinc-800 focus:ring-profit/50"
+              placeholder="e.g. Rent, Utilities, Software" required className="bg-muted border-border focus:ring-profit/50"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -97,7 +97,7 @@ export default function AddExpenseDialog({ open, onOpenChange, expense }: AddExp
               <Input 
                 type="number" value={formData.amount} 
                 onChange={e => setFormData({...formData, amount: e.target.value})}
-                placeholder="0.00" required className="bg-zinc-900 border-zinc-800 focus:ring-profit/50"
+                placeholder="0.00" required className="bg-muted border-border focus:ring-profit/50"
               />
             </div>
             <div className="space-y-2">
@@ -105,7 +105,7 @@ export default function AddExpenseDialog({ open, onOpenChange, expense }: AddExp
               <Input 
                 type="date" value={formData.date} 
                 onChange={e => setFormData({...formData, date: e.target.value})}
-                required className="bg-zinc-900 border-zinc-800 focus:ring-profit/50"
+                required className="bg-muted border-border focus:ring-profit/50"
               />
             </div>
           </div>
@@ -114,10 +114,10 @@ export default function AddExpenseDialog({ open, onOpenChange, expense }: AddExp
             <Input 
               value={formData.notes} 
               onChange={e => setFormData({...formData, notes: e.target.value})}
-              placeholder="Brief description..." className="bg-zinc-900 border-zinc-800 focus:ring-profit/50"
+              placeholder="Brief description..." className="bg-muted border-border focus:ring-profit/50"
             />
           </div>
-          <Button className="w-full bg-profit text-zinc-950 font-black h-12 uppercase tracking-widest text-xs mt-2" type="submit">
+          <Button className="w-full bg-profit text-primary-foreground font-black h-12 uppercase tracking-widest text-xs mt-2" type="submit">
             {expense ? <Save className="w-4 h-4 mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
             {expense ? 'Save Changes' : 'Record Expense'}
           </Button>

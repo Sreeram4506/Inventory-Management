@@ -39,9 +39,9 @@ export default function Registry() {
       <AppLayout>
         <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4">
            <FileArchive className="h-12 w-12 text-loss/50" />
-           <h2 className="text-xl font-bold text-white">Could not load registry</h2>
-           <p className="text-zinc-500 max-w-xs">There was an error fetching the document logs.</p>
-           <Button onClick={() => window.location.reload()} variant="outline" className="border-zinc-800 text-zinc-400">Retry</Button>
+           <h2 className="text-xl font-bold text-foreground">Could not load registry</h2>
+           <p className="text-muted-foreground max-w-xs">There was an error fetching the document logs.</p>
+           <Button onClick={() => window.location.reload()} variant="outline" className="border-border text-muted-foreground">Retry</Button>
         </div>
       </AppLayout>
     );
@@ -102,31 +102,31 @@ export default function Registry() {
       <div className="space-y-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="flex items-center gap-3 font-display text-3xl font-bold tracking-tight text-white">
+            <h1 className="flex items-center gap-3 font-display text-3xl font-bold tracking-tight text-foreground">
               <FileArchive className="h-8 w-8 text-profit" />
               Document Registry
             </h1>
-            <p className="mt-2 text-zinc-400">
+            <p className="mt-2 text-muted-foreground">
               A permanent historical log of all generated and scanned documents.
             </p>
           </div>
           
           <div className="flex items-center gap-3">
             <div className="relative w-full sm:w-56">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search VIN, Make, Model..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full border-zinc-800 bg-zinc-900/50 pl-10 text-white focus-visible:ring-profit/50"
+                className="w-full border-border bg-muted/50 pl-10 text-foreground focus-visible:ring-profit/50"
               />
             </div>
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[180px] bg-zinc-900/50 border-zinc-800 h-10 text-xs">
-                <Filter className="w-3.5 h-3.5 mr-2 text-zinc-500" />
+              <SelectTrigger className="w-[180px] bg-muted/50 border-border h-10 text-xs">
+                <Filter className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
                 <SelectValue placeholder="Filter type" />
               </SelectTrigger>
-              <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+              <SelectContent className="bg-muted border-border text-foreground">
                 {DOCUMENT_TYPES.map(dt => (
                   <SelectItem key={dt} value={dt}>{dt}</SelectItem>
                 ))}
@@ -135,10 +135,10 @@ export default function Registry() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 overflow-hidden">
+        <div className="rounded-2xl border border-border bg-card/50 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-zinc-400">
-              <thead className="bg-zinc-900/50 text-xs uppercase tracking-wider text-zinc-500">
+            <table className="w-full text-left text-sm text-muted-foreground">
+              <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="px-6 py-4 font-medium">Date Generated</th>
                   <th className="px-6 py-4 font-medium">Vehicle</th>
@@ -147,14 +147,14 @@ export default function Registry() {
                   <th className="px-6 py-4 font-medium text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/50">
+              <tbody className="divide-y divide-border/50">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-zinc-500">Loading logs...</td>
+                    <td colSpan={5} className="py-8 text-center text-muted-foreground">Loading logs...</td>
                   </tr>
                 ) : filteredLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-zinc-500">
+                    <td colSpan={5} className="py-8 text-center text-muted-foreground">
                       {searchTerm || typeFilter !== 'All' ? 'No matching documents found.' : 'Your registry is empty. Generate a document to start logging.'}
                     </td>
                   </tr>
@@ -164,13 +164,13 @@ export default function Registry() {
                     const downloadName = `auto-profit-hub-${log.vin ? log.vin.slice(-6) : log.id.slice(-6)}-${log.documentType.replace(/\s+/g, '-')}`;
                     
                     return (
-                      <tr key={log.id} className="transition-colors hover:bg-zinc-900/30">
-                        <td className="whitespace-nowrap px-6 py-4 font-medium text-white">
+                      <tr key={log.id} className="transition-colors hover:bg-muted/30">
+                        <td className="whitespace-nowrap px-6 py-4 font-medium text-foreground">
                           {new Date(log.createdAt).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4">
-                          <div className="font-medium text-white">{vehicleName}</div>
-                          <div className="text-xs text-zinc-500 font-mono mt-0.5">{log.vin || 'No VIN Extracted'}</div>
+                          <div className="font-medium text-foreground">{vehicleName}</div>
+                          <div className="text-xs text-muted-foreground font-mono mt-0.5">{log.vin || 'No VIN Extracted'}</div>
                         </td>
                         <td className="px-6 py-4">
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-400">
@@ -178,11 +178,11 @@ export default function Registry() {
                             {log.documentType}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-xs text-zinc-500 truncate max-w-[200px]">
+                        <td className="px-6 py-4 text-xs text-muted-foreground truncate max-w-[200px]">
                           {log.sourceFileName || 'N/A'}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end gap-2 text-zinc-400">
+                          <div className="flex justify-end gap-2 text-muted-foreground">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button
@@ -194,15 +194,15 @@ export default function Registry() {
                                   <Eye className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800 text-white">
+                              <DropdownMenuContent align="end" className="bg-muted border-border text-foreground">
                                 <DropdownMenuItem 
-                                  className="hover:bg-zinc-800 focus:bg-zinc-800 cursor-pointer"
+                                  className="hover:bg-muted/50 focus:bg-muted/50 cursor-pointer"
                                   onClick={() => handleView(log)}
                                 >
                                   Preview Generated Record
                                 </DropdownMenuItem>
                                 <DropdownMenuItem 
-                                  className="hover:bg-zinc-800 focus:bg-zinc-800 cursor-pointer"
+                                  className="hover:bg-muted/50 focus:bg-muted/50 cursor-pointer"
                                   onClick={() => handleView(log, true)}
                                 >
                                   Preview Original Source
@@ -212,7 +212,7 @@ export default function Registry() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 hover:bg-zinc-800 hover:text-white"
+                              className="h-8 w-8 hover:bg-muted/50 hover:text-foreground"
                               onClick={() => handleEdit(log)}
                             >
                               <Pencil className="h-4 w-4" />
@@ -235,15 +235,15 @@ export default function Registry() {
                                   <Download className="mr-2 h-3.5 w-3.5" /> Download
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800 text-white">
+                              <DropdownMenuContent align="end" className="bg-muted border-border text-foreground">
                                 <DropdownMenuItem 
-                                  className="hover:bg-zinc-800 focus:bg-zinc-800 cursor-pointer"
+                                  className="hover:bg-muted/50 focus:bg-muted/50 cursor-pointer"
                                   onClick={() => handleDownload(log.id, downloadName)}
                                 >
                                   Generated PDF Record
                                 </DropdownMenuItem>
                                 <DropdownMenuItem 
-                                  className="hover:bg-zinc-800 focus:bg-zinc-800 cursor-pointer"
+                                  className="hover:bg-muted/50 focus:bg-muted/50 cursor-pointer"
                                   onClick={() => handleDownload(log.id, downloadName, true)}
                                 >
                                   Original Source File

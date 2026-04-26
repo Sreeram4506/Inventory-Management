@@ -194,11 +194,11 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
 
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-zinc-950 border-zinc-900 text-white selection:bg-profit/30">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-card border-border text-foreground selection:bg-profit/30">
         <DialogHeader>
-          <DialogTitle className="font-display text-2xl text-white">Add New Vehicle</DialogTitle>
+          <DialogTitle className="font-display text-2xl text-foreground">Add New Vehicle</DialogTitle>
           <DialogDescription className="sr-only">Add a new vehicle manually or scan a document to push into inventory.</DialogDescription>
-          <p className="text-zinc-400 text-sm">Fill in the details manually or use our AI scanner.</p>
+          <p className="text-muted-foreground text-sm">Fill in the details manually or use our AI scanner.</p>
         </DialogHeader>
 
         {/* Document Upload / Photo Section */}
@@ -238,32 +238,32 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-zinc-300">VIN Number<span className="text-red-500 ml-1">*</span></Label>
-                <Input name="vin" value={formData.vin} onChange={handleInputChange} placeholder="Enter VIN" required className="bg-zinc-800 border-zinc-700 text-white" />
+                <Label className="text-muted-foreground">VIN Number<span className="text-red-500 ml-1">*</span></Label>
+                <Input name="vin" value={formData.vin} onChange={handleInputChange} placeholder="Enter VIN" required className="bg-muted/50 border-border text-foreground" />
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Make<span className="text-red-500 ml-1">*</span></Label>
-                <Input name="make" value={formData.make} onChange={handleInputChange} placeholder="e.g. Honda" required className="bg-zinc-800 border-zinc-700 text-white" />
+                <Label className="text-muted-foreground">Make<span className="text-red-500 ml-1">*</span></Label>
+                <Input name="make" value={formData.make} onChange={handleInputChange} placeholder="e.g. Honda" required className="bg-muted/50 border-border text-foreground" />
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Model<span className="text-red-500 ml-1">*</span></Label>
-                <Input name="model" value={formData.model} onChange={handleInputChange} placeholder="e.g. Civic" required className="bg-zinc-800 border-zinc-700 text-white" />
+                <Label className="text-muted-foreground">Model<span className="text-red-500 ml-1">*</span></Label>
+                <Input name="model" value={formData.model} onChange={handleInputChange} placeholder="e.g. Civic" required className="bg-muted/50 border-border text-foreground" />
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Year<span className="text-red-500 ml-1">*</span></Label>
-                <Input name="year" value={formData.year} onChange={handleInputChange} type="number" placeholder="2024" required className="bg-zinc-800 border-zinc-700 text-white" />
+                <Label className="text-muted-foreground">Year<span className="text-red-500 ml-1">*</span></Label>
+                <Input name="year" value={formData.year} onChange={handleInputChange} type="number" placeholder="2024" required className="bg-muted/50 border-border text-foreground" />
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Mileage<span className="text-red-500 ml-1">*</span></Label>
-                <Input name="mileage" value={formData.mileage} onChange={handleInputChange} type="number" placeholder="0" required className="bg-zinc-800 border-zinc-700 text-white" />
+                <Label className="text-muted-foreground">Mileage<span className="text-red-500 ml-1">*</span></Label>
+                <Input name="mileage" value={formData.mileage} onChange={handleInputChange} type="number" placeholder="0" required className="bg-muted/50 border-border text-foreground" />
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Color<span className="text-red-500 ml-1">*</span></Label>
-                <Input name="color" value={formData.color} onChange={handleInputChange} placeholder="e.g. Silver" required className="bg-zinc-800 border-zinc-700 text-white" />
+                <Label className="text-muted-foreground">Color<span className="text-red-500 ml-1">*</span></Label>
+                <Input name="color" value={formData.color} onChange={handleInputChange} placeholder="e.g. Silver" required className="bg-muted/50 border-border text-foreground" />
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Title Number</Label>
-                <Input name="titleNumber" value={formData.titleNumber} onChange={handleInputChange} placeholder="e.g. TITLE123456" className="bg-zinc-800 border-zinc-700 text-white" />
+                <Label className="text-muted-foreground">Title Number</Label>
+                <Input name="titleNumber" value={formData.titleNumber} onChange={handleInputChange} placeholder="e.g. TITLE123456" className="bg-muted/50 border-border text-foreground" />
               </div>
             </div>
           </div>
@@ -273,16 +273,16 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
             <h3 className="font-semibold text-sm text-profit uppercase tracking-wider mb-3">Purchase Details</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-zinc-300">Purchase Date<span className="text-red-500 ml-1">*</span></Label>
-                <Input name="purchaseDate" value={formData.purchaseDate} onChange={handleInputChange} type="date" required className="bg-zinc-800 border-zinc-700 text-white" />
+                <Label className="text-muted-foreground">Purchase Date<span className="text-red-500 ml-1">*</span></Label>
+                <Input name="purchaseDate" value={formData.purchaseDate} onChange={handleInputChange} type="date" required className="bg-muted/50 border-border text-foreground" />
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Purchased From</Label>
+                <Label className="text-muted-foreground">Purchased From</Label>
                 <Select onValueChange={(v) => handleSelectChange('purchasedFrom', v)} value={formData.purchasedFrom}>
-                  <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                  <SelectTrigger className="bg-muted/50 border-border text-foreground">
                     <SelectValue placeholder="Select source">{formData.purchasedFrom || 'Select source'}</SelectValue>
                   </SelectTrigger>
-                  <SelectContent className="bg-zinc-800 border-zinc-700 text-white">
+                  <SelectContent className="bg-muted/50 border-border text-foreground">
                     <SelectItem value="Dealer">Dealer</SelectItem>
                     <SelectItem value="Auction">Auction</SelectItem>
                     <SelectItem value="Individual">Individual</SelectItem>
@@ -290,16 +290,16 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Purchase Price ($)<span className="text-red-500 ml-1">*</span></Label>
-                <Input name="purchasePrice" value={formData.purchasePrice} onChange={handleInputChange} type="number" placeholder="0" required className="bg-zinc-800 border-zinc-700 text-white" />
+                <Label className="text-muted-foreground">Purchase Price ($)<span className="text-red-500 ml-1">*</span></Label>
+                <Input name="purchasePrice" value={formData.purchasePrice} onChange={handleInputChange} type="number" placeholder="0" required className="bg-muted/50 border-border text-foreground" />
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Payment Method</Label>
+                <Label className="text-muted-foreground">Payment Method</Label>
                 <Select onValueChange={(v) => handleSelectChange('paymentMethod', v)} value={formData.paymentMethod}>
-                  <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white">
+                  <SelectTrigger className="bg-muted/50 border-border text-foreground">
                     <SelectValue placeholder="Select method">{formData.paymentMethod || 'Select method'}</SelectValue>
                   </SelectTrigger>
-                  <SelectContent className="bg-zinc-800 border-zinc-700 text-white">
+                  <SelectContent className="bg-muted/50 border-border text-foreground">
                     <SelectItem value="Cash">Cash</SelectItem>
                     <SelectItem value="Check">Check</SelectItem>
                     <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
@@ -314,26 +314,26 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
             <h3 className="font-semibold text-sm text-profit uppercase tracking-wider mb-3">Additional Costs</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-zinc-300">Transport Cost ($)</Label>
-                <Input name="transportCost" value={formData.transportCost} onChange={handleInputChange} type="number" placeholder="0" className="bg-zinc-800 border-zinc-700 text-white" />
+                <Label className="text-muted-foreground">Transport Cost ($)</Label>
+                <Input name="transportCost" value={formData.transportCost} onChange={handleInputChange} type="number" placeholder="0" className="bg-muted/50 border-border text-foreground" />
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Repair Cost ($)</Label>
-                <Input name="repairCost" value={formData.repairCost} onChange={handleInputChange} type="number" placeholder="0" className="bg-zinc-800 border-zinc-700 text-white" />
+                <Label className="text-muted-foreground">Repair Cost ($)</Label>
+                <Input name="repairCost" value={formData.repairCost} onChange={handleInputChange} type="number" placeholder="0" className="bg-muted/50 border-border text-foreground" />
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Inspection Cost ($)</Label>
-                <Input name="inspectionCost" value={formData.inspectionCost} onChange={handleInputChange} type="number" placeholder="0" className="bg-zinc-800 border-zinc-700 text-white" />
+                <Label className="text-muted-foreground">Inspection Cost ($)</Label>
+                <Input name="inspectionCost" value={formData.inspectionCost} onChange={handleInputChange} type="number" placeholder="0" className="bg-muted/50 border-border text-foreground" />
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Fees ($)</Label>
-                <Input name="registrationCost" value={formData.registrationCost} onChange={handleInputChange} type="number" placeholder="0" className="bg-zinc-800 border-zinc-700 text-white" />
+                <Label className="text-muted-foreground">Fees ($)</Label>
+                <Input name="registrationCost" value={formData.registrationCost} onChange={handleInputChange} type="number" placeholder="0" className="bg-muted/50 border-border text-foreground" />
               </div>
             </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="outline" onClick={() => handleDialogChange(false)} className="border-zinc-700 text-zinc-300">Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => handleDialogChange(false)} className="border-border text-muted-foreground">Cancel</Button>
             <Button type="submit" disabled={loading} className="bg-profit hover:bg-profit-hover text-black">
               {loading ? 'Adding...' : 'Add Vehicle'}
             </Button>

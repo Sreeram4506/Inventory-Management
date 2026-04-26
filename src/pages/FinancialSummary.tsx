@@ -127,19 +127,19 @@ export default function FinancialSummary({ isSubpage = false }: FinancialSummary
     <div className="space-y-6 p-4">
       {/* Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h3 className="text-xl font-display font-bold text-white">Profit & Loss Statement</h3>
+        <h3 className="text-xl font-display font-bold text-foreground">Profit & Loss Statement</h3>
         <div className="flex items-center gap-3">
           <Select value={period} onValueChange={(v: any) => setPeriod(v)}>
-            <SelectTrigger className="w-[180px] bg-zinc-900/50 border-zinc-800 h-9 text-xs">
+            <SelectTrigger className="w-[180px] bg-muted/50 border-border h-9 text-xs">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+            <SelectContent className="bg-muted border-border text-foreground">
               <SelectItem value="monthly">Monthly</SelectItem>
               <SelectItem value="yearly">Yearly</SelectItem>
               <SelectItem value="all">All Time</SelectItem>
             </SelectContent>
           </Select>
-          <Button onClick={generatePDF} size="sm" className="bg-profit text-zinc-950 hover:bg-profit/90 font-bold text-xs uppercase tracking-widest">
+          <Button onClick={generatePDF} size="sm" className="bg-profit text-primary-foreground hover:bg-profit/90 font-bold text-xs uppercase tracking-widest">
             <FileDown className="w-3.5 h-3.5 mr-2" /> Export PDF
           </Button>
         </div>
@@ -147,24 +147,24 @@ export default function FinancialSummary({ isSubpage = false }: FinancialSummary
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-xl p-4">
-          <p className="text-[10px] uppercase tracking-widest font-bold text-zinc-500">Total Sales</p>
-          <p className="text-2xl font-display font-bold text-white mt-1">{totals.unitsSold}</p>
-          <p className="text-xs text-zinc-500">${totals.revenue.toLocaleString()} revenue</p>
+        <div className="bg-muted/40 border border-border/50 rounded-xl p-4">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Total Sales</p>
+          <p className="text-2xl font-display font-bold text-foreground mt-1">{totals.unitsSold}</p>
+          <p className="text-xs text-muted-foreground">${totals.revenue.toLocaleString()} revenue</p>
         </div>
-        <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-xl p-4">
-          <p className="text-[10px] uppercase tracking-widest font-bold text-zinc-500">Total Expenses</p>
+        <div className="bg-muted/40 border border-border/50 rounded-xl p-4">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Total Expenses</p>
           <p className="text-2xl font-display font-bold text-loss mt-1">${totals.totalExpenses.toLocaleString()}</p>
-          <p className="text-xs text-zinc-500">Ads + Operating</p>
+          <p className="text-xs text-muted-foreground">Ads + Operating</p>
         </div>
-        <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-xl p-4">
-          <p className="text-[10px] uppercase tracking-widest font-bold text-zinc-500">Gross Profit</p>
+        <div className="bg-muted/40 border border-border/50 rounded-xl p-4">
+          <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Gross Profit</p>
           <p className={cn("text-2xl font-display font-bold mt-1", totals.grossProfit >= 0 ? "text-profit" : "text-loss")}>
             ${totals.grossProfit.toLocaleString()}
           </p>
-          <p className="text-xs text-zinc-500">Revenue - COGS</p>
+          <p className="text-xs text-muted-foreground">Revenue - COGS</p>
         </div>
-        <div className="bg-zinc-900/40 border border-profit/20 rounded-xl p-4">
+        <div className="bg-muted/40 border border-profit/20 rounded-xl p-4">
           <p className="text-[10px] uppercase tracking-widest font-bold text-profit">Net Profit</p>
           <p className={cn("text-2xl font-display font-bold mt-1", totals.netProfit >= 0 ? "text-profit" : "text-loss")}>
             ${totals.netProfit.toLocaleString()}
@@ -179,10 +179,10 @@ export default function FinancialSummary({ isSubpage = false }: FinancialSummary
       </div>
 
       {/* P&L Table */}
-      <div className="bg-zinc-950/50 rounded-xl border border-zinc-800 overflow-hidden">
+      <div className="bg-card/50 rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-zinc-900/50 text-[10px] uppercase tracking-widest text-zinc-500">
+            <thead className="bg-muted/50 text-[10px] uppercase tracking-widest text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 text-left font-bold">Period</th>
                 <th className="px-4 py-3 text-right font-bold">Units</th>
@@ -194,39 +194,39 @@ export default function FinancialSummary({ isSubpage = false }: FinancialSummary
                 <th className="px-4 py-3 text-right font-bold">Net Profit</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/50">
+            <tbody className="divide-y divide-border/50">
               {report.map((row, i) => (
-                <tr key={i} className="hover:bg-zinc-900/30 transition-colors">
-                  <td className="px-4 py-3 font-bold text-white">{row.period}</td>
-                  <td className="px-4 py-3 text-right text-zinc-400">{row.unitsSold}</td>
-                  <td className="px-4 py-3 text-right text-white font-medium">${row.revenue.toLocaleString()}</td>
+                <tr key={i} className="hover:bg-muted/30 transition-colors">
+                  <td className="px-4 py-3 font-bold text-foreground">{row.period}</td>
+                  <td className="px-4 py-3 text-right text-muted-foreground">{row.unitsSold}</td>
+                  <td className="px-4 py-3 text-right text-foreground font-medium">${row.revenue.toLocaleString()}</td>
                   <td className="px-4 py-3 text-right text-loss">${row.cogs.toLocaleString()}</td>
                   <td className={cn("px-4 py-3 text-right font-bold", row.grossProfit >= 0 ? "text-profit" : "text-loss")}>
                     ${row.grossProfit.toLocaleString()}
                   </td>
-                  <td className="px-4 py-3 text-right text-zinc-400">${row.adSpend.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right text-zinc-400">${row.opExpenses.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right text-muted-foreground">${row.adSpend.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right text-muted-foreground">${row.opExpenses.toLocaleString()}</td>
                   <td className={cn("px-4 py-3 text-right font-display font-bold text-base", row.netProfit >= 0 ? "text-profit" : "text-loss")}>
                     ${row.netProfit.toLocaleString()}
                   </td>
                 </tr>
               ))}
               {report.length === 0 && (
-                <tr><td colSpan={8} className="text-center py-8 text-zinc-500">No data for the selected period.</td></tr>
+                <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">No data for the selected period.</td></tr>
               )}
             </tbody>
             {report.length > 0 && (
-              <tfoot className="bg-zinc-900/70 border-t-2 border-profit/30">
+              <tfoot className="bg-muted/70 border-t-2 border-profit/30">
                 <tr>
                   <td className="px-4 py-3 font-black text-profit uppercase text-[10px] tracking-widest">Total</td>
-                  <td className="px-4 py-3 text-right font-bold text-white">{totals.unitsSold}</td>
-                  <td className="px-4 py-3 text-right font-bold text-white">${totals.revenue.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right font-bold text-foreground">{totals.unitsSold}</td>
+                  <td className="px-4 py-3 text-right font-bold text-foreground">${totals.revenue.toLocaleString()}</td>
                   <td className="px-4 py-3 text-right font-bold text-loss">${totals.cogs.toLocaleString()}</td>
                   <td className={cn("px-4 py-3 text-right font-bold", totals.grossProfit >= 0 ? "text-profit" : "text-loss")}>
                     ${totals.grossProfit.toLocaleString()}
                   </td>
-                  <td className="px-4 py-3 text-right font-bold text-zinc-300">${totals.adSpend.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right font-bold text-zinc-300">${totals.opExpenses.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right font-bold text-muted-foreground">${totals.adSpend.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right font-bold text-muted-foreground">${totals.opExpenses.toLocaleString()}</td>
                   <td className={cn("px-4 py-3 text-right font-black text-lg font-display", totals.netProfit >= 0 ? "text-profit" : "text-loss")}>
                     ${totals.netProfit.toLocaleString()}
                   </td>

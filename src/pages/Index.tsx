@@ -68,17 +68,29 @@ export default function Dashboard() {
     <AppLayout>
       <div className="space-y-6 page-enter">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-foreground">Dashboard</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">Overview of your dealership performance</p>
+            <h1 className="text-2xl md:text-3xl font-black text-foreground tracking-tight">Dashboard</h1>
+            <p className="text-muted-foreground text-sm font-medium mt-1">Overview of your dealership performance</p>
           </div>
-          {isAdmin && (
-            <div className="flex items-center gap-1.5 bg-profit/8 px-3 py-1.5 rounded-md border border-profit/15">
-              <div className="w-1.5 h-1.5 rounded-full bg-profit" />
-              <span className="text-[11px] text-profit font-medium">Live Sync</span>
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            {isAdmin && (
+              <div className="hidden sm:flex items-center gap-2 bg-profit/10 px-3 py-1.5 rounded-full border border-profit/20 shadow-sm">
+                <div className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-profit opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-profit"></span>
+                </div>
+                <span className="text-[10px] text-profit font-bold uppercase tracking-wider">Live Sync</span>
+              </div>
+            )}
+            <button 
+              onClick={() => window.location.href = '/inventory'}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
+            >
+              <Car className="w-4 h-4" />
+              Manage Inventory
+            </button>
+          </div>
         </div>
 
         {/* Stats Grid */}

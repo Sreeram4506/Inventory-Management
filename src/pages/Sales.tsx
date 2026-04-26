@@ -123,7 +123,7 @@ export default function Sales() {
                 <div 
                   key={sale.id} 
                   onClick={() => handleVehicleClick(sale.vehicleId)}
-                  className="relative p-4 rounded-2xl bg-card/60 backdrop-blur-md border border-border shadow-lg shadow-black/5 active:scale-[0.98] transition-all duration-300 cursor-pointer overflow-hidden group"
+                  className="relative p-5 rounded-2xl bg-card border border-border shadow-md active:scale-[0.98] transition-all duration-300 cursor-pointer overflow-hidden group"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                   
@@ -166,7 +166,7 @@ export default function Sales() {
                     </div>
                   </div>
                   
-                  <div className="relative z-10 flex items-center justify-between py-3 border-y border-border/50 my-3 bg-muted/10 rounded-xl px-3">
+                  <div className="relative z-10 flex items-center justify-between py-4 border-y border-border my-4 bg-muted/10 rounded-xl px-4">
                     <div>
                       <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">Sale Date</p>
                       <p className="text-sm font-bold text-foreground">{new Date(sale.saleDate).toLocaleDateString()}</p>
@@ -202,7 +202,7 @@ export default function Sales() {
         </div>
 
         {/* Desktop View: Table */}
-        <div className="hidden md:block bg-card rounded-xl border border-border/60 overflow-hidden">
+        <div className="hidden md:block bg-card rounded-xl border border-border overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -223,7 +223,7 @@ export default function Sales() {
                     <tr 
                       key={sale.id} 
                       onClick={() => handleVehicleClick(sale.vehicleId)}
-                      className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors cursor-pointer"
+                      className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors cursor-pointer"
                     >
                       <td className="px-4 py-3">
                         <p className="font-medium text-foreground text-sm">{vehicle ? `${vehicle.make} ${vehicle.model}` : sale.vehicleId}</p>

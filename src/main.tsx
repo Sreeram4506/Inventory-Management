@@ -5,7 +5,7 @@ import "./index.css";
 
 console.log("React initialized:", !!React.createContext);
 
-// Enforce Dark Mode globally for the professional dashboard theme
-document.documentElement.classList.add('dark');
+// Enforce Light Mode or use system preference
+document.documentElement.classList.remove('dark');
 
 createRoot(document.getElementById("root")!).render(<App />);
