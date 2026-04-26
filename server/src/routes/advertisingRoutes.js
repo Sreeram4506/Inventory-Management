@@ -1,12 +1,15 @@
 import express from 'express';
 import prisma from '../db/prisma.js';
-import { authenticateToken } from '../middlewares/authMiddleware.js';
+import { authenticateToken, authorizeAdmin } from '../middlewares/authMiddleware.js';
 import { validate, advertisingSchema } from '../utils/validators.js';
 import { adsCache } from '../utils/cache.js';
 
 const router = express.Router();
 
-router.get('/', authenticateToken, async (req, res, next) => {
+// Only Admin can see/manage advertising spend
+router.use(authenticateToken, authorizeAdmin);
+
+router.get('/', async (req, res, next) => {
   try {
     const cached = adsCache.get('ads-list');
     if (cached) return res.json(cached);

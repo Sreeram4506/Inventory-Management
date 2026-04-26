@@ -1,5 +1,6 @@
 import AppLayout from '@/components/AppLayout';
 import { useInventory } from '@/hooks/useInventory';
+import { useAuth } from '@/context/auth-hooks';
 import { Vehicle } from '@/types/inventory';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -35,6 +36,8 @@ export default function Inventory() {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null);
   const { vehicles, isLoading, isError, deleteVehicle } = useInventory();
+  const { user } = useAuth();
+  const isStaff = user?.role === 'STAFF';
 
   if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading inventory...</div>;
   if (isError) {
@@ -78,16 +81,20 @@ export default function Inventory() {
           />
         </div>
 
-        {/* Stats Grid - Horizontal Scroll on Mobile */}
+        {/* Stats Grid - Only show financials to non-staff */}
         <div className="flex md:grid md:grid-cols-4 gap-4 overflow-x-auto pb-4 md:pb-0 -mx-5 px-5 md:mx-0 md:px-0 scrollbar-hide">
-          <div className="stat-card min-w-[200px] md:min-w-0 flex-shrink-0 bg-secondary/30 border-border/50">
-            <p className="stat-label uppercase text-[10px] tracking-widest font-bold text-muted-foreground/80">Total Investment</p>
-            <p className="stat-value text-xl md:text-2xl mt-1 text-foreground">${vehicles.filter(v => v.status !== 'Sold').reduce((s, v) => s + (v.totalPurchaseCost || 0) + (v.repairCost || 0), 0).toLocaleString()}</p>
-          </div>
-          <div className="stat-card min-w-[200px] md:min-w-0 flex-shrink-0 bg-secondary/30 border-border/50">
-            <p className="stat-label uppercase text-[10px] tracking-widest font-bold text-muted-foreground/80">Avg Purchase</p>
-            <p className="stat-value text-xl md:text-2xl mt-1 text-foreground">${vehicles.length > 0 ? Math.round(vehicles.reduce((s, v) => s + (v.purchasePrice || 0), 0) / vehicles.length).toLocaleString() : 0}</p>
-          </div>
+          {!isStaff && (
+            <>
+              <div className="stat-card min-w-[200px] md:min-w-0 flex-shrink-0 bg-secondary/30 border-border/50">
+                <p className="stat-label uppercase text-[10px] tracking-widest font-bold text-muted-foreground/80">Total Investment</p>
+                <p className="stat-value text-xl md:text-2xl mt-1 text-foreground">${vehicles.filter(v => v.status !== 'Sold').reduce((s, v) => s + (v.totalPurchaseCost || 0) + (v.repairCost || 0), 0).toLocaleString()}</p>
+              </div>
+              <div className="stat-card min-w-[200px] md:min-w-0 flex-shrink-0 bg-secondary/30 border-border/50">
+                <p className="stat-label uppercase text-[10px] tracking-widest font-bold text-muted-foreground/80">Avg Purchase</p>
+                <p className="stat-value text-xl md:text-2xl mt-1 text-foreground">${vehicles.length > 0 ? Math.round(vehicles.reduce((s, v) => s + (v.purchasePrice || 0), 0) / vehicles.length).toLocaleString() : 0}</p>
+              </div>
+            </>
+          )}
           <div className="stat-card min-w-[200px] md:min-w-0 flex-shrink-0 bg-secondary/30 border-border/50">
             <p className="stat-label uppercase text-[10px] tracking-widest font-bold text-muted-foreground/80">Available</p>
             <p className="stat-value text-xl md:text-2xl mt-1 text-profit">{vehicles.filter(v => v.status === 'Available').length}</p>
@@ -130,15 +137,17 @@ export default function Inventory() {
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center mt-2">
-                  <div>
-                    <p className="text-[10px] uppercase text-muted-foreground font-bold mb-0.5 tracking-wider">Total Investment</p>
-                    <p className="text-xl font-display font-bold text-profit">${((vehicle.totalPurchaseCost || 0) + (vehicle.repairCost || 0)).toLocaleString()}</p>
+                {!isStaff && (
+                  <div className="flex justify-between items-center mt-2">
+                    <div>
+                      <p className="text-[10px] uppercase text-muted-foreground font-bold mb-0.5 tracking-wider">Total Investment</p>
+                      <p className="text-xl font-display font-bold text-profit">${((vehicle.totalPurchaseCost || 0) + (vehicle.repairCost || 0)).toLocaleString()}</p>
+                    </div>
+                    <Button variant="outline" size="sm" className="gap-2 h-10 border-border/50 text-xs font-bold uppercase tracking-widest">
+                      Manage Cost
+                    </Button>
                   </div>
-                  <Button variant="outline" size="sm" className="gap-2 h-10 border-border/50 text-xs font-bold uppercase tracking-widest">
-                    Manage Cost
-                  </Button>
-                </div>
+                )}
               </div>
             ))
           ) : (
@@ -155,8 +164,12 @@ export default function Inventory() {
                   <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Vehicle</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">VIN</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Year</th>
-                  <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Initial Purchase</th>
-                  <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Investment</th>
+                  {!isStaff && (
+                    <>
+                      <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Initial Purchase</th>
+                      <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Investment</th>
+                    </>
+                  )}
                   <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Days</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Status</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Manage</th>
@@ -177,8 +190,12 @@ export default function Inventory() {
                     </td>
                     <td className="px-6 py-4 text-sm text-muted-foreground font-mono tracking-tight">{vehicle.vin.slice(-8)}</td>
                     <td className="px-6 py-4 text-sm text-foreground font-medium">{vehicle.year}</td>
-                    <td className="px-6 py-4 text-sm font-semibold text-foreground">${vehicle.purchasePrice.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-sm font-bold text-profit">${((vehicle.totalPurchaseCost || 0) + (vehicle.repairCost || 0)).toLocaleString()}</td>
+                    {!isStaff && (
+                      <>
+                        <td className="px-6 py-4 text-sm font-semibold text-foreground">${vehicle.purchasePrice.toLocaleString()}</td>
+                        <td className="px-6 py-4 text-sm font-bold text-profit">${((vehicle.totalPurchaseCost || 0) + (vehicle.repairCost || 0)).toLocaleString()}</td>
+                      </>
+                    )}
                     <td className="px-6 py-4">
                       <span className={cn("text-sm font-bold", vehicle.daysInInventory >= 60 ? "text-warning" : "text-foreground")}>
                         {vehicle.daysInInventory}

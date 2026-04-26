@@ -15,54 +15,54 @@ const basePageSize = {
 // ──────────────────────────────────────────────────────────────────────
 const fieldMap = {
   // Row: "Mfrs. Model Year: ___ Make: ___ Model: ___ Color: ___"
-  year:            { x: 135, y: 667, width: 50,  height: 14, font: 'helvetica' },
-  make:            { x: 228, y: 667, width: 110, height: 14, font: 'helvetica' },
-  model:           { x: 392, y: 667, width: 95,  height: 14, font: 'helvetica' },
-  color:           { x: 512, y: 667, width: 85,  height: 14, font: 'helvetica' },
+  year:            { x: 135, y: 669, width: 50,  height: 14, font: 'helvetica' },
+  make:            { x: 228, y: 669, width: 110, height: 14, font: 'helvetica' },
+  model:           { x: 392, y: 669, width: 95,  height: 14, font: 'helvetica' },
+  color:           { x: 512, y: 669, width: 85,  height: 14, font: 'helvetica' },
 
   // VIN box row (individual chars drawn separately by drawVin)
-  vinArea:         { x: 114, y: 612, width: 290, height: 16 },
+  vinArea:         { x: 114, y: 613, width: 290, height: 16 },
 
   // "Obtained From (Source): ___ Transaction Date: ___"
-  obtainedFrom:    { x: 192, y: 419, width: 185, height: 12, font: 'courier' },
-  transactionDate: { x: 448, y: 419, width: 130, height: 12, font: 'courier' },
+  obtainedFrom:    { x: 192, y: 421, width: 185, height: 12, font: 'courier' },
+  transactionDate: { x: 448, y: 421, width: 130, height: 12, font: 'courier' },
 
   // "Address (number and street): ___"
-  address:         { x: 192, y: 389, width: 395, height: 12, font: 'courier' },
+  address:         { x: 192, y: 392, width: 395, height: 12, font: 'courier' },
 
   // "City or Town: ___ State: ___ Zip Code: ___ Odometer In: ___"
-  city:            { x: 118, y: 359, width: 130, height: 12, font: 'courier' },
-  state:           { x: 300, y: 359, width: 35,  height: 12, font: 'courier' },
-  zipCode:         { x: 375, y: 359, width: 75,  height: 12, font: 'courier' },
-  odometerIn:      { x: 498, y: 359, width: 85,  height: 12, font: 'courier' },
+  city:            { x: 118, y: 362, width: 130, height: 12, font: 'courier' },
+  state:           { x: 300, y: 362, width: 35,  height: 12, font: 'courier' },
+  zipCode:         { x: 375, y: 362, width: 75,  height: 12, font: 'courier' },
+  odometerIn:      { x: 505, y: 362, width: 85,  height: 12, font: 'courier' },
 
   // Repeater: "The source … was obtained from: ___"
-  sourceRepeater:  { x: 368, y: 275, width: 215, height: 12, font: 'courier' },
+  sourceRepeater:  { x: 355, y: 278, width: 230, height: 12, font: 'courier' },
 
   // Stock No. — top-right corner
-  stockNo:         { x: 475, y: 753, width: 110, height: 14, font: 'helvetica' },
+  stockNo:         { x: 475, y: 755, width: 110, height: 14, font: 'helvetica' },
 
   // Title No. — top-leftish or near stock
-  titleNo:         { x: 124, y: 751, width: 200, height: 14, font: 'helvetica' },
+  titleNo:         { x: 124, y: 753, width: 200, height: 14, font: 'helvetica' },
 
   // ── Disposition of Motor Vehicle/Part ──
-  disposedTo:      { x: 192, y: 201, width: 235, height: 12, font: 'courier' },
-  disposedAddress: { x: 192, y: 171, width: 230, height: 12, font: 'courier' },
-  disposedCity:    { x: 118, y: 141, width: 155, height: 12, font: 'courier' },
-  disposedState:   { x: 300, y: 141, width: 35,  height: 12, font: 'courier' },
-  disposedZip:     { x: 375, y: 141, width: 60,  height: 12, font: 'courier' },
-  disposedOdometer:{ x: 498, y: 141, width: 85,  height: 12, font: 'courier' },
-  disposedDate:    { x: 448, y: 201, width: 115, height: 12, font: 'courier' },
-  disposedPrice:   { x: 235, y: 60,  width: 130, height: 12, font: 'courier' },
+  disposedTo:      { x: 192, y: 203, width: 235, height: 12, font: 'courier' },
+  disposedAddress: { x: 192, y: 173, width: 230, height: 12, font: 'courier' },
+  disposedCity:    { x: 118, y: 144, width: 155, height: 12, font: 'courier' },
+  disposedState:   { x: 300, y: 144, width: 35,  height: 12, font: 'courier' },
+  disposedZip:     { x: 375, y: 144, width: 60,  height: 12, font: 'courier' },
+  disposedOdometer:{ x: 505, y: 144, width: 85,  height: 12, font: 'courier' },
+  disposedDate:    { x: 448, y: 203, width: 115, height: 12, font: 'courier' },
+  disposedPrice:   { x: 235, y: 50,  width: 130, height: 12, font: 'courier' },
   
   // DL Info & Signature
-  disposedDl:      { x: 195, y: 79,  width: 150, height: 11, font: 'courier' },
-  disposedDlState: { x: 395, y: 79,  width: 40,  height: 11, font: 'courier' },
-  dealerSignature: { x: 412, y: 32,  width: 175, height: 12, font: 'courier' },
+  disposedDl:      { x: 195, y: 70,  width: 150, height: 11, font: 'courier' },
+  disposedDlState: { x: 395, y: 70,  width: 40,  height: 11, font: 'courier' },
+  dealerSignature: { x: 412, y: 34,  width: 175, height: 12, font: 'courier' },
 };
 
 const VIN_START_X = 114;
-const VIN_START_Y = 612;
+const VIN_START_Y = 613;
 const VIN_STEP_X  = 17.05;
 
 export async function fillUsedVehiclePdf(templateBuffer, vehicleInfo, templateMimeType = 'application/pdf') {

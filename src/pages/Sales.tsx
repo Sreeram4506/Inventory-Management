@@ -4,6 +4,7 @@ import { useInventory } from '@/hooks/useInventory';
 import { cn } from '@/lib/utils';
 import QueryErrorState from '@/components/QueryErrorState';
 import { useState } from 'react';
+import { useAuth } from '@/context/auth-hooks';
 import VehicleDetailDialog from '@/components/VehicleDetailDialog';
 import { Vehicle } from '@/types/inventory';
 
@@ -11,6 +12,8 @@ export default function Sales() {
   const { sales, isLoading: salesLoading, isError: salesError } = useSales();
   const { vehicles, isLoading: vehiclesLoading, isError: vehiclesError } = useInventory();
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const { user } = useAuth();
+  const isStaff = user?.role === 'STAFF';
 
   if (salesLoading || vehiclesLoading) return <div className="p-8 text-center text-muted-foreground">Loading sales...</div>;
   if (salesError || vehiclesError) {
@@ -48,14 +51,18 @@ export default function Sales() {
             <p className="stat-label uppercase text-[10px] tracking-widest font-bold text-zinc-500">Total Revenue</p>
             <p className="stat-value text-xl md:text-2xl mt-1 text-white">${totalRevenue.toLocaleString()}</p>
           </div>
-          <div className="stat-card min-w-[200px] md:min-w-0 flex-shrink-0 bg-zinc-900/40 border-zinc-800/50">
-            <p className="stat-label uppercase text-[10px] tracking-widest font-bold text-zinc-500">Total Profit</p>
-            <p className="stat-value text-xl md:text-2xl mt-1 text-profit font-display">${totalProfit.toLocaleString()}</p>
-          </div>
-          <div className="stat-card min-w-[200px] md:min-w-0 flex-shrink-0 bg-zinc-900/40 border-zinc-800/50">
-            <p className="stat-label uppercase text-[10px] tracking-widest font-bold text-zinc-500 text-info">Avg Profit/Unit</p>
-            <p className="stat-value text-xl md:text-2xl mt-1 text-info font-display">${avgProfit.toLocaleString()}</p>
-          </div>
+          {!isStaff && (
+            <>
+              <div className="stat-card min-w-[200px] md:min-w-0 flex-shrink-0 bg-zinc-900/40 border-zinc-800/50">
+                <p className="stat-label uppercase text-[10px] tracking-widest font-bold text-zinc-500">Total Profit</p>
+                <p className="stat-value text-xl md:text-2xl mt-1 text-profit font-display">${totalProfit.toLocaleString()}</p>
+              </div>
+              <div className="stat-card min-w-[200px] md:min-w-0 flex-shrink-0 bg-zinc-900/40 border-zinc-800/50">
+                <p className="stat-label uppercase text-[10px] tracking-widest font-bold text-zinc-500 text-info">Avg Profit/Unit</p>
+                <p className="stat-value text-xl md:text-2xl mt-1 text-info font-display">${avgProfit.toLocaleString()}</p>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Mobile View: Cards */}
@@ -102,12 +109,14 @@ export default function Sales() {
                       <div className="w-2 h-2 rounded-full bg-profit animate-pulse" />
                       <span className="text-xs text-zinc-400 font-medium">Recorded Success</span>
                     </div>
-                    <div className="text-right">
-                      <p className="text-[10px] uppercase text-zinc-500 font-bold mb-0.5">Net Profit</p>
-                      <p className={cn("text-xl font-display font-bold", sale.profit >= 0 ? "text-profit" : "text-loss")}>
-                        ${sale.profit.toLocaleString()}
-                      </p>
-                    </div>
+                    {!isStaff && (
+                      <div className="text-right">
+                        <p className="text-[10px] uppercase text-zinc-500 font-bold mb-0.5">Net Profit</p>
+                        <p className={cn("text-xl font-display font-bold", sale.profit >= 0 ? "text-profit" : "text-loss")}>
+                          ${sale.profit.toLocaleString()}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -128,7 +137,7 @@ export default function Sales() {
                   <th className="text-left px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Sale Date</th>
                   <th className="text-left px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Sale Price</th>
                   <th className="text-left px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Payment</th>
-                  <th className="text-left px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Profit</th>
+                  {!isStaff && <th className="text-left px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Profit</th>}
                 </tr>
               </thead>
               <tbody>
@@ -162,11 +171,13 @@ export default function Sales() {
                           {sale.paymentMethod}
                         </span>
                       </td>
-                      <td className="px-4 py-4">
-                        <span className={cn("font-display font-bold text-lg", sale.profit >= 0 ? "text-profit" : "text-loss")}>
-                          ${sale.profit.toLocaleString()}
-                        </span>
-                      </td>
+                      {!isStaff && (
+                        <td className="px-4 py-4">
+                          <span className={cn("font-display font-bold text-lg", sale.profit >= 0 ? "text-profit" : "text-loss")}>
+                            ${sale.profit.toLocaleString()}
+                          </span>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

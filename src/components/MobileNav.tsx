@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Car, ShoppingCart, 
-  BarChart3, Menu, LogOut, X, FileArchive, FileText, Receipt
+  BarChart3, Menu, LogOut, X, FileArchive, FileText, Receipt, Users
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -11,24 +11,33 @@ import { Button } from './ui/button';
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/inventory', icon: Car, label: 'Inventory' },
-  { to: '/sales', icon: ShoppingCart, label: 'Sales' },
+  { to: '/sales', icon: ShoppingCart, label: 'Sales', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/used-vehicle-forms', icon: FileArchive, label: 'Forms' },
 ];
 
 const drawerItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/inventory', icon: Car, label: 'Inventory' },
-  { to: '/sales', icon: ShoppingCart, label: 'Sales' },
-  { to: '/expenses', icon: Receipt, label: 'Expenses' },
+  { to: '/sales', icon: ShoppingCart, label: 'Sales', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+  { to: '/expenses', icon: Receipt, label: 'Expenses', roles: ['ADMIN'] },
   { to: '/used-vehicle-forms', icon: FileText, label: 'Used Forms' },
-  { to: '/registry', icon: FileArchive, label: 'Registry Logs' },
-  { to: '/reports', icon: BarChart3, label: 'Analytics' },
+  { to: '/registry', icon: FileArchive, label: 'Registry Logs', roles: ['ADMIN', 'MANAGER'] },
+  { to: '/reports', icon: BarChart3, label: 'Analytics', roles: ['ADMIN', 'MANAGER'] },
+  { to: '/team-analytics', icon: Users, label: 'Team', roles: ['ADMIN'] },
 ];
 
 export default function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
   const { user, logout } = useAuth();
+
+  const filteredNavItems = navItems.filter(item => 
+    !item.roles || (user && item.roles.includes(user.role))
+  );
+
+  const filteredDrawerItems = drawerItems.filter(item => 
+    !item.roles || (user && item.roles.includes(user.role))
+  );
 
   return (
     <>
@@ -76,7 +85,7 @@ export default function MobileNav() {
                 <p className="text-[10px] text-profit font-bold">{user?.role}</p>
               </div>
 
-              {drawerItems.map((item) => {
+              {filteredDrawerItems.map((item) => {
                 const isActive = location.pathname === item.to;
                 return (
                   <NavLink
@@ -117,7 +126,7 @@ export default function MobileNav() {
 
       {/* Bottom Tab Bar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 h-20 bg-sidebar/80 backdrop-blur-xl border-t border-sidebar-border py-2 px-4 flex items-center justify-around z-50 safe-area-bottom shadow-[0_-8px_30px_rgb(0,0,0,0.12)]">
-        {navItems.map((item) => {
+        {filteredNavItems.map((item) => {
           const isActive = location.pathname === item.to;
           return (
             <NavLink

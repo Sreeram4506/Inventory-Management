@@ -24,3 +24,10 @@ export const authorizeAdmin = (req, res, next) => {
   }
   next();
 };
+
+export const authorizeManagerOrAdmin = (req, res, next) => {
+  if (req.user.role !== 'ADMIN' && req.user.role !== 'MANAGER') {
+    return res.status(403).json({ message: 'Manager or Admin access required' });
+  }
+  next();
+};

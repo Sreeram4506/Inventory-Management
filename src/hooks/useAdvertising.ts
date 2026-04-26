@@ -4,7 +4,7 @@ import { AdvertisingExpense } from '@/types/inventory';
 import { apiFetch, handleApiResponse } from '@/lib/api';
 
 export function useAdvertising() {
-  const { token, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const queryClient = useQueryClient();
 
   const adsQuery = useQuery({
@@ -13,7 +13,7 @@ export function useAdvertising() {
       const response = await apiFetch('/advertising', token);
       return handleApiResponse<AdvertisingExpense[]>(response, logout);
     },
-    enabled: !!token,
+    enabled: !!token && user?.role === 'ADMIN',
     staleTime: 60000,
   });
 

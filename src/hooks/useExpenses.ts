@@ -4,7 +4,7 @@ import { BusinessExpense } from '@/types/inventory';
 import { apiFetch, handleApiResponse } from '@/lib/api';
 
 export function useExpenses() {
-  const { token, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const queryClient = useQueryClient();
 
   const expensesQuery = useQuery({
@@ -13,7 +13,7 @@ export function useExpenses() {
       const response = await apiFetch('/expenses', token);
       return handleApiResponse<BusinessExpense[]>(response, logout);
     },
-    enabled: !!token,
+    enabled: !!token && user?.role === 'ADMIN',
     staleTime: 60000,
   });
 

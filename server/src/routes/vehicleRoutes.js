@@ -146,14 +146,47 @@ router.get('/', authenticateToken, async (req, res, next) => {
       }
     });
 
+    const isStaff = req.user.role === 'STAFF';
+
     const enrichedVehicles = vehicles.map(v => {
       const hasDocument = !!v.purchase?.documentBase64;
       const hasSourceDocument = !!v.purchase?.sourceDocumentBase64;
-      // Strip the heavy base64 strings from purchase before sending
-      const { documentBase64, sourceDocumentBase64, ...purchaseWithoutDoc } = v.purchase || {};
+      
+      // Strip base64 strings
+      const { documentBase64, sourceDocumentBase64, ...purchaseData } = v.purchase || {};
+      
+      // If Staff, mask financial data
+      if (isStaff) {
+        return {
+          id: v.id,
+          vin: v.vin,
+          make: v.make,
+          model: v.model,
+          year: v.year,
+          mileage: v.mileage,
+          color: v.color,
+          status: v.status,
+          purchaseDate: v.purchaseDate,
+          createdAt: v.createdAt,
+          updatedAt: v.updatedAt,
+          hasDocument,
+          hasSourceDocument,
+          // Hide all money fields for staff
+          purchasePrice: 0,
+          totalPurchaseCost: 0,
+          inspectionCost: 0,
+          registrationCost: 0,
+          transportCost: 0,
+          repairCost: 0,
+          purchase: null,
+          repairs: [],
+          sale: v.sale ? { status: 'Sold' } : null // Only show THAT it is sold, not for how much
+        };
+      }
+
       return {
         ...v,
-        purchase: v.purchase ? purchaseWithoutDoc : null,
+        purchase: v.purchase ? purchaseData : null,
         purchasePrice: v.purchase?.purchasePrice || 0,
         totalPurchaseCost: v.purchase?.totalPurchaseCost || 0,
         inspectionCost: v.purchase?.inspectionCost || 0,
@@ -205,6 +238,7 @@ router.post('/', authenticateToken, validate(vehicleSchema), async (req, res, ne
         color,
         purchaseDate: new Date(purchaseDate),
         status: 'Available',
+        createdById: req.user.id,
         purchase: {
           create: {
             sellerName: purchasedFrom,

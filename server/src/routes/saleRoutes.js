@@ -1,13 +1,16 @@
 import express from 'express';
 import prisma from '../db/prisma.js';
-import { authenticateToken } from '../middlewares/authMiddleware.js';
+import { authenticateToken, authorizeManagerOrAdmin } from '../middlewares/authMiddleware.js';
 import { validate, saleSchema } from '../utils/validators.js';
 
 import { salesCache } from '../utils/cache.js';
 
 const router = express.Router();
 
-router.get('/', authenticateToken, async (req, res, next) => {
+// Allow all authenticated users, but we will mask data for STAFF
+router.use(authenticateToken);
+
+router.get('/', async (req, res, next) => {
   try {
     const cachedData = salesCache.get('sales-list');
     if (cachedData) return res.json(cachedData);
@@ -21,8 +24,19 @@ router.get('/', authenticateToken, async (req, res, next) => {
       orderBy: { saleDate: 'desc' }
     });
     
-    salesCache.set('sales-list', sales);
-    res.json(sales);
+    const isStaff = req.user.role === 'STAFF';
+    
+    // Mask profit for staff
+    const processedSales = sales.map(s => {
+      if (isStaff) {
+        const { profit, ...saleData } = s;
+        return { ...saleData, profit: 0 };
+      }
+      return s;
+    });
+
+    salesCache.set('sales-list', processedSales);
+    res.json(processedSales);
   } catch (err) {
     next(err);
   }
@@ -57,6 +71,7 @@ router.post('/', authenticateToken, validate(saleSchema), async (req, res, next)
           paymentMethod,
           profit,
           vehicleId,
+          createdById: req.user.id,
           ...loanDetails
         }
       });

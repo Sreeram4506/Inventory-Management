@@ -69,10 +69,10 @@ async function textExtract(text) {
     const prompt = `Read this vehicle document carefully and extract ALL information. Return ONLY a JSON object.
     
     VIN EXTRACTION RULE:
-    - You MUST extract exactly 17 characters for the VIN.
-    - CRITICAL: The first character of the VIN (often 1, 2, 3, 4, 5, J, W, etc.) is frequently printed VERY CLOSE to the left vertical line or boundary. Look extremely closely.
-    - If you extract only 16 characters, YOU HAVE MISSED THE FIRST CHARACTER. Look again at the far left edge.
-    - Do NOT include any labels like "VIN:" or "V.I.N. No." in the output.
+    - Extract the EXACT 17-character VIN accurately.
+    - The VIN may be printed with widely spaced characters or in individual boxes. Read ALL characters from left to right.
+    - Do NOT include any labels like "VIN:", "VIN NO:", or "Serial:" in the value. Return ONLY the 17 characters.
+    - Pay special attention to the very first character. Do not skip it.
 
 {
   "vin": "5FNYF4H61BB077174",
@@ -204,10 +204,10 @@ async function visionExtract(fileBuffer, mimetype) {
     const prompt = `Read this vehicle document image and extract ALL data. Return ONLY a JSON object.
 
     VIN EXTRACTION RULE:
-    - You MUST extract exactly 17 characters for the VIN.
-    - CRITICAL: The first character of the VIN (often 1, 2, 3, 4, 5, J, W, etc.) is frequently printed VERY CLOSE to the left vertical line or boundary. Look extremely closely.
-    - If you extract only 16 characters, YOU HAVE MISSED THE FIRST CHARACTER. Look again at the far left edge.
-    - Do NOT include any labels like "VIN:" or "V.I.N. No." in the output.
+    - Extract the EXACT 17-character VIN accurately.
+    - The VIN may be printed with widely spaced characters or in individual boxes. Read ALL characters from left to right.
+    - Do NOT include any labels like "VIN:", "VIN NO:", or "Serial:" in the value. Return ONLY the 17 characters.
+    - Look closely for the first and last characters of the VIN. Do not skip the first digit.
 
 {
   "vin": "5FNYF4H61BB077174",
@@ -295,8 +295,8 @@ function clean(d) {
   const n = v => { const x = parseFloat(String(v || '0').replace(/[^0-9.]/g, '')); return Number.isFinite(x) ? x : 0; };
   const i = v => { const x = parseInt(String(v || '0').replace(/\D/g, ''), 10); return Number.isFinite(x) ? x : 0; };
   const vin = s(d.vin).toUpperCase()
-    .replace(/^VIN[:\s-]*/, '') // Only strip exact "VIN:" prefix if AI accidentally includes it
     .replace(/[^A-Z0-9]/g, '')
+    .replace(/^(VIN|SERIAL|NUMBER|ID|VEHICLEID|IDENTIFICATION|STOCK|LOT|NO)+/, '')
     .replace(/[IOQ]/g, '')
     .slice(0, 17);
   const dt = v => {
@@ -415,3 +415,37 @@ async function extractPdfTextPages(fileBuffer) {
   }
   return { pages, combinedText: pages.join('\n').trim() };
 }
+
+/**
+ * Validates a 17-character VIN using the standard check digit rule (position 9).
+ * Useful for catching OCR errors.
+ */
+export function isValidVin(vin) {
+  if (!vin || vin.length !== 17) return false;
+  
+  const weights = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2];
+  const transliteration = {
+    'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7, 'H': 8,
+    'J': 1, 'K': 2, 'L': 3, 'M': 4, 'N': 5, 'P': 7, 'R': 9,
+    'S': 2, 'T': 3, 'U': 4, 'V': 5, 'W': 6, 'X': 7, 'Y': 8, 'Z': 9,
+    '0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9
+  };
+
+  try {
+    let sum = 0;
+    for (let i = 0; i < 17; i++) {
+      const char = vin[i].toUpperCase();
+      const val = transliteration[char];
+      if (val === undefined && i !== 8) return false; // Invalid char in non-check-digit position
+      sum += (val || 0) * weights[i];
+    }
+
+    const remainder = sum % 11;
+    const checkDigit = remainder === 10 ? 'X' : String(remainder);
+    
+    return vin[8].toUpperCase() === checkDigit;
+  } catch (err) {
+    return false;
+  }
+}
+

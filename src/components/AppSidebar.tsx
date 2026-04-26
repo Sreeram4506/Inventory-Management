@@ -2,7 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Car, ShoppingCart, DollarSign, 
   Megaphone, Receipt, TrendingUp, ChevronLeft, ChevronRight,
-  LogOut, User as UserIcon, BarChart3, FileCheck2, FileArchive
+  LogOut, User as UserIcon, BarChart3, FileCheck2, FileArchive, Users
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -11,11 +11,12 @@ import { useAuth } from '@/context/auth-hooks';
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/inventory', icon: Car, label: 'Inventory' },
-  { to: '/sales', icon: ShoppingCart, label: 'Sales' },
-  { to: '/expenses', icon: Receipt, label: 'Expenses' },
+  { to: '/sales', icon: ShoppingCart, label: 'Sales', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+  { to: '/expenses', icon: Receipt, label: 'Expenses', roles: ['ADMIN'] },
   { to: '/used-vehicle-forms', icon: FileCheck2, label: 'Used Forms' },
-  { to: '/registry', icon: FileArchive, label: 'Registry' },
+  { to: '/registry', icon: FileArchive, label: 'Registry', roles: ['ADMIN', 'MANAGER'] },
   { to: '/reports', icon: BarChart3, label: 'Reports', roles: ['ADMIN', 'MANAGER'] },
+  { to: '/team-analytics', icon: Users, label: 'Team Analytics', roles: ['ADMIN'] },
 ];
 
 export default function AppSidebar() {

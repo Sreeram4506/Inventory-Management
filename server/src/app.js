@@ -15,6 +15,7 @@ import advertisingRoutes from './routes/advertisingRoutes.js';
 import documentRoutes from './routes/documentRoutes.js';
 import registryRoutes from './routes/registryRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
+import teamRoutes from './routes/teamRoutes.js';
 
 const app = express();
 
@@ -81,6 +82,7 @@ app.use('/api/expenses', expenseRoutes);
 app.use('/api/advertising', advertisingRoutes);
 app.use('/api/registry', registryRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/team', teamRoutes);
 app.use('/api', documentRoutes);
 
 // Custom error handling middleware

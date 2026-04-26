@@ -3,28 +3,29 @@ import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import ProtectedRoute from "./components/ProtectedRoute.tsx";
-import { AuthProvider } from "./context/AuthContext.tsx";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { AuthProvider } from "./context/AuthContext";
 import { lazy, Suspense, useEffect } from "react";
 
 // Preload critical routes
-const preloadDashboard = () => import("./pages/Index.tsx");
-const preloadInventory = () => import("./pages/Inventory.tsx");
+const preloadDashboard = () => import("./pages/Index");
+const preloadInventory = () => import("./pages/Inventory");
 
 // Standard imports for reporting to avoid lazy-loading issues during transition
-import Reports from "./pages/Reports.tsx";
+import Reports from "./pages/Reports";
 
 // Lazy load other pages for code splitting
 const Index = lazy(preloadDashboard);
 const Inventory = lazy(preloadInventory);
-const Sales = lazy(() => import("./pages/Sales.tsx"));
-const Advertising = lazy(() => import("./pages/Advertising.tsx"));
-const Expenses = lazy(() => import("./pages/Expenses.tsx"));
-const CashFlow = lazy(() => import("./pages/CashFlow.tsx"));
-const UsedVehicleForms = lazy(() => import("./pages/UsedVehicleForms.tsx"));
-const Registry = lazy(() => import("./pages/Registry.tsx"));
-const Login = lazy(() => import("./pages/Login.tsx"));
-const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+const Sales = lazy(() => import("./pages/Sales"));
+const Advertising = lazy(() => import("./pages/Advertising"));
+const Expenses = lazy(() => import("./pages/Expenses"));
+const CashFlow = lazy(() => import("./pages/CashFlow"));
+const UsedVehicleForms = lazy(() => import("./pages/UsedVehicleForms"));
+const Registry = lazy(() => import("./pages/Registry"));
+const TeamAnalytics = lazy(() => import("./pages/TeamAnalytics"));
+const Login = lazy(() => import("./pages/Login"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Preload manager component
 function PreloadManager() {
@@ -116,6 +117,11 @@ export default function App() {
                 <Route path="/reports" element={
                   <ProtectedRoute roles={['ADMIN', 'MANAGER']}>
                     <Reports />
+                  </ProtectedRoute>
+                } />
+                <Route path="/team-analytics" element={
+                  <ProtectedRoute roles={['ADMIN']}>
+                    <TeamAnalytics />
                   </ProtectedRoute>
                 } />
                 

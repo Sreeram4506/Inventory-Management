@@ -243,8 +243,8 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
     // Use manual customer name fallback if AI didn't extract it
     const customerName = billOfSaleInfo.disposedTo || req.body.customerName || 'Unknown Customer';
 
-    // ── Step 3: EXACT VIN match in inventory ──
-    const vehicle = await prisma.vehicle.findUnique({
+    // ── Step 3: VIN match in inventory ──
+    let vehicle = await prisma.vehicle.findUnique({
       where: { vin: extractedVin },
       include: { 
         purchase: true,
@@ -254,10 +254,32 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
     });
 
     if (!vehicle) {
-      return res.status(404).json({ status: 'error', message: `VIN not found in inventory: ${extractedVin}` });
+      console.log(`[BillOfSale] Exact match fail for ${extractedVin}. Trying fuzzy match...`);
+      const allVehicles = await prisma.vehicle.findMany({
+        where: { status: 'Available' },
+        include: { purchase: true, repairs: true, sale: true }
+      });
+      
+      // Look for a vehicle where only 1 or 2 characters are different
+      const closeMatches = allVehicles.filter(v => {
+        const dist = levenshteinDistance(v.vin, extractedVin);
+        return dist > 0 && dist <= 2;
+      });
+
+      if (closeMatches.length === 1) {
+        vehicle = closeMatches[0];
+        console.log(`[BillOfSale] FUZZY MATCH found: ${extractedVin} matches ${vehicle.vin} (dist: ${levenshteinDistance(vehicle.vin, extractedVin)})`);
+        // We proceed with this vehicle
+      } else {
+        return res.status(404).json({ 
+          status: 'error', 
+          message: `VIN not found in inventory: ${extractedVin}. Please ensure the vehicle was scanned into inventory first.` 
+        });
+      }
     }
 
-    console.log(`[BillOfSale] EXACT VIN match found: ${extractedVin} → Vehicle ID: ${vehicle.id}`);
+    const matchedVin = vehicle.vin;
+    console.log(`[BillOfSale] VIN matched: ${matchedVin} → Vehicle ID: ${vehicle.id}`);
 
     // ── Step 4: Update vehicle status: AVAILABLE → SOLD ──
     await prisma.vehicle.update({
@@ -417,5 +439,22 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
     next(err);
   }
 });
+
+function levenshteinDistance(a, b) {
+  const matrix = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return matrix[a.length][b.length];
+}
 
 export default router;

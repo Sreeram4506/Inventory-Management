@@ -12,8 +12,12 @@ model User {
   email     String   @unique
   password  String
   name      String
-  role      String   @default("STAFF") // ADMIN, STAFF
+  role      String   @default("STAFF") // ADMIN, MANAGER, STAFF
   createdAt DateTime @default(now())
+  
+  // Relations for tracking activity
+  vehiclesAdded Vehicle[]
+  salesMade     Sale[]
 }
 
 model Vehicle {
@@ -35,6 +39,10 @@ model Vehicle {
   purchase          Purchase?
   repairs           Repair[]
   sale              Sale?
+  
+  // Activity tracking
+  createdById       String?  @db.ObjectId
+  createdBy         User?    @relation(fields: [createdById], references: [id])
 }
 
 model Purchase {
@@ -91,6 +99,10 @@ model Sale {
   interestRate   Float?
   loanTerm       Int?
   monthlyPayment Float?
+
+  // Activity tracking
+  createdById    String?  @db.ObjectId
+  createdBy      User?    @relation(fields: [createdById], references: [id])
 
   createdAt      DateTime @default(now())
 }
