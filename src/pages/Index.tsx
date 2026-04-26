@@ -6,7 +6,7 @@ import { useAdvertising } from '@/hooks/useAdvertising';
 import { useExpenses } from '@/hooks/useExpenses';
 import { useTeam } from '@/hooks/useTeam';
 import { useAuth } from '@/context/auth-hooks';
-import { Car, ShoppingCart, DollarSign, TrendingUp, Package, Megaphone, Activity, Users } from 'lucide-react';
+import { Car, ShoppingCart, DollarSign, TrendingUp, Package, Megaphone, Users } from 'lucide-react';
 import QueryErrorState from '@/components/QueryErrorState';
 import { lazy, Suspense, useState } from 'react';
 import RevenueReportDialog from '@/components/RevenueReportDialog';
@@ -66,24 +66,24 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
-      <div className="space-y-8 pb-12 animate-in fade-in duration-700">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="space-y-6 page-enter">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl md:text-4xl font-bold font-display text-white tracking-tight">Performance Overview</h1>
-            <p className="text-zinc-400 mt-1 flex items-center gap-2">
-              <Activity className="w-4 h-4 text-profit" />
-              Real-time analytics for your dealership
-            </p>
+            <h1 className="text-xl md:text-2xl font-bold text-foreground">Dashboard</h1>
+            <p className="text-muted-foreground text-sm mt-0.5">Overview of your dealership performance</p>
           </div>
-          <div className="flex items-center gap-2 bg-zinc-900/50 p-1 rounded-xl border border-zinc-800">
-            <span className="px-3 py-1.5 rounded-lg bg-profit/10 text-profit text-xs font-semibold uppercase tracking-wider">Live</span>
-            <span className="pr-3 text-[11px] text-zinc-500 uppercase font-medium">Auto-Sync Enabled</span>
-          </div>
+          {isAdmin && (
+            <div className="flex items-center gap-1.5 bg-profit/8 px-3 py-1.5 rounded-md border border-profit/15">
+              <div className="w-1.5 h-1.5 rounded-full bg-profit" />
+              <span className="text-[11px] text-profit font-medium">Live Sync</span>
+            </div>
+          )}
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          <StatCard label="Total Inventory" value={invLoading ? "..." : String(vehicles.length)} icon={Car} />
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <StatCard label="Inventory" value={invLoading ? "..." : String(vehicles.length)} icon={Car} />
           <StatCard label="Units Sold" value={salesLoading ? "..." : String(sales.length)} icon={ShoppingCart} />
           {!isStaff && (
             <>
@@ -92,25 +92,25 @@ export default function Dashboard() {
                 label="Total Revenue" 
                 value={salesLoading ? "..." : `$${totalRevenue.toLocaleString()}`} 
                 icon={DollarSign} 
-                iconClassName="bg-blue-500 text-white" 
+                iconClassName="bg-info/15 text-info" 
                 onClick={() => setReportModalOpen(true)}
               />
             </>
           )}
           {isAdmin && (
             <>
-              <StatCard label="Ad Spend" value={adsLoading ? "..." : `$${totalAdSpend.toLocaleString()}`} icon={Megaphone} iconClassName="bg-warning text-black" />
-              <StatCard label="Net Profit" value={salesLoading ? "..." : `$${totalProfit.toLocaleString()}`} icon={TrendingUp} iconClassName="bg-profit text-black" />
+              <StatCard label="Ad Spend" value={adsLoading ? "..." : `$${totalAdSpend.toLocaleString()}`} icon={Megaphone} iconClassName="bg-warning/15 text-warning" />
+              <StatCard label="Net Profit" value={salesLoading ? "..." : `$${totalProfit.toLocaleString()}`} icon={TrendingUp} iconClassName="bg-profit/15 text-profit" />
             </>
           )}
         </div>
 
-        {/* Charts Section */}
+        {/* Charts */}
         {!isStaff && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <Suspense fallback={
-              <div className="lg:col-span-3 flex items-center justify-center h-80 bg-zinc-900/50 rounded-xl">
-                <div className="text-zinc-500">Loading charts...</div>
+              <div className="lg:col-span-3 flex items-center justify-center h-72 bg-card rounded-xl border border-border/60">
+                <div className="text-muted-foreground text-sm">Loading charts...</div>
               </div>
             }>
               <ChartsSection
@@ -123,66 +123,68 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* Admin sections: Expenses + Team */}
         {isAdmin && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Recent Expenses List */}
-            <div className="stat-card bg-zinc-900/40 border-zinc-800/50">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="font-display font-semibold text-xl text-white">Recent Expenses</h3>
-                <span className="text-xs text-zinc-500 font-medium tracking-tight">Last 30 Days</span>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Recent Expenses */}
+            <div className="stat-card">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-foreground">Recent Expenses</h3>
+                <span className="text-[11px] text-muted-foreground">Last 30 Days</span>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {expLoading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="h-16 w-full animate-pulse bg-zinc-900 shadow-lg rounded-xl border border-zinc-800" />
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-12 w-full animate-pulse bg-muted/50 rounded-lg" />
                   ))
                 ) : expenses.length > 0 ? expenses.slice(0, 5).map((exp) => (
-                  <div key={exp.id} className="group flex items-center justify-between p-3 rounded-xl border border-zinc-800/50 bg-zinc-950/30 hover:bg-zinc-900/50 transition-all duration-300">
+                  <div key={exp.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-zinc-900 flex items-center justify-center text-zinc-400 group-hover:text-profit transition-colors">
-                        <DollarSign className="w-5 h-5" />
+                      <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center text-muted-foreground">
+                        <DollarSign className="w-3.5 h-3.5" />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-white">{exp.category}</p>
-                        <p className="text-[11px] text-zinc-500 uppercase font-bold tracking-wider">{new Date(exp.date).toLocaleDateString()}</p>
+                        <p className="text-sm font-medium text-foreground">{exp.category}</p>
+                        <p className="text-[11px] text-muted-foreground">{new Date(exp.date).toLocaleDateString()}</p>
                       </div>
                     </div>
-                    <span className="font-display font-bold text-white text-lg">${exp.amount.toLocaleString()}</span>
+                    <span className="font-semibold text-foreground tabular-nums">${exp.amount.toLocaleString()}</span>
                   </div>
                 )) : (
-                  <div className="h-48 flex items-center justify-center text-zinc-500 italic text-sm">No recent expenses found.</div>
+                  <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">No recent expenses.</div>
                 )}
               </div>
             </div>
-            {/* Team Performance List */}
-            <div className="stat-card bg-zinc-900/40 border-zinc-800/50">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="font-display font-semibold text-xl text-white">Team Performance</h3>
-                <span className="text-xs text-zinc-500 font-medium tracking-tight">Staff & Managers</span>
+
+            {/* Team Performance */}
+            <div className="stat-card">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-foreground">Team Performance</h3>
+                <span className="text-[11px] text-muted-foreground">Staff & Managers</span>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {teamLoading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="h-16 w-full animate-pulse bg-zinc-900 shadow-lg rounded-xl border border-zinc-800" />
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-12 w-full animate-pulse bg-muted/50 rounded-lg" />
                   ))
                 ) : team.length > 0 ? team.map((member) => (
-                  <div key={member.id} className="group flex items-center justify-between p-3 rounded-xl border border-zinc-800/50 bg-zinc-950/30 hover:bg-zinc-900/50 transition-all duration-300">
+                  <div key={member.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-zinc-900 flex items-center justify-center text-zinc-400 group-hover:text-info transition-colors">
-                        <Users className="w-5 h-5" />
+                      <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center text-muted-foreground">
+                        <Users className="w-3.5 h-3.5" />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-white">{member.name}</p>
-                        <p className="text-[11px] text-zinc-500 uppercase font-bold tracking-wider">{member.role}</p>
+                        <p className="text-sm font-medium text-foreground">{member.name}</p>
+                        <p className="text-[11px] text-muted-foreground">{member.role}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-zinc-400 font-medium"><span className="text-white font-bold">{member._count?.salesMade || 0}</span> Sales</p>
-                      <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider"><span className="text-zinc-300">{member._count?.vehiclesAdded || 0}</span> Vehicles Added</p>
+                      <p className="text-sm font-semibold text-foreground tabular-nums">{member._count?.salesMade || 0} sales</p>
+                      <p className="text-[11px] text-muted-foreground">{member._count?.vehiclesAdded || 0} added</p>
                     </div>
                   </div>
                 )) : (
-                  <div className="h-48 flex items-center justify-center text-zinc-500 italic text-sm">No team members found.</div>
+                  <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">No team members found.</div>
                 )}
               </div>
             </div>

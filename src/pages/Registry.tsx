@@ -25,6 +25,15 @@ export default function Registry() {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
 
+  const filteredLogs = useMemo(() => {
+    return logs.filter(log => {
+      const searchStr = `${log.vin} ${log.make} ${log.model} ${log.year} ${log.sourceFileName}`.toLowerCase();
+      const matchesSearch = searchStr.includes(searchTerm.toLowerCase());
+      const matchesType = typeFilter === 'All' || log.documentType === typeFilter;
+      return matchesSearch && matchesType;
+    });
+  }, [logs, searchTerm, typeFilter]);
+
   if (isError) {
     return (
       <AppLayout>
@@ -87,15 +96,6 @@ export default function Registry() {
       toast.error('Error loading document preview.');
     }
   };
-
-  const filteredLogs = useMemo(() => {
-    return logs.filter(log => {
-      const searchStr = `${log.vin} ${log.make} ${log.model} ${log.year} ${log.sourceFileName}`.toLowerCase();
-      const matchesSearch = searchStr.includes(searchTerm.toLowerCase());
-      const matchesType = typeFilter === 'All' || log.documentType === typeFilter;
-      return matchesSearch && matchesType;
-    });
-  }, [logs, searchTerm, typeFilter]);
 
   return (
     <AppLayout>

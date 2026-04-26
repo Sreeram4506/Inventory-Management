@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
-  LayoutDashboard, Car, ShoppingCart, DollarSign, 
-  Megaphone, Receipt, TrendingUp, ChevronLeft, ChevronRight,
+  LayoutDashboard, Car, ShoppingCart, 
+  Receipt, ChevronLeft, ChevronRight,
   LogOut, User as UserIcon, BarChart3, FileCheck2, FileArchive, Users
 } from 'lucide-react';
 import { useState } from 'react';
@@ -16,7 +16,7 @@ const navItems = [
   { to: '/used-vehicle-forms', icon: FileCheck2, label: 'Used Forms' },
   { to: '/registry', icon: FileArchive, label: 'Registry', roles: ['ADMIN', 'MANAGER'] },
   { to: '/reports', icon: BarChart3, label: 'Reports', roles: ['ADMIN', 'MANAGER'] },
-  { to: '/team-analytics', icon: Users, label: 'Team Analytics', roles: ['ADMIN'] },
+  { to: '/team-analytics', icon: Users, label: 'Team', roles: ['ADMIN'] },
 ];
 
 export default function AppSidebar() {
@@ -30,24 +30,23 @@ export default function AppSidebar() {
 
   return (
     <aside className={cn(
-      "hidden md:flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300 min-h-screen shrink-0",
-      collapsed ? "w-[72px]" : "w-[260px]"
+      "hidden md:flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-200 min-h-screen shrink-0",
+      collapsed ? "w-[68px]" : "w-[240px]"
     )}>
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-6 border-b border-sidebar-border">
-        <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0">
-          <Car className="w-5 h-5 text-sidebar-primary-foreground" />
+      <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
+        <div className="w-8 h-8 rounded-lg bg-sidebar-primary/90 flex items-center justify-center shrink-0">
+          <Car className="w-4 h-4 text-sidebar-primary-foreground" />
         </div>
         {!collapsed && (
-          <div className="animate-slide-in">
-            <h1 className="text-base font-bold text-sidebar-accent-foreground font-display tracking-tight">AutoProfitHub</h1>
-            <p className="text-xs text-sidebar-muted">Management System</p>
+          <div className="overflow-hidden">
+            <h1 className="text-sm font-bold text-sidebar-accent-foreground truncate">AutoProfitHub</h1>
           </div>
         )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-2 py-3 space-y-0.5">
         {filteredNavItems.map((item) => {
           const isActive = location.pathname === item.to;
           return (
@@ -55,30 +54,30 @@ export default function AppSidebar() {
               key={item.to}
               to={item.to}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                "flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150",
                 isActive
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
               )}
             >
-              <item.icon className={cn("w-5 h-5 shrink-0", isActive && "text-sidebar-primary")} />
-              {!collapsed && <span className="animate-slide-in">{item.label}</span>}
+              <item.icon className={cn("w-[18px] h-[18px] shrink-0", isActive && "text-sidebar-primary")} />
+              {!collapsed && <span className="truncate">{item.label}</span>}
             </NavLink>
           );
         })}
       </nav>
 
-      {/* User & Collapse Info */}
-      <div className="mt-auto px-3 py-4 border-t border-sidebar-border space-y-1">
+      {/* User & Collapse */}
+      <div className="mt-auto px-2 py-3 border-t border-sidebar-border space-y-0.5">
         <div className={cn(
-          "flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-sidebar-muted mb-2",
+          "flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] text-sidebar-muted",
           collapsed && "justify-center"
         )}>
-          <UserIcon className="w-5 h-5 shrink-0" />
+          <UserIcon className="w-[18px] h-[18px] shrink-0" />
           {!collapsed && (
-            <div className="flex flex-col">
-              <span className="font-semibold text-sidebar-accent-foreground">{user?.name}</span>
-              <span className="text-[10px] uppercase font-bold text-profit">{user?.role}</span>
+            <div className="flex flex-col min-w-0">
+              <span className="font-medium text-sidebar-accent-foreground truncate">{user?.name}</span>
+              <span className="text-[10px] uppercase font-semibold text-sidebar-primary tracking-wide">{user?.role}</span>
             </div>
           )}
         </div>
@@ -86,23 +85,23 @@ export default function AppSidebar() {
         <button
           onClick={logout}
           className={cn(
-            "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 w-full transition-colors",
+            "flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] text-destructive/80 hover:bg-destructive/10 hover:text-destructive w-full transition-colors",
             collapsed && "justify-center"
           )}
         >
-          <LogOut className="w-5 h-5 shrink-0" />
+          <LogOut className="w-[18px] h-[18px] shrink-0" />
           {!collapsed && <span>Sign Out</span>}
         </button>
 
         <button
           onClick={() => setCollapsed(!collapsed)}
           className={cn(
-            "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sidebar-foreground hover:bg-sidebar-accent/50 w-full transition-colors",
+            "flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] text-sidebar-foreground hover:bg-sidebar-accent/60 w-full transition-colors",
             collapsed && "justify-center"
           )}
         >
-          {collapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
-          {!collapsed && <span>Collapse Sidebar</span>}
+          {collapsed ? <ChevronRight className="w-[18px] h-[18px]" /> : <ChevronLeft className="w-[18px] h-[18px]" />}
+          {!collapsed && <span>Collapse</span>}
         </button>
       </div>
     </aside>

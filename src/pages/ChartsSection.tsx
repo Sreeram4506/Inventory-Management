@@ -10,84 +10,83 @@ interface ChartsSectionProps {
 export default function ChartsSection({ salesHistory, inventoryStatusData, profitData, COLORS }: ChartsSectionProps) {
   return (
     <>
-      {/* Sales & Profit Area Chart */}
+      {/* Revenue & Profit Area Chart */}
       <div className="stat-card lg:col-span-2 overflow-hidden">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="font-display font-semibold text-xl text-white">Financial Growth</h3>
-          <div className="flex items-center gap-4 text-xs">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-foreground">Revenue & Profit</h3>
+          <div className="flex items-center gap-4 text-[11px]">
             <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-              <span className="text-zinc-400">Revenue</span>
+              <div className="w-2 h-2 rounded-full bg-info" />
+              <span className="text-muted-foreground">Revenue</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-profit" />
-              <span className="text-zinc-400">Profit</span>
+              <div className="w-2 h-2 rounded-full bg-profit" />
+              <span className="text-muted-foreground">Profit</span>
             </div>
           </div>
         </div>
-        <ResponsiveContainer width="100%" height={320}>
+        <ResponsiveContainer width="100%" height={280}>
           <AreaChart data={salesHistory}>
             <defs>
               <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                <stop offset="5%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0.2}/>
+                <stop offset="95%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0}/>
               </linearGradient>
               <linearGradient id="colorProf" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                <stop offset="5%" stopColor="hsl(152, 60%, 40%)" stopOpacity={0.2}/>
+                <stop offset="95%" stopColor="hsl(152, 60%, 40%)" stopOpacity={0}/>
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-            <XAxis dataKey="date" stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
-            <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(222, 14%, 15%)" vertical={false} />
+            <XAxis dataKey="date" stroke="hsl(220, 8%, 42%)" fontSize={11} tickLine={false} axisLine={false} />
+            <YAxis stroke="hsl(220, 8%, 42%)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
             <Tooltip
-              contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }}
-              itemStyle={{ fontSize: '12px' }}
+              contentStyle={{ backgroundColor: 'hsl(222, 22%, 8%)', border: '1px solid hsl(222, 14%, 15%)', borderRadius: '8px', fontSize: '12px' }}
             />
-            <Area type="monotone" dataKey="revenue" stroke="#3b82f6" fillOpacity={1} fill="url(#colorRev)" strokeWidth={3} />
-            <Area type="monotone" dataKey="profit" stroke="#10b981" fillOpacity={1} fill="url(#colorProf)" strokeWidth={3} />
+            <Area type="monotone" dataKey="revenue" stroke="hsl(217, 91%, 60%)" fillOpacity={1} fill="url(#colorRev)" strokeWidth={2} />
+            <Area type="monotone" dataKey="profit" stroke="hsl(152, 60%, 40%)" fillOpacity={1} fill="url(#colorProf)" strokeWidth={2} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
 
       {/* Inventory Status Pie */}
-      <div className="stat-card bg-zinc-900/40 border-zinc-800/50">
-        <h3 className="font-display font-semibold text-xl text-white mb-6">Inventory Status</h3>
-        <ResponsiveContainer width="100%" height={320}>
+      <div className="stat-card">
+        <h3 className="font-semibold text-foreground mb-4">Inventory Status</h3>
+        <ResponsiveContainer width="100%" height={260}>
           <PieChart>
-            <Pie data={inventoryStatusData} cx="50%" cy="50%" innerRadius={80} outerRadius={110} paddingAngle={8} dataKey="value" stroke="none">
+            <Pie data={inventoryStatusData} cx="50%" cy="50%" innerRadius={70} outerRadius={95} paddingAngle={6} dataKey="value" stroke="none">
               {inventoryStatusData.map((_, index) => (
                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
               ))}
             </Pie>
             <Tooltip
-              contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }}
+              contentStyle={{ backgroundColor: 'hsl(222, 22%, 8%)', border: '1px solid hsl(222, 14%, 15%)', borderRadius: '8px', fontSize: '12px' }}
             />
           </PieChart>
         </ResponsiveContainer>
-        <div className="flex justify-center gap-6 mt-4">
+        <div className="flex justify-center gap-6 mt-2">
           {inventoryStatusData.map((item, index) => (
             <div key={item.name} className="flex flex-col items-center">
-              <span className="text-[10px] uppercase font-bold text-zinc-500 mb-1">{item.name}</span>
-              <span className="text-lg font-display font-bold text-white leading-none">{item.value}</span>
+              <span className="text-[10px] text-muted-foreground font-medium mb-0.5">{item.name}</span>
+              <span className="text-lg font-semibold text-foreground tabular-nums">{item.value}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Top Profits Bar Chart */}
+      {/* Profit Bar Chart */}
       <div className="stat-card">
-        <h3 className="font-display font-semibold text-xl text-white mb-6">Vehicle Performance</h3>
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={profitData} layout="vertical" margin={{ left: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} />
-            <XAxis type="number" stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
-            <YAxis type="category" dataKey="vehicle" stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} width={120} />
+        <h3 className="font-semibold text-foreground mb-4">Top Vehicle Profits</h3>
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={profitData} layout="vertical" margin={{ left: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(222, 14%, 15%)" horizontal={false} />
+            <XAxis type="number" stroke="hsl(220, 8%, 42%)" fontSize={11} tickLine={false} axisLine={false} />
+            <YAxis type="category" dataKey="vehicle" stroke="hsl(220, 8%, 42%)" fontSize={11} tickLine={false} axisLine={false} width={110} />
             <Tooltip
-              cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-              contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }}
+              cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+              contentStyle={{ backgroundColor: 'hsl(222, 22%, 8%)', border: '1px solid hsl(222, 14%, 15%)', borderRadius: '8px', fontSize: '12px' }}
             />
-            <Bar dataKey="profit" fill="#10b981" radius={[0, 4, 4, 0]} barSize={24} />
+            <Bar dataKey="profit" fill="hsl(152, 60%, 40%)" radius={[0, 4, 4, 0]} barSize={20} />
           </BarChart>
         </ResponsiveContainer>
       </div>

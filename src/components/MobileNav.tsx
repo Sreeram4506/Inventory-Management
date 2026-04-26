@@ -9,8 +9,8 @@ import { useAuth } from '@/context/auth-hooks';
 import { Button } from './ui/button';
 
 const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/inventory', icon: Car, label: 'Inventory' },
+  { to: '/', icon: LayoutDashboard, label: 'Home' },
+  { to: '/inventory', icon: Car, label: 'Cars' },
   { to: '/sales', icon: ShoppingCart, label: 'Sales', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/used-vehicle-forms', icon: FileArchive, label: 'Forms' },
 ];
@@ -21,8 +21,8 @@ const drawerItems = [
   { to: '/sales', icon: ShoppingCart, label: 'Sales', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/expenses', icon: Receipt, label: 'Expenses', roles: ['ADMIN'] },
   { to: '/used-vehicle-forms', icon: FileText, label: 'Used Forms' },
-  { to: '/registry', icon: FileArchive, label: 'Registry Logs', roles: ['ADMIN', 'MANAGER'] },
-  { to: '/reports', icon: BarChart3, label: 'Analytics', roles: ['ADMIN', 'MANAGER'] },
+  { to: '/registry', icon: FileArchive, label: 'Registry', roles: ['ADMIN', 'MANAGER'] },
+  { to: '/reports', icon: BarChart3, label: 'Reports', roles: ['ADMIN', 'MANAGER'] },
   { to: '/team-analytics', icon: Users, label: 'Team', roles: ['ADMIN'] },
 ];
 
@@ -41,48 +41,43 @@ export default function MobileNav() {
 
   return (
     <>
-      {/* Top Mobile Header */}
-      <header className="md:hidden flex items-center justify-between px-5 py-4 bg-sidebar border-b border-sidebar-border sticky top-0 z-50">
+      {/* Top bar */}
+      <header className="md:hidden flex items-center justify-between px-4 py-3 bg-sidebar border-b border-sidebar-border sticky top-0 z-50">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
-            <Car className="w-4 h-4 text-sidebar-primary-foreground" />
+          <div className="w-7 h-7 rounded-md bg-sidebar-primary/90 flex items-center justify-center">
+            <Car className="w-3.5 h-3.5 text-sidebar-primary-foreground" />
           </div>
-          <h1 className="text-sm font-bold text-sidebar-accent-foreground font-display tracking-tight uppercase">AutoProfitHub</h1>
+          <h1 className="text-sm font-bold text-sidebar-accent-foreground tracking-tight">AutoProfitHub</h1>
         </div>
         <button 
           onClick={() => setIsOpen(true)}
-          className="w-9 h-9 rounded-lg bg-sidebar-accent flex items-center justify-center text-sidebar-foreground"
+          className="w-8 h-8 rounded-md bg-sidebar-accent flex items-center justify-center text-sidebar-foreground"
         >
-          <Menu className="w-5 h-5" />
+          <Menu className="w-4 h-4" />
         </button>
       </header>
 
-      {/* Slide-over Menu (Drawer) */}
+      {/* Drawer overlay */}
       {isOpen && (
         <div className="fixed inset-0 z-[60] md:hidden">
-          {/* Backdrop */}
           <div 
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm" 
             onClick={() => setIsOpen(false)}
           />
           
-          {/* Drawer Content */}
-          <div className="absolute top-0 right-0 h-full w-[280px] bg-sidebar border-l border-sidebar-border shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-sidebar-border">
-              <span className="font-display font-bold text-sidebar-accent-foreground tracking-tight">Main Menu</span>
-              <button 
-                onClick={() => setIsOpen(false)}
-                className="text-sidebar-muted hover:text-sidebar-accent-foreground"
-              >
-                <X className="w-6 h-6" />
+          <div className="absolute top-0 right-0 h-full w-[260px] bg-sidebar border-l border-sidebar-border shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-4 py-4 border-b border-sidebar-border">
+              <span className="font-semibold text-sm text-sidebar-accent-foreground">Menu</span>
+              <button onClick={() => setIsOpen(false)} className="text-sidebar-muted hover:text-sidebar-accent-foreground">
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-1">
-              <div className="bg-sidebar-accent/50 rounded-xl p-4 mb-4">
-                <p className="text-xs text-sidebar-muted uppercase tracking-wider font-bold mb-1">Signed in as</p>
-                <p className="text-sm font-semibold text-sidebar-accent-foreground">{user?.name}</p>
-                <p className="text-[10px] text-profit font-bold">{user?.role}</p>
+            <div className="flex-1 overflow-y-auto p-3 space-y-0.5">
+              <div className="bg-sidebar-accent/40 rounded-lg p-3 mb-3">
+                <p className="text-[10px] text-sidebar-muted uppercase tracking-wider font-semibold mb-0.5">Signed in as</p>
+                <p className="text-sm font-medium text-sidebar-accent-foreground">{user?.name}</p>
+                <p className="text-[10px] text-sidebar-primary font-semibold">{user?.role}</p>
               </div>
 
               {filteredDrawerItems.map((item) => {
@@ -93,39 +88,36 @@ export default function MobileNav() {
                     to={item.to}
                     onClick={() => setIsOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all",
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-colors",
                       isActive 
                         ? "bg-sidebar-primary/10 text-sidebar-primary" 
                         : "text-sidebar-muted hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
                     )}
                   >
-                    <item.icon className="w-5 h-5" />
+                    <item.icon className="w-[18px] h-[18px]" />
                     {item.label}
                   </NavLink>
                 );
               })}
 
-              <div className="pt-4 mt-4 border-t border-sidebar-border">
+              <div className="pt-3 mt-3 border-t border-sidebar-border">
                 <Button 
                   variant="destructive" 
-                  className="w-full justify-start gap-3 h-12 rounded-xl"
+                  className="w-full justify-start gap-3 h-10 rounded-lg text-[13px]"
                   onClick={logout}
                 >
-                  <LogOut className="w-5 h-5" />
+                  <LogOut className="w-[18px] h-[18px]" />
                   Sign Out
                 </Button>
               </div>
-            </div>
-            
-            <div className="mt-auto p-6 text-center">
-              <p className="text-[10px] text-sidebar-muted">© 2024 AutoProfitHub v2.0</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Bottom Tab Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-20 bg-sidebar/80 backdrop-blur-xl border-t border-sidebar-border py-2 px-4 flex items-center justify-around z-50 safe-area-bottom shadow-[0_-8px_30px_rgb(0,0,0,0.12)]">
+      {/* Bottom tab bar - Modern Floating Design */}
+      <nav className="md:hidden fixed bottom-4 left-4 right-4 h-16 bg-sidebar/80 backdrop-blur-xl border border-sidebar-border/50 rounded-2xl shadow-2xl py-1.5 px-3 flex items-center justify-around z-50 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-sidebar-primary/5 via-transparent to-sidebar-primary/5 pointer-events-none" />
         {filteredNavItems.map((item) => {
           const isActive = location.pathname === item.to;
           return (
@@ -133,25 +125,18 @@ export default function MobileNav() {
               key={item.to}
               to={item.to}
               className={cn(
-                "flex flex-col items-center justify-center gap-1.5 transition-all duration-300 relative px-4",
-                isActive ? "text-sidebar-primary" : "text-sidebar-muted"
+                "relative flex flex-col items-center justify-center gap-1 transition-all duration-300 px-4 h-full",
+                isActive ? "text-sidebar-primary transform -translate-y-0.5" : "text-sidebar-muted hover:text-sidebar-foreground"
               )}
             >
-              <div className={cn(
-                "p-2 rounded-xl transition-all duration-300",
-                isActive ? "bg-sidebar-primary/10" : ""
-              )}>
-                <item.icon className={cn("w-6 h-6", isActive ? "scale-110" : "scale-100")} />
-              </div>
-              <span className={cn(
-                "text-[10px] font-bold tracking-tight uppercase transition-all duration-300",
-                isActive ? "opacity-100 translate-y-0" : "opacity-70"
-              )}>
-                {item.label}
-              </span>
               {isActive && (
-                <div className="absolute -top-2 w-1.5 h-1.5 rounded-full bg-sidebar-primary shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-in zoom-in slide-in-from-top-1" />
+                <div className="absolute -top-1 w-8 h-1 bg-sidebar-primary rounded-b-full shadow-[0_0_10px_rgba(16,185,129,0.5)] animate-fade-in" />
               )}
+              <item.icon className={cn("w-[22px] h-[22px] transition-all duration-300", isActive && "scale-110 drop-shadow-md")} />
+              <span className={cn(
+                "text-[10px] font-semibold tracking-tight transition-all duration-300",
+                isActive ? "opacity-100" : "opacity-70"
+              )}>{item.label}</span>
             </NavLink>
           );
         })}

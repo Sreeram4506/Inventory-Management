@@ -12,8 +12,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
     <div className="flex flex-col md:flex-row min-h-screen bg-background relative">
       <AppSidebar />
       <MobileNav />
-      <main className="flex-1 overflow-auto pb-24 md:pb-0">
-        <div className="p-5 md:p-8 max-w-[1400px] mx-auto">
+      <main className="flex-1 overflow-auto pb-28 md:pb-0">
+        <div className="p-4 md:p-8 max-w-[1400px] mx-auto">
           {children}
         </div>
       </main>

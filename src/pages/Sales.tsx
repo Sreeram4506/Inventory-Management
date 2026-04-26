@@ -38,35 +38,34 @@ export default function Sales() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold font-display text-foreground tracking-tight">Sales History</h1>
-            <p className="text-muted-foreground mt-1 text-sm md:text-base">{sales.length} units finalized</p>
-          </div>
+      <div className="space-y-5 page-enter">
+        <div>
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Sales</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">{sales.length} units finalized</p>
         </div>
 
-        <div className="flex md:grid md:grid-cols-3 gap-4 overflow-x-auto pb-4 md:pb-0 -mx-5 px-5 md:mx-0 md:px-0 scrollbar-hide">
-          <div className="stat-card min-w-[200px] md:min-w-0 flex-shrink-0 bg-zinc-900/40 border-zinc-800/50">
-            <p className="stat-label uppercase text-[10px] tracking-widest font-bold text-zinc-500">Total Revenue</p>
-            <p className="stat-value text-xl md:text-2xl mt-1 text-white">${totalRevenue.toLocaleString()}</p>
+        {/* Stats */}
+        <div className="flex gap-3 overflow-x-auto pb-2 -mx-5 px-5 md:mx-0 md:px-0 scrollbar-hide">
+          <div className="stat-card min-w-[160px] md:min-w-0 flex-shrink-0 py-3 px-4">
+            <p className="text-[11px] text-muted-foreground font-medium">Total Revenue</p>
+            <p className="text-lg font-semibold text-foreground mt-0.5 tabular-nums">${totalRevenue.toLocaleString()}</p>
           </div>
           {!isStaff && (
             <>
-              <div className="stat-card min-w-[200px] md:min-w-0 flex-shrink-0 bg-zinc-900/40 border-zinc-800/50">
-                <p className="stat-label uppercase text-[10px] tracking-widest font-bold text-zinc-500">Total Profit</p>
-                <p className="stat-value text-xl md:text-2xl mt-1 text-profit font-display">${totalProfit.toLocaleString()}</p>
+              <div className="stat-card min-w-[160px] md:min-w-0 flex-shrink-0 py-3 px-4">
+                <p className="text-[11px] text-muted-foreground font-medium">Total Profit</p>
+                <p className="text-lg font-semibold text-profit mt-0.5 tabular-nums">${totalProfit.toLocaleString()}</p>
               </div>
-              <div className="stat-card min-w-[200px] md:min-w-0 flex-shrink-0 bg-zinc-900/40 border-zinc-800/50">
-                <p className="stat-label uppercase text-[10px] tracking-widest font-bold text-zinc-500 text-info">Avg Profit/Unit</p>
-                <p className="stat-value text-xl md:text-2xl mt-1 text-info font-display">${avgProfit.toLocaleString()}</p>
+              <div className="stat-card min-w-[160px] md:min-w-0 flex-shrink-0 py-3 px-4">
+                <p className="text-[11px] text-info font-medium">Avg Profit / Unit</p>
+                <p className="text-lg font-semibold text-info mt-0.5 tabular-nums">${avgProfit.toLocaleString()}</p>
               </div>
             </>
           )}
         </div>
 
-        {/* Mobile View: Cards */}
-        <div className="grid grid-cols-1 gap-4 md:hidden">
+        {/* Mobile View: Cards - Premium Design */}
+        <div className="grid grid-cols-1 gap-4 md:hidden pb-6">
           {sales.length > 0 ? (
             sales.map((sale) => {
               const vehicle = vehicles.find(v => v.id === sale.vehicleId);
@@ -74,17 +73,19 @@ export default function Sales() {
                 <div 
                   key={sale.id} 
                   onClick={() => handleVehicleClick(sale.vehicleId)}
-                  className="stat-card bg-zinc-900/40 border-zinc-800/50 p-4 relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
+                  className="relative p-4 rounded-2xl bg-card/60 backdrop-blur-md border border-border shadow-lg shadow-black/5 active:scale-[0.98] transition-all duration-300 cursor-pointer overflow-hidden group"
                 >
-                  <div className="flex justify-between items-start mb-3">
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  
+                  <div className="relative z-10 flex justify-between items-start mb-3">
                     <div>
-                      <h3 className="font-bold text-lg text-white">
+                      <h3 className="font-bold text-lg text-foreground leading-tight tracking-tight">
                         {vehicle ? `${vehicle.make} ${vehicle.model}` : `ID: ${sale.vehicleId.slice(-8)}`}
                       </h3>
-                      <p className="text-xs text-zinc-500 font-medium">Sold to {sale.customerName}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Sold to <span className="font-medium text-foreground">{sale.customerName}</span></p>
                     </div>
                     <span className={cn(
-                      "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase border tracking-widest",
+                      "px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase border shadow-sm",
                       sale.paymentMethod === 'Cash' ? 'bg-profit/10 text-profit border-profit/20' :
                       sale.paymentMethod === 'Loan' ? 'bg-info/10 text-info border-info/20' :
                       'bg-muted text-muted-foreground border-border'
@@ -93,51 +94,53 @@ export default function Sales() {
                     </span>
                   </div>
                   
-                  <div className="flex items-center justify-between py-3 border-y border-zinc-800/50 my-2">
+                  <div className="relative z-10 flex items-center justify-between py-3 border-y border-border/50 my-3 bg-muted/10 rounded-xl px-3">
                     <div>
-                      <p className="text-[10px] uppercase text-zinc-500 font-bold mb-0.5">Sale Date</p>
-                      <p className="text-sm font-medium text-zinc-200">{new Date(sale.saleDate).toLocaleDateString()}</p>
+                      <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">Sale Date</p>
+                      <p className="text-sm font-bold text-foreground">{new Date(sale.saleDate).toLocaleDateString()}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-[10px] uppercase text-zinc-500 font-bold mb-0.5">Sale Price</p>
-                      <p className="text-sm font-bold text-white">${sale.salePrice.toLocaleString()}</p>
+                      <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">Sale Price</p>
+                      <p className="text-sm font-bold text-foreground tabular-nums">${sale.salePrice.toLocaleString()}</p>
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-end mt-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-profit animate-pulse" />
-                      <span className="text-xs text-zinc-400 font-medium">Recorded Success</span>
-                    </div>
-                    {!isStaff && (
+                  {!isStaff && (
+                    <div className="relative z-10 flex justify-between items-center mt-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-profit animate-pulse" />
+                        <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Completed</span>
+                      </div>
                       <div className="text-right">
-                        <p className="text-[10px] uppercase text-zinc-500 font-bold mb-0.5">Net Profit</p>
-                        <p className={cn("text-xl font-display font-bold", sale.profit >= 0 ? "text-profit" : "text-loss")}>
+                        <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">Net Profit</p>
+                        <p className={cn("text-xl font-bold tabular-nums", sale.profit >= 0 ? "text-profit" : "text-loss")}>
                           ${sale.profit.toLocaleString()}
                         </p>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               );
             })
           ) : (
-            <div className="py-12 text-center text-zinc-500 font-medium italic">No sales recorded yet.</div>
+            <div className="py-16 text-center bg-card/40 rounded-2xl border border-dashed border-border">
+              <p className="text-muted-foreground text-sm font-medium">No sales recorded yet.</p>
+            </div>
           )}
         </div>
 
         {/* Desktop View: Table */}
-        <div className="hidden md:block bg-card rounded-xl border border-border overflow-hidden shadow-xl shadow-black/20">
+        <div className="hidden md:block bg-card rounded-xl border border-border/60 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Vehicle</th>
-                  <th className="text-left px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Customer</th>
-                  <th className="text-left px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Sale Date</th>
-                  <th className="text-left px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Sale Price</th>
-                  <th className="text-left px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Payment</th>
-                  {!isStaff && <th className="text-left px-4 py-4 text-xs font-bold text-muted-foreground uppercase tracking-widest">Profit</th>}
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Vehicle</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Customer</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Price</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Payment</th>
+                  {!isStaff && <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Profit</th>}
                 </tr>
               </thead>
               <tbody>
@@ -147,23 +150,21 @@ export default function Sales() {
                     <tr 
                       key={sale.id} 
                       onClick={() => handleVehicleClick(sale.vehicleId)}
-                      className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors cursor-pointer group"
+                      className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors cursor-pointer"
                     >
-                      <td className="px-4 py-4">
-                        <div className="group">
-                          <p className="font-semibold text-foreground group-hover:text-profit transition-colors">{vehicle ? `${vehicle.make} ${vehicle.model}` : sale.vehicleId}</p>
-                          <p className="text-xs text-muted-foreground">{vehicle?.year} · {vehicle?.color}</p>
-                        </div>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-foreground text-sm">{vehicle ? `${vehicle.make} ${vehicle.model}` : sale.vehicleId}</p>
+                        <p className="text-[11px] text-muted-foreground">{vehicle?.year} · {vehicle?.color}</p>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-3">
                         <p className="text-sm font-medium text-foreground">{sale.customerName}</p>
-                        <p className="text-xs text-muted-foreground">{sale.phone}</p>
+                        <p className="text-[11px] text-muted-foreground">{sale.phone}</p>
                       </td>
-                      <td className="px-4 py-4 text-sm text-foreground font-medium">{new Date(sale.saleDate).toLocaleDateString()}</td>
-                      <td className="px-4 py-4 text-sm font-bold text-foreground font-display text-lg">${sale.salePrice.toLocaleString()}</td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-3 text-sm text-foreground">{new Date(sale.saleDate).toLocaleDateString()}</td>
+                      <td className="px-4 py-3 text-sm font-semibold text-foreground tabular-nums">${sale.salePrice.toLocaleString()}</td>
+                      <td className="px-4 py-3">
                         <span className={cn(
-                          "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase border tracking-widest",
+                          "px-2 py-0.5 rounded text-[10px] font-semibold border",
                           sale.paymentMethod === 'Cash' ? 'bg-profit/10 text-profit border-profit/20' :
                           sale.paymentMethod === 'Loan' ? 'bg-info/10 text-info border-info/20' :
                           'bg-muted text-muted-foreground border-border'
@@ -172,8 +173,8 @@ export default function Sales() {
                         </span>
                       </td>
                       {!isStaff && (
-                        <td className="px-4 py-4">
-                          <span className={cn("font-display font-bold text-lg", sale.profit >= 0 ? "text-profit" : "text-loss")}>
+                        <td className="px-4 py-3">
+                          <span className={cn("font-semibold text-sm tabular-nums", sale.profit >= 0 ? "text-profit" : "text-loss")}>
                             ${sale.profit.toLocaleString()}
                           </span>
                         </td>

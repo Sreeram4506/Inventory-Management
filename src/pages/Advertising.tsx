@@ -21,6 +21,17 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
   const [selectedAd, setSelectedAd] = useState<AdvertisingExpense | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+  const filteredAds = useMemo(() => {
+    return ads.filter(ad => 
+      ad.campaignName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      ad.platform.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [ads, searchTerm]);
+
+  const totalSpend = useMemo(() => {
+    return filteredAds.reduce((s, a) => s + a.amountSpent, 0);
+  }, [filteredAds]);
+
   if (adsLoading || vehiclesLoading) return <div className="p-8 text-center text-muted-foreground">Loading advertising data...</div>;
 
   if (adsError || vehiclesError) {
@@ -47,17 +58,6 @@ export default function Advertising({ isSubpage = false }: AdvertisingProps) {
     setSelectedAd(ad);
     setIsDialogOpen(true);
   };
-
-  const filteredAds = useMemo(() => {
-    return ads.filter(ad => 
-      ad.campaignName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ad.platform.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [ads, searchTerm]);
-
-  const totalSpend = useMemo(() => {
-    return filteredAds.reduce((s, a) => s + a.amountSpent, 0);
-  }, [filteredAds]);
 
   const content = (
     <div className="space-y-6">
