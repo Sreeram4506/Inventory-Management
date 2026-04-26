@@ -1,5 +1,6 @@
 import express from 'express';
 import prisma from '../db/prisma.js';
+import bcrypt from 'bcryptjs';
 import { authenticateToken, authorizeAdmin } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
@@ -8,9 +9,6 @@ const router = express.Router();
 router.get('/', authenticateToken, authorizeAdmin, async (req, res, next) => {
   try {
     const users = await prisma.user.findMany({
-      where: {
-        role: { in: ['MANAGER', 'STAFF'] }
-      },
       select: {
         id: true,
         name: true,
@@ -51,6 +49,67 @@ router.get('/', authenticateToken, authorizeAdmin, async (req, res, next) => {
     });
 
     res.json(users);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Create a new team member
+router.post('/', authenticateToken, authorizeAdmin, async (req, res, next) => {
+  const { name, email, password, role } = req.body;
+  
+  if (!name || !email || !password || !role) {
+    return res.status(400).json({ message: 'All fields are required' });
+  }
+
+  try {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) return res.status(400).json({ message: 'User already exists' });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: { name, email, password: hashedPassword, role }
+    });
+
+    res.status(201).json({ id: user.id, name: user.name, email: user.email, role: user.role });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Update a team member
+router.patch('/:id', authenticateToken, authorizeAdmin, async (req, res, next) => {
+  const { name, email, password, role } = req.body;
+  const { id } = req.params;
+
+  try {
+    const data = { name, email, role };
+    if (password) {
+      data.password = await bcrypt.hash(password, 10);
+    }
+
+    const user = await prisma.user.update({
+      where: { id },
+      data
+    });
+
+    res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Delete a team member
+router.delete('/:id', authenticateToken, authorizeAdmin, async (req, res, next) => {
+  const { id } = req.params;
+  try {
+    // Check if user is not deleting themselves
+    if (id === req.user.id) {
+      return res.status(400).json({ message: 'You cannot delete your own account' });
+    }
+
+    await prisma.user.delete({ where: { id } });
+    res.json({ message: 'User deleted successfully' });
   } catch (err) {
     next(err);
   }
