@@ -248,111 +248,86 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-card border-border text-foreground custom-scrollbar p-0 md:p-6">
-        <DialogHeader>
+        <DialogHeader className="p-6 pb-2 md:p-6">
           <DialogDescription className="sr-only">Vehicle details and management tabs.</DialogDescription>
-          <div className="flex items-start justify-between">
-            <DialogTitle className="flex items-center gap-3 text-2xl font-black font-display tracking-tight text-foreground line-clamp-1">
-              <span className="p-2 bg-profit/10 rounded-lg"><Info className="text-profit" /></span>
-              {isEditing ? 'Editing Vehicle Record' : `${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            <DialogTitle className="flex items-center gap-3 text-xl md:text-2xl font-black font-display tracking-tight text-foreground">
+              <span className="p-2 bg-profit/10 rounded-lg shrink-0"><Info className="text-profit h-5 w-5" /></span>
+              <span className="truncate">{isEditing ? 'Editing Vehicle Record' : `${vehicle.year} ${vehicle.make} ${vehicle.model}`}</span>
             </DialogTitle>
-            <div className="flex gap-2">
+            
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
               <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={isEditing ? () => setIsEditing(false) : startEditing}
-                className="border-profit/30 text-xs font-bold uppercase tracking-widest text-foreground/70 hover:bg-profit/10"
+                className="flex-1 sm:flex-none border-profit/30 text-[10px] font-black uppercase tracking-widest text-foreground/70 hover:bg-profit/10 h-9"
               >
                 {isEditing ? 'Cancel' : <><Pencil className="w-3.5 h-3.5 mr-2" /> Edit Details</>}
               </Button>
+              
               {isAdmin && !isEditing && (
                 <Button 
                   variant="ghost" 
                   size="sm" 
                   onClick={() => setShowDeleteConfirm(true)}
-                  className="text-destructive hover:bg-destructive/10 text-xs font-bold uppercase tracking-widest h-8"
+                  className="text-destructive hover:bg-destructive/10 text-[10px] font-black uppercase tracking-widest h-9 px-3"
                   title="Delete from Inventory"
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
               )}
+
               {(vehicle.hasDocument || vehicle.hasSourceDocument) && !isEditing && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="border-border/50 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:bg-white/5 hidden sm:flex"
-                    >
-                      <Download className="w-3.5 h-3.5 mr-2" /> Download
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-muted border-border text-foreground">
-                    {vehicle.hasDocument && (
-                      <>
-                        <DropdownMenuItem 
-                          className="hover:bg-muted/50 focus:bg-muted/50 cursor-pointer text-xs font-bold uppercase tracking-widest text-profit"
-                          onClick={() => handleView(false)}
-                        >
-                          Preview Record
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className="hover:bg-muted/50 focus:bg-muted/50 cursor-pointer text-xs font-bold uppercase tracking-widest text-profit"
-                          onClick={() => window.open(apiUrl(`/vehicles/${vehicle.id}/document?token=${token}`), '_blank')}
-                        >
-                          Download Record (PDF)
-                        </DropdownMenuItem>
-                        <div className="h-px bg-muted/50 my-1" />
-                      </>
-                    )}
-                    {vehicle.hasSourceDocument && (
-                      <>
-                        <DropdownMenuItem 
-                          className="hover:bg-muted/50 focus:bg-muted/50 cursor-pointer text-xs font-bold uppercase tracking-widest text-blue-400"
-                          onClick={() => handleView(true)}
-                        >
-                          Preview Source Doc
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className="hover:bg-muted/50 focus:bg-muted/50 cursor-pointer text-xs font-bold uppercase tracking-widest text-blue-400"
-                          onClick={() => window.open(apiUrl(`/vehicles/${vehicle.id}/document?token=${token}&type=source`), '_blank')}
-                        >
-                          Download Source Doc
-                        </DropdownMenuItem>
-                      </>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <div className="sm:hidden">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-9 border-border/50 text-[10px] font-black uppercase tracking-widest">
+                        <Download className="w-3.5 h-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-white border-border text-foreground">
+                       {vehicle.hasDocument && (
+                        <DropdownMenuItem onClick={() => handleView(false)} className="text-[10px] font-black uppercase">Preview</DropdownMenuItem>
+                       )}
+                       {vehicle.hasSourceDocument && (
+                        <DropdownMenuItem onClick={() => handleView(true)} className="text-[10px] font-black uppercase">Source</DropdownMenuItem>
+                       )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               )}
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 mt-2">
-            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground bg-secondary/30 px-3 py-1 rounded-full">
+
+          <div className="flex flex-wrap gap-2 mt-4">
+            <div className="text-[10px] font-black uppercase tracking-[0.1em] text-muted-foreground bg-muted/50 border border-border/60 px-3 py-1.5 rounded-lg">
               VIN: {vehicle.vin}
-            </span>
+            </div>
             {vehicle.titleNumber && (
-              <span className="text-xs font-bold uppercase tracking-widest text-blue-300 bg-blue-500/10 px-3 py-1 rounded-full">
+              <div className="text-[10px] font-black uppercase tracking-[0.1em] text-blue-500 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-lg">
                 Title #: {vehicle.titleNumber}
-              </span>
+              </div>
             )}
-            <span className="text-xs font-bold uppercase tracking-widest text-foreground/90 bg-profit/80 px-3 py-1 rounded-full">
-               Total Cost: ${((vehicle.totalPurchaseCost || 0) + (vehicle.repairCost || 0)).toLocaleString()}
-            </span>
+            <div className="text-[10px] font-black uppercase tracking-[0.1em] text-profit bg-profit/10 border border-profit/20 px-3 py-1.5 rounded-lg">
+               Investment: ${((vehicle.totalPurchaseCost || 0) + (vehicle.repairCost || 0)).toLocaleString()}
+            </div>
           </div>
         </DialogHeader>
 
-        <Tabs defaultValue={isEditing ? "edit" : "financials"} value={isEditing ? "edit" : undefined} className="mt-6">
-          <TabsList className={`bg-secondary/20 border border-border/50 p-1 rounded-xl h-auto flex flex-wrap gap-1 ${isEditing ? 'hidden' : ''}`}>
-            <TabsTrigger value="financials" className="data-[state=active]:bg-profit data-[state=active]:text-primary-foreground px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
+        <Tabs defaultValue={isEditing ? "edit" : "financials"} value={isEditing ? "edit" : undefined} className="mt-4 px-6 md:px-0">
+          <TabsList className={`bg-muted/50 border border-border/50 p-1 rounded-xl h-auto grid grid-cols-2 sm:flex sm:flex-wrap gap-1 ${isEditing ? 'hidden' : ''}`}>
+            <TabsTrigger value="financials" className="data-[state=active]:bg-profit data-[state=active]:text-primary-foreground px-3 sm:px-5 py-2.5 rounded-lg font-black uppercase text-[9px] sm:text-[10px] tracking-widest gap-2 transition-all">
               <Receipt className="w-3.5 h-3.5" /> Financials
             </TabsTrigger>
-            <TabsTrigger value="repairs" className="data-[state=active]:bg-profit data-[state=active]:text-primary-foreground px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
+            <TabsTrigger value="repairs" className="data-[state=active]:bg-profit data-[state=active]:text-primary-foreground px-3 sm:px-5 py-2.5 rounded-lg font-black uppercase text-[9px] sm:text-[10px] tracking-widest gap-2 transition-all">
               <Pencil className="w-3.5 h-3.5" /> Manage Repairs
             </TabsTrigger>
-            <TabsTrigger value="ads" className="data-[state=active]:bg-profit data-[state=active]:text-primary-foreground px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
+            <TabsTrigger value="ads" className="data-[state=active]:bg-profit data-[state=active]:text-primary-foreground px-3 sm:px-5 py-2.5 rounded-lg font-black uppercase text-[9px] sm:text-[10px] tracking-widest gap-2 transition-all">
               <Megaphone className="w-3.5 h-3.5" /> Advertising
             </TabsTrigger>
             {vehicle.status !== 'Sold' && (
-              <TabsTrigger value="sale" className="data-[state=active]:bg-info data-[state=active]:text-primary-foreground px-5 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest gap-2 transition-all">
+              <TabsTrigger value="sale" className="data-[state=active]:bg-info data-[state=active]:text-primary-foreground px-3 sm:px-5 py-2.5 rounded-lg font-black uppercase text-[9px] sm:text-[10px] tracking-widest gap-2 transition-all">
                 <ShoppingCart className="w-3.5 h-3.5" /> Record Sale
               </TabsTrigger>
             )}
