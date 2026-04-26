@@ -21,103 +21,140 @@ export default function UsedVehicleFormGenerator({
   token,
   onScanComplete,
 }: UsedVehicleFormGeneratorProps) {
-  const [sourceFile, setSourceFile] = useState<File | null>(null);
+  const [sourceFiles, setSourceFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
   const sourceInputRef = useRef<HTMLInputElement>(null);
 
   const handleGenerate = async (pushToInventory: boolean) => {
-    if (!sourceFile) {
-      toast.error('Choose the source file first.');
+    if (sourceFiles.length === 0) {
+      toast.error('Choose the source file(s) first.');
       return;
     }
 
     setLoading(true);
-    const formData = new FormData();
-    formData.append('sourceFile', sourceFile);
-    formData.append('pushToInventory', String(pushToInventory));
+    setProgress({ current: 0, total: sourceFiles.length });
 
-    try {
-      const response = await fetch(apiUrl('/generate-used-vehicle-form'), {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
+    let successCount = 0;
+    let failCount = 0;
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to generate used vehicle form');
+    for (let i = 0; i < sourceFiles.length; i++) {
+      const file = sourceFiles[i];
+      setProgress({ current: i + 1, total: sourceFiles.length });
+
+      const formData = new FormData();
+      formData.append('sourceFile', file);
+      formData.append('pushToInventory', String(pushToInventory));
+
+      try {
+        const response = await fetch(apiUrl('/generate-used-vehicle-form'), {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || 'Failed to generate form');
+        }
+
+        const data = (await response.json()) as GenerateUsedVehicleResponse & { inventoryAdded?: boolean };
+        
+        onScanComplete({ 
+          info: data.info, 
+          pdfBase64: data.pdfBase64, 
+          fileName: data.fileName 
+        });
+
+        // For bulk, maybe we don't want to trigger 20 downloads automatically, 
+        // but for now we'll keep it consistent.
+        if (sourceFiles.length === 1) {
+          downloadPdf(data.pdfBase64, data.fileName);
+        }
+
+        successCount++;
+      } catch (error: any) {
+        console.error(error);
+        failCount++;
+        toast.error(`Failed ${file.name}: ${error.message}`);
       }
+    }
 
-      const data = (await response.json()) as GenerateUsedVehicleResponse & { inventoryAdded?: boolean };
-      onScanComplete({ 
-        info: data.info, 
-        pdfBase64: data.pdfBase64, 
-        fileName: data.fileName 
-      });
-      downloadPdf(data.pdfBase64, data.fileName);
-
-      const message = data.inventoryAdded 
-        ? 'Form generated and vehicle added to inventory.' 
-        : 'Used vehicle form generated.';
-
-      toast.success(message, {
+    if (successCount > 0) {
+      toast.success(`Successfully processed ${successCount} files.`, {
         icon: <CheckCircle2 className="w-4 h-4 text-profit" />,
       });
-    } catch (error: any) {
-      console.error(error);
-      toast.error(error.message || 'Could not generate the used vehicle form.');
-    } finally {
-      setLoading(false);
     }
+    
+    setLoading(false);
+    setSourceFiles([]);
   };
 
   return (
     <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5 space-y-4">
       <div>
         <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-profit">
-          Used Vehicle Record
+          Used Vehicle Record (Bulk)
         </h3>
         <p className="mt-2 text-sm text-zinc-400">
-          Upload the vehicle document and we&apos;ll fill it into the built-in blank
-          Used Vehicle Record sheet automatically, then download the completed PDF.
+          Upload documents and we&apos;ll fill them into the blank Record sheets.
+          You can select multiple files at once.
         </p>
       </div>
 
       <button
         type="button"
+        disabled={loading}
         onClick={() => sourceInputRef.current?.click()}
-        className="w-full rounded-xl border border-zinc-800 bg-zinc-900/70 p-4 text-left transition hover:border-zinc-700 hover:bg-zinc-900"
+        className="w-full rounded-xl border border-zinc-800 bg-zinc-900/70 p-4 text-left transition hover:border-zinc-700 hover:bg-zinc-900 disabled:opacity-50"
       >
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-profit/15 text-profit">
             <FileUp className="h-5 w-5" />
           </div>
-          <div>
-            <p className="text-sm font-medium text-white">Record Source</p>
-            <p className="text-xs text-zinc-500">
-              {sourceFile ? sourceFile.name : 'Choose the bill of sale or scan'}
+          <div className="flex-1 overflow-hidden">
+            <p className="text-sm font-medium text-white">Record Source(s)</p>
+            <p className="text-xs text-zinc-500 truncate">
+              {sourceFiles.length > 0 
+                ? `${sourceFiles.length} files selected (${sourceFiles.map(f => f.name).join(', ')})` 
+                : 'Choose one or more documents'}
             </p>
           </div>
         </div>
       </button>
 
+      {loading && (
+        <div className="space-y-2">
+          <div className="flex justify-between text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+            <span>Processing...</span>
+            <span>{progress.current} / {progress.total}</span>
+          </div>
+          <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-profit transition-all duration-500" 
+              style={{ width: `${(progress.current / progress.total) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col gap-3 sm:flex-row">
         <Button
           type="button"
           variant="outline"
-          disabled={loading || !sourceFile}
+          disabled={loading || sourceFiles.length === 0}
           onClick={() => handleGenerate(false)}
           className="flex-1 border-profit text-profit hover:bg-profit/10 hover:text-profit"
         >
           <FileArchive className="mr-2 h-4 w-4" />
-          {loading ? 'Processing...' : 'Save to Logs Only'}
+          {loading ? 'Processing...' : 'Save to Logs'}
         </Button>
 
         <Button
           type="button"
-          disabled={loading || !sourceFile}
+          disabled={loading || sourceFiles.length === 0}
           onClick={() => handleGenerate(true)}
           className="flex-1 bg-profit hover:bg-profit/90 text-black font-semibold"
         >
@@ -130,8 +167,12 @@ export default function UsedVehicleFormGenerator({
         ref={sourceInputRef}
         type="file"
         className="hidden"
+        multiple
         accept="image/*,.pdf,.doc,.docx"
-        onChange={(event) => setSourceFile(event.target.files?.[0] || null)}
+        onChange={(event) => {
+          const files = Array.from(event.target.files || []);
+          setSourceFiles(files);
+        }}
       />
     </div>
   );

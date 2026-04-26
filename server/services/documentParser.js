@@ -18,17 +18,17 @@ const ocrLangPath = path.dirname(
 // ═══════════════════════════════════════════════════════════════
 // SINGLE ENTRY POINT — Extract everything from any document
 // ═══════════════════════════════════════════════════════════════
-export async function extractVehicleInfo(fileBuffer, mimetype) {
+export async function extractVehicleInfo(fileBuffer, mimetype, extraInstructions = "") {
   console.log(`[Parser] START | mime=${mimetype} | nvidia=${hasNvidiaKey}`);
 
   // For images — go straight to Vision AI
   if (mimetype.startsWith('image/')) {
-    const visionResult = await visionExtract(fileBuffer, mimetype);
+    const visionResult = await visionExtract(fileBuffer, mimetype, extraInstructions);
     if (visionResult) return visionResult;
     // Fallback: OCR the image then send text to LLM
     const ocrText = await ocrImage(fileBuffer);
     if (hasNvidiaKey && ocrText.length > 30) {
-      const textResult = await textExtract(ocrText);
+      const textResult = await textExtract(ocrText, extraInstructions);
       if (textResult) return textResult;
     }
     return {};
@@ -41,12 +41,12 @@ export async function extractVehicleInfo(fileBuffer, mimetype) {
 
     // If PDF has native text, use text LLM
     if (combinedText.replace(/\s/g, '').length > 30 && hasNvidiaKey) {
-      const textResult = await textExtract(combinedText);
+      const textResult = await textExtract(combinedText, extraInstructions);
       if (textResult) return textResult;
     }
 
     // Scanned PDF — render to image, use vision
-    const visionResult = await visionExtract(fileBuffer, mimetype);
+    const visionResult = await visionExtract(fileBuffer, mimetype, extraInstructions);
     if (visionResult) return visionResult;
 
     return {};
@@ -55,7 +55,7 @@ export async function extractVehicleInfo(fileBuffer, mimetype) {
   // Word docs and other text
   const text = await extractText(fileBuffer, mimetype);
   if (hasNvidiaKey && text.length > 30) {
-    const textResult = await textExtract(text);
+    const textResult = await textExtract(text, extraInstructions);
     if (textResult) return textResult;
   }
   return {};
@@ -64,7 +64,7 @@ export async function extractVehicleInfo(fileBuffer, mimetype) {
 // ═══════════════════════════════════════════════════════════════
 // TEXT LLM — One simple prompt, extract ALL fields
 // ═══════════════════════════════════════════════════════════════
-async function textExtract(text) {
+async function textExtract(text, extraInstructions = "") {
   try {
     const prompt = `Read this vehicle document carefully and extract ALL information. Return ONLY a JSON object.
     
@@ -115,7 +115,7 @@ IMPORTANT INSTRUCTIONS:
 - Dates as ISO 8601 (YYYY-MM-DD)
 - Use null for any field not found. Do NOT guess.
 
-Document text:
+${extraInstructions ? `EXTRA INSTRUCTIONS:\n${extraInstructions}\n\n` : ''}Document text:
 ${text}`;
 
     console.log(`[Parser:Text] Sending ${text.length} chars to LLM...`);
@@ -159,7 +159,7 @@ ${text}`;
 // ═══════════════════════════════════════════════════════════════
 // VISION LLM — For images and scanned PDFs
 // ═══════════════════════════════════════════════════════════════
-async function visionExtract(fileBuffer, mimetype) {
+async function visionExtract(fileBuffer, mimetype, extraInstructions = "") {
   if (!hasNvidiaKey) return null;
 
   let base64Image = '';
@@ -244,7 +244,9 @@ RULES:
 - VIN = exactly 17 chars, no I/O/Q
 - Money = plain numbers (5300 not $5,300)
 - Use null if not found
-- Return ONLY JSON`;
+- Return ONLY JSON
+
+${extraInstructions ? `EXTRA INSTRUCTIONS:\n${extraInstructions}` : ''}`;
 
     console.log(`[Parser:Vision] Sending image to Vision AI...`);
     const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
@@ -268,7 +270,10 @@ RULES:
     });
 
     const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
+    if (data.error) {
+      console.error('[Parser:Vision] API Error:', data.error);
+      throw new Error(data.error.message);
+    }
 
     const raw = data.choices[0].message.content;
     console.log(`[Parser:Vision] Raw response: ${raw.substring(0, 800)}`);

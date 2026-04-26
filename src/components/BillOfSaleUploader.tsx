@@ -16,10 +16,11 @@ export default function BillOfSaleUploader({
   token,
   onUploadComplete,
 }: BillOfSaleUploaderProps) {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [vin, setVin] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -30,133 +31,169 @@ export default function BillOfSaleUploader({
   }, [searchParams]);
 
   const handleUpload = async () => {
-    if (!file) {
-      toast.error('Choose the Bill of Sale file first.');
+    if (files.length === 0) {
+      toast.error('Choose the Bill of Sale file(s) first.');
       return;
     }
 
     setLoading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-    if (vin) formData.append('vin', vin.trim().toUpperCase());
-    if (customerName) formData.append('customerName', customerName.trim());
+    setProgress({ current: 0, total: files.length });
 
-    try {
-      const response = await fetch(apiUrl('/upload-bill-of-sale'), {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
+    let successCount = 0;
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to process Bill of Sale');
+    for (let i = 0; i < files.length; i++) {
+      const currentFile = files[i];
+      setProgress({ current: i + 1, total: files.length });
+
+      const formData = new FormData();
+      formData.append('file', currentFile);
+      
+      // Only apply manual fallback if processing a single file
+      if (files.length === 1) {
+        if (vin) formData.append('vin', vin.trim().toUpperCase());
+        if (customerName) formData.append('customerName', customerName.trim());
       }
 
-      const data = await response.json();
-
-      if (data.status === 'success') {
-        onUploadComplete({
-          info: data.info,
-          pdfBase64: data.pdfBase64,
-          fileName: data.fileName
+      try {
+        const response = await fetch(apiUrl('/upload-bill-of-sale'), {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
         });
 
-        // Download the regenerated PDF
-        if (data.pdfBase64) {
-          downloadPdf(data.pdfBase64, data.fileName || `UsedVehicleRecord_${data.vin}.pdf`);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || 'Failed to process Bill of Sale');
         }
 
-        // Refresh all relevant tables
-        queryClient.invalidateQueries({ queryKey: ['vehicles'] });
-        queryClient.invalidateQueries({ queryKey: ['sales'] });
-        queryClient.invalidateQueries({ queryKey: ['registry'] });
+        const data = await response.json();
 
-        toast.success(`VIN ${data.vin} matched! Vehicle marked as SOLD.`, {
-          icon: <CheckCircle2 className="w-4 h-4 text-profit" />,
-        });
+        if (data.status === 'success') {
+          onUploadComplete({
+            info: data.info,
+            pdfBase64: data.pdfBase64,
+            fileName: data.fileName
+          });
+
+          if (data.pdfBase64 && files.length === 1) {
+            downloadPdf(data.pdfBase64, data.fileName || `UsedVehicleRecord_${data.vin}.pdf`);
+          }
+          successCount++;
+        }
+      } catch (error: any) {
+        console.error(error);
+        toast.error(`Failed ${currentFile.name}: ${error.message}`);
       }
-
-      setFile(null);
-      setVin('');
-      setCustomerName('');
-    } catch (error: any) {
-      console.error(error);
-      toast.error(error.message || 'Could not process the Bill of Sale.');
-    } finally {
-      setLoading(false);
     }
+
+    if (successCount > 0) {
+      // Refresh all relevant tables
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['registry'] });
+
+      toast.success(`Successfully processed ${successCount} sales documents.`, {
+        icon: <CheckCircle2 className="w-4 h-4 text-profit" />,
+      });
+    }
+
+    setFiles([]);
+    setVin('');
+    setCustomerName('');
+    setLoading(false);
   };
 
   return (
     <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5 space-y-4">
       <div>
         <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-profit">
-          Bill of Sale → Mark as Sold
+          Mark as Sold (Bulk)
         </h3>
         <p className="mt-2 text-sm text-zinc-400">
-          Upload a Bill of Sale. The VIN will be matched exactly against your inventory.
-          If found, the vehicle status changes to <span className="text-profit font-medium">SOLD</span> and a sales record is created.
+          Upload Bills of Sale. VINs will be matched against your inventory.
+          Matched vehicles will be moved to <span className="text-profit font-medium">SOLD</span>.
         </p>
       </div>
 
       <div className="space-y-3">
-        <div className="relative">
-          <Fingerprint className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-          <Input
-            placeholder="VIN (fallback if AI can't extract)"
-            value={vin}
-            onChange={(e) => setVin(e.target.value.toUpperCase())}
-            className="pl-10 bg-zinc-900/50 border-zinc-800 focus:border-profit/50 h-11"
-          />
-        </div>
+        {files.length <= 1 && (
+          <div className="grid gap-3 animate-in fade-in slide-in-from-top-1 duration-300">
+            <div className="relative">
+              <Fingerprint className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+              <Input
+                placeholder="VIN Fallback (Single file only)"
+                value={vin}
+                onChange={(e) => setVin(e.target.value.toUpperCase())}
+                className="pl-10 bg-zinc-900/50 border-zinc-800 focus:border-profit/50 h-11"
+              />
+            </div>
 
-        <div className="relative">
-          <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-          <Input
-            placeholder="Customer name (fallback if AI can't extract)"
-            value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
-            className="pl-10 bg-zinc-900/50 border-zinc-800 focus:border-profit/50 h-11"
-          />
-        </div>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+              <Input
+                placeholder="Customer Fallback (Single file only)"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                className="pl-10 bg-zinc-900/50 border-zinc-800 focus:border-profit/50 h-11"
+              />
+            </div>
+          </div>
+        )}
 
         <button
           type="button"
+          disabled={loading}
           onClick={() => fileInputRef.current?.click()}
-          className="w-full rounded-xl border border-zinc-800 bg-zinc-900/70 p-4 text-left transition hover:border-zinc-700 hover:bg-zinc-900"
+          className="w-full rounded-xl border border-zinc-800 bg-zinc-900/70 p-4 text-left transition hover:border-zinc-700 hover:bg-zinc-900 disabled:opacity-50"
         >
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-profit/15 text-profit">
               <FileUp className="h-5 w-5" />
             </div>
-            <div>
-              <p className="text-sm font-medium text-white">Bill of Sale Document</p>
-              <p className="text-xs text-zinc-500">
-                {file ? file.name : 'Click to select or drag and drop'}
+            <div className="flex-1 overflow-hidden">
+              <p className="text-sm font-medium text-white">Bill of Sale Document(s)</p>
+              <p className="text-xs text-zinc-500 truncate">
+                {files.length > 0 
+                  ? `${files.length} files selected (${files.map(f => f.name).join(', ')})` 
+                  : 'Click to select or drag multiple files'}
               </p>
             </div>
           </div>
         </button>
       </div>
 
+      {loading && (
+        <div className="space-y-2">
+          <div className="flex justify-between text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+            <span>Marking Sold...</span>
+            <span>{progress.current} / {progress.total}</span>
+          </div>
+          <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-profit transition-all duration-500" 
+              style={{ width: `${(progress.current / progress.total) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       <Button
         type="button"
-        disabled={loading || !file}
+        disabled={loading || files.length === 0}
         onClick={handleUpload}
         className="w-full bg-profit hover:bg-profit/90 text-black font-semibold h-11"
       >
         {loading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Matching VIN & Processing...
+            Processing Batch...
           </>
         ) : (
           <>
             <FileText className="mr-2 h-4 w-4" />
-            Process Bill of Sale
+            Process Documents
           </>
         )}
       </Button>
@@ -165,8 +202,12 @@ export default function BillOfSaleUploader({
         ref={fileInputRef}
         type="file"
         className="hidden"
+        multiple
         accept="image/*,.pdf"
-        onChange={(event) => setFile(event.target.files?.[0] || null)}
+        onChange={(event) => {
+          const selectedFiles = Array.from(event.target.files || []);
+          setFiles(selectedFiles);
+        }}
       />
     </div>
   );

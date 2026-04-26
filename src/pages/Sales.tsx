@@ -8,18 +8,21 @@ import { useAuth } from '@/context/auth-hooks';
 import VehicleDetailDialog from '@/components/VehicleDetailDialog';
 import DocumentViewerDialog from '@/components/DocumentViewerDialog';
 import { Vehicle } from '@/types/inventory';
-import { FileText } from 'lucide-react';
+import { FileText, Trash2, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { apiUrl } from '@/lib/api';
 import { toast } from '@/components/ui/toast-utils';
 
 export default function Sales() {
-  const { sales, isLoading: salesLoading, isError: salesError } = useSales();
+  const { sales, isLoading: salesLoading, isError: salesError, deleteSale } = useSales();
   const { vehicles, isLoading: vehiclesLoading, isError: vehiclesError } = useInventory();
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const { user, token } = useAuth();
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const isStaff = user?.role === 'STAFF';
+  const isManagerOrAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
 
   if (salesLoading || vehiclesLoading) return <div className="p-8 text-center text-muted-foreground">Loading sales...</div>;
   if (salesError || vehiclesError) {
@@ -64,6 +67,22 @@ export default function Sales() {
       }
     } catch (e) {
       toast.error('Error loading document.');
+    }
+  };
+  const handleDeleteSale = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to delete this sale record? The vehicle will be returned to inventory as "Available".')) {
+      return;
+    }
+
+    setDeletingId(id);
+    try {
+      await deleteSale(id);
+      toast.success('Sale deleted and vehicle reverted to Available.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete sale.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -127,6 +146,15 @@ export default function Sales() {
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
+                      {isManagerOrAdmin && (
+                        <button 
+                          onClick={(e) => handleDeleteSale(sale.id, e)}
+                          disabled={deletingId === sale.id}
+                          className="p-1.5 rounded-lg bg-red-500/10 text-red-500 border border-red-500/20 shadow-sm active:scale-95 transition-transform disabled:opacity-50"
+                        >
+                          {deletingId === sale.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        </button>
+                      )}
                       <span className={cn(
                         "px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase border shadow-sm",
                         sale.paymentMethod === 'Cash' ? 'bg-profit/10 text-profit border-profit/20' :
@@ -185,6 +213,7 @@ export default function Sales() {
                   <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Price</th>
                   <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Payment</th>
                   {!isStaff && <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Profit</th>}
+                  {isManagerOrAdmin && <th className="text-right px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -235,6 +264,19 @@ export default function Sales() {
                           <span className={cn("font-semibold text-sm tabular-nums", sale.profit >= 0 ? "text-profit" : "text-loss")}>
                             ${sale.profit.toLocaleString()}
                           </span>
+                        </td>
+                      )}
+                      {isManagerOrAdmin && (
+                        <td className="px-4 py-3 text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => handleDeleteSale(sale.id, e)}
+                            disabled={deletingId === sale.id}
+                            className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                          >
+                            {deletingId === sale.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                          </Button>
                         </td>
                       )}
                     </tr>

@@ -34,11 +34,25 @@ export function useSales() {
     },
   });
 
+  const deleteSaleMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiFetch(`/sales/${id}`, token, {
+        method: 'DELETE',
+      });
+      return handleApiResponse(response, logout);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+    },
+  });
+
   return {
     sales: salesQuery.data || [],
     isLoading: salesQuery.isLoading,
     isError: salesQuery.isError,
     error: salesQuery.error,
     addSale: addSaleMutation.mutateAsync,
+    deleteSale: deleteSaleMutation.mutateAsync,
   };
 }

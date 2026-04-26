@@ -3,7 +3,7 @@ import prisma from '../db/prisma.js';
 import { authenticateToken, authorizeManagerOrAdmin } from '../middlewares/authMiddleware.js';
 import { validate, saleSchema } from '../utils/validators.js';
 
-import { salesCache } from '../utils/cache.js';
+import { salesCache, vehicleCache } from '../utils/cache.js';
 
 const router = express.Router();
 
@@ -83,8 +83,43 @@ router.post('/', authenticateToken, validate(saleSchema), async (req, res, next)
     });
 
     salesCache.delete('sales-list');
+    vehicleCache.delete('vehicle-list'); // Invalidate inventory as well
     res.status(201).json(sale);
   } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/:id', authenticateToken, authorizeManagerOrAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const sale = await prisma.sale.findUnique({
+      where: { id },
+      select: { vehicleId: true }
+    });
+
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale record not found' });
+    }
+
+    await prisma.$transaction([
+      // 1. Delete the sale record
+      prisma.sale.delete({ where: { id } }),
+      // 2. Move vehicle back to Available
+      prisma.vehicle.update({
+        where: { id: sale.vehicleId },
+        data: { status: 'Available' }
+      })
+    ]);
+
+    // 3. Clear caches
+    salesCache.delete('sales-list');
+    vehicleCache.delete('vehicle-list');
+
+    res.json({ message: 'Sale deleted and vehicle reverted to Available status.' });
+  } catch (err) {
+    console.error('[Sale Delete Error]', err);
     next(err);
   }
 });

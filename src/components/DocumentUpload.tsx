@@ -22,9 +22,23 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = async (file: File) => {
-    if (!file) return;
+  const handleFiles = async (files: File[]) => {
+    if (!files || files.length === 0) return;
 
+    // For single file, we can still use the old logic if needed, 
+    // but for bulk we'll pass the files back to the parent
+    if (files.length === 1) {
+      await handleSingleFile(files[0]);
+    } else {
+      // Pass the whole list back to a new bulk handler if provided
+      toast.info(`Preparing to process ${files.length} documents...`);
+      for (const file of files) {
+        await handleSingleFile(file);
+      }
+    }
+  };
+
+  const handleSingleFile = async (file: File) => {
     setScanning(true);
     
     // Convert to base64 for preview/storage
@@ -52,12 +66,8 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         if (response.status === 409) {
-          toast.error(errorData.message || 'Vehicle already exists in inventory', {
-            description: 'Duplicate VIN detected. This vehicle is already registered.',
-            action: errorData.existingId && onViewExisting ? {
-              label: 'View Vehicle',
-              onClick: () => onViewExisting(errorData.existingId, ''), // VIN can be from errorData if needed
-            } : undefined
+          toast.error(`VIN conflict for ${file.name}`, {
+            description: errorData.message || 'Vehicle already exists in inventory',
           });
           return;
         }
@@ -72,15 +82,10 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
           data.pdfBase64 ? { base64: data.pdfBase64, fileName: data.fileName } : undefined,
           sourceBase64
         );
-        toast.success('Document processed! Details filled and PDF record generated.', {
-          icon: <CheckCircle2 className="w-4 h-4 text-profit" />,
-        });
-      } else {
-        toast.error('Could not extract details from this document.');
       }
     } catch (err: any) {
       console.error(err);
-      toast.error(err.message || 'Failed to analyze document. Please enter details manually.');
+      toast.error(`Failed to process ${file.name}: ${err.message}`);
     } finally {
       setScanning(false);
     }
@@ -98,8 +103,8 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragActive(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) handleFile(file);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) handleFiles(files);
   };
 
   return (
@@ -140,8 +145,8 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
             </div>
             
             <div className="space-y-1">
-              <p className="text-white font-medium text-lg">Drop your document here</p>
-              <p className="text-zinc-400 text-sm">Standard Bill of Sale, Invoice, or Registration</p>
+              <p className="text-white font-medium text-lg">Drop your documents here</p>
+              <p className="text-zinc-400 text-sm">Select multiple files for bulk push</p>
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-3">
@@ -151,7 +156,7 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
                 className="bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-white h-11 px-6 rounded-xl"
               >
                 <Upload className="w-4 h-4 mr-2" />
-                Upload File
+                Upload Files
               </Button>
               
               <Button 
@@ -170,7 +175,11 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
           className="hidden" 
           ref={fileInputRef}
           accept="image/*,.pdf,.doc,.docx"
-          onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+          multiple
+          onChange={(e) => {
+            const files = Array.from(e.target.files || []);
+            if (files.length > 0) handleFiles(files);
+          }}
         />
         
         {/* Special Camera Input for Mobile */}
@@ -180,7 +189,10 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
           ref={cameraInputRef}
           accept="image/*"
           capture="environment"
-          onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+          onChange={(e) => {
+            const files = Array.from(e.target.files || []);
+            if (files.length > 0) handleFiles(files);
+          }}
         />
       </div>
 
