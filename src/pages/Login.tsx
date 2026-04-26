@@ -65,7 +65,7 @@ const Login = () => {
               <Input 
                 id="email" 
                 type="email" 
-                placeholder="admin@autoprofithub.com" 
+                placeholder="email@autoprofithub.com" 
                 className="bg-zinc-950/50 border-zinc-700/50 text-white placeholder:text-zinc-600 focus:border-profit/50 focus:ring-profit/20 h-11 transition-all" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -92,15 +92,6 @@ const Login = () => {
             >
               {isLoading ? 'Authenticating...' : 'Secure Sign In'}
             </Button>
-            
-            <div className="p-3 bg-zinc-950/50 border border-zinc-800 rounded-lg w-full">
-              <p className="text-[10px] text-zinc-500 uppercase font-bold text-center mb-1 tracking-widest text-white/40">Demo Access</p>
-              <div className="flex justify-center gap-3 text-xs">
-                <span className="text-zinc-300 font-mono">admin@gmail.com</span>
-                <span className="text-zinc-600">/</span>
-                <span className="text-zinc-300 font-mono">password123</span>
-              </div>
-            </div>
           </CardFooter>
         </form>
       </Card>

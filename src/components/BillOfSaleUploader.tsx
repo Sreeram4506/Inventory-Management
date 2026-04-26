@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 
 interface BillOfSaleUploaderProps {
   token: string | null;
-  onUploadComplete: (data: any) => void;
+  onUploadComplete: (data: { info: any; pdfBase64?: string; fileName?: string }) => void;
 }
 
 export default function BillOfSaleUploader({
@@ -58,7 +58,11 @@ export default function BillOfSaleUploader({
       const data = await response.json();
 
       if (data.status === 'success') {
-        onUploadComplete(data.info);
+        onUploadComplete({
+          info: data.info,
+          pdfBase64: data.pdfBase64,
+          fileName: data.fileName
+        });
 
         // Download the regenerated PDF
         if (data.pdfBase64) {

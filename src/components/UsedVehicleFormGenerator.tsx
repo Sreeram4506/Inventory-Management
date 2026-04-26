@@ -7,7 +7,7 @@ import { apiUrl } from '@/lib/api';
 
 interface UsedVehicleFormGeneratorProps {
   token: string | null;
-  onScanComplete: (data: ExtractedVehicleDocumentInfo) => void;
+  onScanComplete: (data: { info: ExtractedVehicleDocumentInfo; pdfBase64: string; fileName: string }) => void;
 }
 
 interface GenerateUsedVehicleResponse {
@@ -27,7 +27,7 @@ export default function UsedVehicleFormGenerator({
 
   const handleGenerate = async (pushToInventory: boolean) => {
     if (!sourceFile) {
-      toast.error('Choose the CamScanner file first.');
+      toast.error('Choose the source file first.');
       return;
     }
 
@@ -51,7 +51,11 @@ export default function UsedVehicleFormGenerator({
       }
 
       const data = (await response.json()) as GenerateUsedVehicleResponse & { inventoryAdded?: boolean };
-      onScanComplete(data.info);
+      onScanComplete({ 
+        info: data.info, 
+        pdfBase64: data.pdfBase64, 
+        fileName: data.fileName 
+      });
       downloadPdf(data.pdfBase64, data.fileName);
 
       const message = data.inventoryAdded 
@@ -76,7 +80,7 @@ export default function UsedVehicleFormGenerator({
           Used Vehicle Record
         </h3>
         <p className="mt-2 text-sm text-zinc-400">
-          Upload the CamScanner document and we&apos;ll fill it into the built-in blank
+          Upload the vehicle document and we&apos;ll fill it into the built-in blank
           Used Vehicle Record sheet automatically, then download the completed PDF.
         </p>
       </div>
@@ -91,7 +95,7 @@ export default function UsedVehicleFormGenerator({
             <FileUp className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-sm font-medium text-white">CamScanner Source</p>
+            <p className="text-sm font-medium text-white">Record Source</p>
             <p className="text-xs text-zinc-500">
               {sourceFile ? sourceFile.name : 'Choose the bill of sale or scan'}
             </p>

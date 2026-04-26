@@ -1,41 +1,67 @@
-import { FileBadge2, FileCheck, FileText, MapPin, CalendarDays, Gauge, UserCheck, DollarSign, Eye } from 'lucide-react';
+import { FileBadge2, FileCheck, FileText, MapPin, CalendarDays, Gauge, UserCheck, DollarSign, Eye, Download, FileArchive, Trash2 } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import UsedVehicleFormGenerator from '@/components/UsedVehicleFormGenerator';
 import BillOfSaleUploader from '@/components/BillOfSaleUploader';
 import { useAuth } from '@/context/auth-hooks';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ExtractedVehicleDocumentInfo, Vehicle } from '@/types/inventory';
 import { useInventory } from '@/hooks/useInventory';
+import { useRegistry } from '@/hooks/useRegistry';
 import VehicleDetailDialog from '@/components/VehicleDetailDialog';
 import DocumentViewerDialog from '@/components/DocumentViewerDialog';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-
-const fieldRows = [
-  { key: 'vin', label: 'VIN', icon: FileBadge2 },
-  { key: 'purchaseDate', label: 'Purchase Date', icon: CalendarDays },
-  { key: 'mileage', label: 'Mileage', icon: Gauge },
-  { key: 'purchasedFrom', label: 'Obtained From', icon: FileText },
-  { key: 'usedVehicleSourceAddress', label: 'Address', icon: MapPin },
-];
+import { toast } from '@/components/ui/toast-utils';
 
 export default function UsedVehicleForms() {
   const { token } = useAuth();
   const [extractedInfo, setExtractedInfo] = useState<ExtractedVehicleDocumentInfo | null>(null);
-  const [lastGeneratedPdf, setLastGeneratedPdf] = useState<string | null>(null);
+  const [lastGeneratedPdf, setLastGeneratedPdf] = useState<{ base64: string; name: string } | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const { vehicles } = useInventory();
+  const { logs, deleteLog } = useRegistry();
 
-  const handleScanComplete = (data: { info: ExtractedVehicleDocumentInfo; pdfBase64: string }) => {
+  const handleScanComplete = (data: { info: ExtractedVehicleDocumentInfo; pdfBase64: string; fileName?: string }) => {
     setExtractedInfo(data.info);
-    setLastGeneratedPdf(data.pdfBase64);
+    setLastGeneratedPdf({ 
+      base64: data.pdfBase64, 
+      name: data.fileName || `UsedVehicleRecord_${data.info.vin || 'New'}.pdf` 
+    });
+  };
+
+  const handleDownloadLast = () => {
+    if (!lastGeneratedPdf) return;
+    
+    const binary = window.atob(lastGeneratedPdf.base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = lastGeneratedPdf.name;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const recentLogs = useMemo(() => {
+    return [...logs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3);
+  }, [logs]);
+
+  const handleDeleteLog = async (id: string) => {
+    try {
+      await deleteLog(id);
+      toast.success('Record removed from registry.');
+    } catch (err) {
+      toast.error('Failed to remove record.');
+    }
   };
 
   const handleSidebarClick = (e: React.MouseEvent) => {
-    // Don't open vehicle dialog if clicking an action button (like Preview)
     if ((e.target as HTMLElement).closest('button')) return;
-
     if (!extractedInfo?.vin) return;
     const vehicle = vehicles.find(v => v.vin === extractedInfo.vin);
     if (vehicle) {
@@ -74,27 +100,124 @@ export default function UsedVehicleForms() {
               />
             </div>
 
+            {/* Recent Activity Section */}
             <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5">
-              <h2 className="text-lg font-semibold text-white">How it works</h2>
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <StepCard
-                  number="01"
-                  title="Upload source"
-                  description="Choose the CamScanner bill of sale or purchase PDF."
-                />
-                <StepCard
-                  number="02"
-                  title="AI VIN Match"
-                  description="If updating a record, we'll match it via VIN automatically."
-                />
-                <StepCard
-                  number="03"
-                  title="PDF Regeneration"
-                  description="The completed PDF downloads with all fields filled accurately."
-                />
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <FileArchive className="w-5 h-5 text-profit" />
+                  Recent Records
+                </h2>
+                <div className="flex items-center gap-4">
+                  {recentLogs.length > 0 && (
+                    <Button 
+                      variant="ghost" 
+                      className="text-destructive/60 hover:text-destructive hover:bg-destructive/10 text-[10px] uppercase font-bold tracking-widest h-7 px-2"
+                      onClick={async () => {
+                        if (confirm('Are you sure you want to clear these recent records?')) {
+                          for (const log of recentLogs) {
+                            await deleteLog(log.id);
+                          }
+                          toast.success('Recent records cleared.');
+                        }
+                      }}
+                    >
+                      Clear Recent
+                    </Button>
+                  )}
+                  <Button variant="link" className="text-profit hover:text-profit/80 text-[10px] uppercase font-bold tracking-widest p-0 h-auto" onClick={() => window.location.href='/registry'}>
+                    Full Registry →
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                {recentLogs.length > 0 ? (
+                  recentLogs.map((log) => (
+                    <div key={log.id} className="flex items-center justify-between p-4 rounded-xl bg-zinc-900/50 border border-zinc-800 hover:border-zinc-700 transition-colors group/row">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-profit/10 flex items-center justify-center text-profit">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-white">{log.year} {log.make} {log.model}</p>
+                          <p className="text-[10px] text-zinc-500 font-mono tracking-wider">{log.vin?.slice(-8)} • {new Date(log.createdAt).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="h-8 w-8 p-0 text-zinc-400 hover:text-profit hover:bg-profit/10"
+                          title="Download PDF"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const binary = window.atob(log.documentBase64 || '');
+                            const bytes = new Uint8Array(binary.length);
+                            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                            const blob = new Blob([bytes], { type: 'application/pdf' });
+                            const url = window.URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = `UsedVehicleRecord_${log.vin}.pdf`;
+                            link.click();
+                            window.URL.revokeObjectURL(url);
+                          }}
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="h-8 w-8 p-0 text-zinc-400 hover:text-profit hover:bg-profit/10"
+                          title="Preview"
+                          onClick={() => {
+                            setExtractedInfo({
+                              vin: log.vin || '',
+                              make: log.make || '',
+                              model: log.model || '',
+                              year: Number(log.year) || 0,
+                              mileage: Number(log.mileage) || 0,
+                              color: log.color || '',
+                              purchasedFrom: log.purchasedFrom || '',
+                              purchaseDate: log.purchaseDate || '',
+                              disposedTo: log.disposedTo || '',
+                              disposedPrice: Number(log.disposedPrice) || 0,
+                              disposedDate: log.disposedDate || '',
+                              disposedOdometer: Number(log.disposedOdometer) || 0,
+                            } as any);
+                            setLastGeneratedPdf({ 
+                              base64: log.documentBase64 || '', 
+                              name: `Registry_${log.vin}.pdf` 
+                            });
+                            setViewerOpen(true);
+                          }}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="h-8 w-8 p-0 text-destructive/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover/row:opacity-100 transition-opacity"
+                          title="Delete Record"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteLog(log.id);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-8 text-center text-zinc-500 border border-dashed border-zinc-800 rounded-xl">
+                    No recent records found. Push a document to start logging.
+                  </div>
+                )}
               </div>
             </div>
           </div>
+
 
           <aside 
             onClick={handleSidebarClick}
@@ -115,17 +238,30 @@ export default function UsedVehicleForms() {
               </div>
               
               {lastGeneratedPdf && (
-                <Button 
-                  size="sm" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setViewerOpen(true);
-                  }}
-                  className="bg-profit/10 hover:bg-profit/20 text-profit border-profit/20 gap-2 h-9"
-                >
-                  <Eye className="w-4 h-4" />
-                  Preview PDF
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDownloadLast();
+                    }}
+                    className="border-profit/30 text-profit hover:bg-profit/10 h-9"
+                  >
+                    <Download className="w-4 h-4" />
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setViewerOpen(true);
+                    }}
+                    className="bg-profit/10 hover:bg-profit/20 text-profit border-profit/20 gap-2 h-9"
+                  >
+                    <Eye className="w-4 h-4" />
+                    Preview
+                  </Button>
+                </div>
               )}
             </div>
 
@@ -239,29 +375,11 @@ export default function UsedVehicleForms() {
       <DocumentViewerDialog
         open={viewerOpen}
         onOpenChange={setViewerOpen}
-        documentBase64={lastGeneratedPdf}
+        documentBase64={lastGeneratedPdf?.base64 || null}
         vehicleName={extractedInfo ? `${extractedInfo.year} ${extractedInfo.make} ${extractedInfo.model}` : "Vehicle"}
         documentType="Used Vehicle Record (Generated)"
       />
     </AppLayout>
-  );
-}
-
-function StepCard({
-  number,
-  title,
-  description,
-}: {
-  number: string;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-profit">{number}</p>
-      <h3 className="mt-3 text-base font-semibold text-white">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-zinc-400">{description}</p>
-    </div>
   );
 }
 

@@ -10,7 +10,10 @@ import { Input } from '@/components/ui/input';
 import AddVehicleDialog from '@/components/AddVehicleDialog';
 import QueryErrorState from '@/components/QueryErrorState';
 import VehicleDetailDialog from '@/components/VehicleDetailDialog';
-import { Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import DocumentViewerDialog from '@/components/DocumentViewerDialog';
+import { Pencil, Trash2, AlertTriangle, FileText, Eye } from 'lucide-react';
+import { apiUrl } from '@/lib/api';
+import { toast } from '@/components/ui/toast-utils';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -35,7 +38,9 @@ export default function Inventory() {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null);
   const { vehicles, isLoading, isError, deleteVehicle } = useInventory();
-  const { user } = useAuth();
+  const { token, user } = useAuth();
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
   const isStaff = user?.role === 'STAFF';
 
   if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading inventory...</div>;
@@ -53,6 +58,31 @@ export default function Inventory() {
   const filtered = vehicles.filter(v =>
     `${v.make} ${v.model} ${v.vin} ${v.year}`.toLowerCase().includes(search.toLowerCase())
   );
+
+  const handleQuickPreview = async (vehicle: Vehicle) => {
+    if (!token) return;
+    try {
+      const resp = await fetch(apiUrl(`/vehicles/${vehicle.id}/data`), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!resp.ok) throw new Error('Failed to fetch document');
+      const data = await resp.json();
+      
+      const base64 = data.documentBase64 || data.sourceDocumentBase64;
+      if (base64) {
+        setViewerDoc({ 
+          base64, 
+          name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+          type: data.documentBase64 ? 'Generated Record' : 'Source Document'
+        });
+        setViewerOpen(true);
+      } else {
+        toast.error('No document available for this vehicle.');
+      }
+    } catch (e) {
+      toast.error('Error loading document.');
+    }
+  };
 
   return (
     <AppLayout>
@@ -121,9 +151,22 @@ export default function Inventory() {
                     <h3 className="font-bold text-lg text-foreground leading-tight tracking-tight">{vehicle.make} {vehicle.model}</h3>
                     <p className="text-xs text-muted-foreground font-mono mt-0.5">{vehicle.vin}</p>
                   </div>
-                  <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase border shadow-sm", statusStyles[vehicle.status])}>
-                    {vehicle.status}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {(vehicle.hasDocument || vehicle.hasSourceDocument) && (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleQuickPreview(vehicle);
+                        }}
+                        className="p-1.5 rounded-lg bg-profit/20 text-profit border border-profit/30 shadow-sm active:scale-95 transition-transform"
+                      >
+                        <FileText className="w-4 h-4" />
+                      </button>
+                    )}
+                    <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase border shadow-sm", statusStyles[vehicle.status])}>
+                      {vehicle.status}
+                    </span>
+                  </div>
                 </div>
                 
                 <div className="relative z-10 grid grid-cols-2 gap-4 py-3 border-y border-border/50 my-3 bg-muted/10 rounded-xl px-3">
@@ -204,9 +247,25 @@ export default function Inventory() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={cn("px-2 py-0.5 rounded text-[10px] font-semibold border", statusStyles[vehicle.status])}>
-                        {vehicle.status}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={cn("px-2 py-0.5 rounded text-[10px] font-semibold border", statusStyles[vehicle.status])}>
+                          {vehicle.status}
+                        </span>
+                        {(vehicle.hasDocument || vehicle.hasSourceDocument) && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 w-7 p-0 text-profit/60 hover:text-profit hover:bg-profit/10"
+                            title="Quick Preview Document"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleQuickPreview(vehicle);
+                            }}
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -276,6 +335,13 @@ export default function Inventory() {
         vehicle={selectedVehicle} 
         open={!!selectedVehicle} 
         onOpenChange={(open) => !open && setSelectedVehicle(null)} 
+      />
+      <DocumentViewerDialog
+        open={viewerOpen}
+        onOpenChange={setViewerOpen}
+        documentBase64={viewerDoc?.base64 || null}
+        vehicleName={viewerDoc?.name || ''}
+        documentType={viewerDoc?.type || ''}
       />
     </AppLayout>
   );

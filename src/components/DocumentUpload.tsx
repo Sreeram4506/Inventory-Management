@@ -186,7 +186,7 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
 
       <div className="flex items-center gap-2 p-3 rounded-xl bg-blue-500/5 border border-blue-500/20 text-[13px] text-blue-400/80">
         <Loader2 className="w-3.5 h-3.5 animate-pulse" />
-        <span>Optimized for CamScanner PDFs and high-res mobile photos.</span>
+        <span>Optimized for high-quality PDFs and high-res mobile photos.</span>
       </div>
     </div>
   );

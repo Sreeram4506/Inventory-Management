@@ -8,7 +8,8 @@ import { useInventory } from '@/hooks/useInventory';
 import { toast } from '@/components/ui/toast-utils';
 import { useAuth } from '@/context/auth-hooks';
 import DocumentUpload from './DocumentUpload';
-import { FileDown, FileCheck, CheckCircle2 } from 'lucide-react';
+import DocumentViewerDialog from './DocumentViewerDialog';
+import { FileDown, FileCheck, CheckCircle2, Eye } from 'lucide-react';
 import { ExtractedVehicleDocumentInfo, Vehicle } from '@/types/inventory';
 
 interface AddVehicleDialogProps {
@@ -68,6 +69,7 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
   const [formData, setFormData] = useState(createInitialFormData);
   const [pdfData, setPdfData] = useState<{ base64: string; fileName: string } | null>(null);
   const [sourceData, setSourceData] = useState<string | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
 
   const resetForm = () => {
     setFormData(createInitialFormData());
@@ -210,16 +212,28 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-sm text-profit uppercase tracking-wider">Vehicle Details</h3>
               {pdfData && (
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={currentDownloadPdf}
-                  className="h-8 text-profit hover:text-profit-hover hover:bg-profit/10 gap-2 text-xs"
-                >
-                  <FileDown className="w-3.5 h-3.5" />
-                  Download Filled Record
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setViewerOpen(true)}
+                    className="h-8 text-profit hover:text-profit-hover hover:bg-profit/10 gap-2 text-xs"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    Preview
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={currentDownloadPdf}
+                    className="h-8 text-profit hover:text-profit-hover hover:bg-profit/10 gap-2 text-xs"
+                  >
+                    <FileDown className="w-3.5 h-3.5" />
+                    Download
+                  </Button>
+                </div>
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -325,6 +339,14 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
             </Button>
           </div>
         </form>
+
+        <DocumentViewerDialog
+          open={viewerOpen}
+          onOpenChange={setViewerOpen}
+          documentBase64={pdfData?.base64 || null}
+          vehicleName={`${formData.year} ${formData.make} ${formData.model}`}
+          documentType="Scanned Record Preview"
+        />
       </DialogContent>
     </Dialog>
   );

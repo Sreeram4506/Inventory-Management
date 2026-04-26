@@ -6,13 +6,19 @@ import QueryErrorState from '@/components/QueryErrorState';
 import { useState } from 'react';
 import { useAuth } from '@/context/auth-hooks';
 import VehicleDetailDialog from '@/components/VehicleDetailDialog';
+import DocumentViewerDialog from '@/components/DocumentViewerDialog';
 import { Vehicle } from '@/types/inventory';
+import { FileText } from 'lucide-react';
+import { apiUrl } from '@/lib/api';
+import { toast } from '@/components/ui/toast-utils';
 
 export default function Sales() {
   const { sales, isLoading: salesLoading, isError: salesError } = useSales();
   const { vehicles, isLoading: vehiclesLoading, isError: vehiclesError } = useInventory();
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
   const isStaff = user?.role === 'STAFF';
 
   if (salesLoading || vehiclesLoading) return <div className="p-8 text-center text-muted-foreground">Loading sales...</div>;
@@ -34,6 +40,31 @@ export default function Sales() {
   const handleVehicleClick = (vehicleId: string) => {
     const vehicle = vehicles.find(v => v.id === vehicleId);
     if (vehicle) setSelectedVehicle(vehicle);
+  };
+
+  const handleQuickPreview = async (vehicle: Vehicle) => {
+    if (!token) return;
+    try {
+      const resp = await fetch(apiUrl(`/vehicles/${vehicle.id}/data`), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!resp.ok) throw new Error('Failed to fetch document');
+      const data = await resp.json();
+      
+      const base64 = data.documentBase64 || data.sourceDocumentBase64;
+      if (base64) {
+        setViewerDoc({ 
+          base64, 
+          name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+          type: 'Final Vehicle Record'
+        });
+        setViewerOpen(true);
+      } else {
+        toast.error('No document available.');
+      }
+    } catch (e) {
+      toast.error('Error loading document.');
+    }
   };
 
   return (
@@ -84,14 +115,27 @@ export default function Sales() {
                       </h3>
                       <p className="text-xs text-muted-foreground mt-0.5">Sold to <span className="font-medium text-foreground">{sale.customerName}</span></p>
                     </div>
-                    <span className={cn(
-                      "px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase border shadow-sm",
-                      sale.paymentMethod === 'Cash' ? 'bg-profit/10 text-profit border-profit/20' :
-                      sale.paymentMethod === 'Loan' ? 'bg-info/10 text-info border-info/20' :
-                      'bg-muted text-muted-foreground border-border'
-                    )}>
-                      {sale.paymentMethod}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {vehicle?.hasDocument && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleQuickPreview(vehicle);
+                          }}
+                          className="p-1.5 rounded-lg bg-profit/20 text-profit border border-profit/30 shadow-sm active:scale-95 transition-transform"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      <span className={cn(
+                        "px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase border shadow-sm",
+                        sale.paymentMethod === 'Cash' ? 'bg-profit/10 text-profit border-profit/20' :
+                        sale.paymentMethod === 'Loan' ? 'bg-info/10 text-info border-info/20' :
+                        'bg-muted text-muted-foreground border-border'
+                      )}>
+                        {sale.paymentMethod}
+                      </span>
+                    </div>
                   </div>
                   
                   <div className="relative z-10 flex items-center justify-between py-3 border-y border-border/50 my-3 bg-muted/10 rounded-xl px-3">
@@ -163,14 +207,28 @@ export default function Sales() {
                       <td className="px-4 py-3 text-sm text-foreground">{new Date(sale.saleDate).toLocaleDateString()}</td>
                       <td className="px-4 py-3 text-sm font-semibold text-foreground tabular-nums">${sale.salePrice.toLocaleString()}</td>
                       <td className="px-4 py-3">
-                        <span className={cn(
-                          "px-2 py-0.5 rounded text-[10px] font-semibold border",
-                          sale.paymentMethod === 'Cash' ? 'bg-profit/10 text-profit border-profit/20' :
-                          sale.paymentMethod === 'Loan' ? 'bg-info/10 text-info border-info/20' :
-                          'bg-muted text-muted-foreground border-border'
-                        )}>
-                          {sale.paymentMethod}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "px-2 py-0.5 rounded text-[10px] font-semibold border",
+                            sale.paymentMethod === 'Cash' ? 'bg-profit/10 text-profit border-profit/20' :
+                            sale.paymentMethod === 'Loan' ? 'bg-info/10 text-info border-info/20' :
+                            'bg-muted text-muted-foreground border-border'
+                          )}>
+                            {sale.paymentMethod}
+                          </span>
+                          {vehicle?.hasDocument && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleQuickPreview(vehicle);
+                              }}
+                              className="p-1 rounded-md text-profit/60 hover:text-profit hover:bg-profit/10 transition-colors"
+                              title="Preview Bill of Sale"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                       {!isStaff && (
                         <td className="px-4 py-3">
@@ -192,6 +250,13 @@ export default function Sales() {
         vehicle={selectedVehicle} 
         open={!!selectedVehicle} 
         onOpenChange={(open) => !open && setSelectedVehicle(null)} 
+      />
+      <DocumentViewerDialog
+        open={viewerOpen}
+        onOpenChange={setViewerOpen}
+        documentBase64={viewerDoc?.base64 || null}
+        vehicleName={viewerDoc?.name || ''}
+        documentType={viewerDoc?.type || ''}
       />
     </AppLayout>
   );
