@@ -345,34 +345,39 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
     });
 
     let filledPdf;
-    if (existingEntry || vehicle) {
       // Merge disposition data into existing registry entry (or build from scratch if none exists)
+      // IMPORTANT: We strictly preserve Acquisition and Motor Vehicle data from the database record
+      // and only use the Bill of Sale for Disposition fields.
       const mergedInfo = {
-        vin: extractedVin,
+        // 1. Motor Vehicle Identification (Strictly from Database)
+        vin: vehicle?.vin || extractedVin,
         make: vehicle?.make || '',
         model: vehicle?.model || '',
         year: vehicle?.year || '',
         color: vehicle?.color || '',
-        mileage: vehicle?.mileage || 0,
+        mileage: vehicle?.mileage || 0, // This is Odometer IN
         titleNumber: vehicle?.titleNumber || '',
+
+        // 2. Acquisition Section (Strictly from Original Purchase)
         purchasedFrom: vehicle?.purchase?.sellerName || '',
-        purchaseDate: vehicle?.purchaseDate?.toISOString(),
+        purchaseDate: vehicle?.purchaseDate?.toISOString() || vehicle?.purchase?.purchaseDate?.toISOString(),
         purchasePrice: vehicle?.purchase?.purchasePrice || 0,
         usedVehicleSourceAddress: vehicle?.purchase?.sellerAddress || '',
         usedVehicleSourceCity: vehicle?.purchase?.sellerCity || '',
         usedVehicleSourceState: vehicle?.purchase?.sellerState || '',
         usedVehicleSourceZipCode: vehicle?.purchase?.sellerZip || '',
-        // Disposition from Bill of Sale extraction
+
+        // 3. Disposition Section (Strictly from Bill of Sale extraction)
         disposedTo: customerName,
-        disposedAddress: billOfSaleInfo.disposedAddress,
-        disposedCity: billOfSaleInfo.disposedCity,
-        disposedState: billOfSaleInfo.disposedState,
-        disposedZip: billOfSaleInfo.disposedZip,
-        disposedDate: billOfSaleInfo.disposedDate,
-        disposedPrice: billOfSaleInfo.disposedPrice,
-        disposedOdometer: billOfSaleInfo.disposedOdometer,
-        disposedDlNumber: billOfSaleInfo.disposedDlNumber,
-        disposedDlState: billOfSaleInfo.disposedDlState,
+        disposedAddress: billOfSaleInfo.disposedAddress || '',
+        disposedCity: billOfSaleInfo.disposedCity || '',
+        disposedState: billOfSaleInfo.disposedState || '',
+        disposedZip: billOfSaleInfo.disposedZip || '',
+        disposedDate: billOfSaleInfo.disposedDate || new Date().toISOString(),
+        disposedPrice: billOfSaleInfo.disposedPrice || 0,
+        disposedOdometer: billOfSaleInfo.disposedOdometer || '',
+        disposedDlNumber: billOfSaleInfo.disposedDlNumber || '',
+        disposedDlState: billOfSaleInfo.disposedDlState || '',
       };
 
       const templateBuffer = await getTemplateBuffer();
