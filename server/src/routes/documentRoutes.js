@@ -345,6 +345,7 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
     });
 
     let filledPdf;
+    if (existingEntry || vehicle) {
       // Merge disposition data into existing registry entry (or build from scratch if none exists)
       // IMPORTANT: We strictly preserve Acquisition and Motor Vehicle data from the database record
       // and only use the Bill of Sale for Disposition fields.
