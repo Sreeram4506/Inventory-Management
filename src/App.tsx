@@ -66,7 +66,7 @@ const queryClient = new QueryClient({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <BrowserRouter>
         <AuthProvider>
           <TooltipProvider>
             <Suspense fallback={<PageLoader />}>

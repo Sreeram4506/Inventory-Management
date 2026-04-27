@@ -128,10 +128,10 @@ export default function AIChatAssistant() {
   };
 
   return (
-    <div className="fixed bottom-24 md:bottom-6 right-6 z-50 flex flex-col items-end">
+    <div className="fixed bottom-24 md:bottom-6 right-6 z-40 flex flex-col items-end pointer-events-none">
       {/* Chat Window */}
       {isOpen && (
-        <div className="bg-card border border-border rounded-2xl shadow-2xl w-80 sm:w-96 h-[500px] max-h-[80vh] flex flex-col mb-4 overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300">
+        <div className="bg-card border border-border rounded-2xl shadow-2xl w-80 sm:w-96 h-[500px] max-h-[80vh] flex flex-col mb-4 overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300 pointer-events-auto">
           {/* Header */}
           <div className="bg-muted border-b border-border p-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -249,7 +249,7 @@ export default function AIChatAssistant() {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="w-14 h-14 bg-profit hover:bg-profit/90 text-profit-foreground rounded-full shadow-lg shadow-profit/20 flex items-center justify-center transition-all hover:scale-105 active:scale-95 animate-in zoom-in"
+          className="w-14 h-14 bg-profit hover:bg-profit/90 text-profit-foreground rounded-full shadow-lg shadow-profit/20 flex items-center justify-center transition-all hover:scale-105 active:scale-95 animate-in zoom-in pointer-events-auto"
         >
           <MessageSquare className="w-6 h-6" />
         </button>

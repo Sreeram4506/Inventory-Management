@@ -116,7 +116,7 @@ export default function MobileNav() {
       )}
 
       {/* Bottom tab bar - Modern Floating Design */}
-      <nav className="md:hidden fixed bottom-4 left-4 right-4 h-16 bg-sidebar/80 backdrop-blur-xl border border-sidebar-border/50 rounded-2xl shadow-2xl py-1.5 px-3 flex items-center justify-around z-50 overflow-hidden">
+      <nav className="md:hidden fixed bottom-4 left-4 right-4 h-16 bg-sidebar/80 backdrop-blur-xl border border-sidebar-border/50 rounded-2xl shadow-2xl py-1.5 px-3 flex items-center justify-around z-[100] overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-sidebar-primary/5 via-transparent to-sidebar-primary/5 pointer-events-none" />
         {filteredNavItems.map((item) => {
           const isActive = location.pathname === item.to;
