@@ -107,6 +107,7 @@ IMPORTANT INSTRUCTIONS:
 - "disposedPrice" = The FINAL TOTAL price the customer is paying (Look for 'Total' at the very bottom of the costs section, e.g., $8,150.00).
 - "purchasedFrom" = The SELLER. Look for the "SELLER" block or the "Seller's Printed Name".
 - "disposedTo" = The BUYER/PURCHASER. Look for "BUYER", "PURCHASER", or "Print Name(s) of Purchaser(s)".
+- TITLE NUMBER: Extract from 'Title Number' or 'Title State/Number'. If it looks like 'MA/BN1234', return only 'BN1234'.
 - ADDRESSES: Capture the full street address, including any "Apt", "Suite", or "Unit" numbers.
 - VIN: Must be exactly 17 characters. If the VIN is in boxes, read every single box from left to right.
 - Use null for any field not found. Do NOT guess.
