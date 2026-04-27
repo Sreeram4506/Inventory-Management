@@ -103,16 +103,12 @@ async function textExtract(text, extraInstructions = "") {
 }
 
 IMPORTANT INSTRUCTIONS:
-- "purchasePrice" = The TOTAL COST of the vehicle (look for 'Total Price', 'Grand Total', or the final bottom-line amount including any buyer fees).
-- "disposedPrice" = The TOTAL SELLING PRICE for the customer (look for the 'Total' or 'Final Price' at the bottom of the costs section).
-- "purchasedFrom" = whoever is labeled SELLER on the document. 
-- "disposedTo" = whoever is labeled BUYER, PURCHASER, or "Print Name(s) of Purchaser(s)" on the document.
-- If both SELLER and BUYER are shown, extract both.
-- If this is an auction document (ADESA, Manheim, etc.), the SELLER is listed under "SELLER:" and the BUYER is listed under "BUYER:".
-- If this is a retail Bill of Sale, look for "Seller's Printed Name" and "Purchaser's Printed Name".
-- VIN must be exactly 17 characters. Remove spaces/dashes.
-- All money values as plain numbers: 5300 not $5,300.00
-- Dates as ISO 8601 (YYYY-MM-DD)
+- "purchasePrice" = The FINAL BOTTOM-LINE amount including all fees (e.g., on ADESA forms, look for 'Purchase Price' or 'Total Price').
+- "disposedPrice" = The FINAL TOTAL price the customer is paying (Look for 'Total' at the very bottom of the costs section, e.g., $8,150.00).
+- "purchasedFrom" = The SELLER. Look for the "SELLER" block or the "Seller's Printed Name".
+- "disposedTo" = The BUYER/PURCHASER. Look for "BUYER", "PURCHASER", or "Print Name(s) of Purchaser(s)".
+- ADDRESSES: Capture the full street address, including any "Apt", "Suite", or "Unit" numbers.
+- VIN: Must be exactly 17 characters. If the VIN is in boxes, read every single box from left to right.
 - Use null for any field not found. Do NOT guess.
 
 ${extraInstructions ? `EXTRA INSTRUCTIONS:\n${extraInstructions}\n\n` : ''}Document text:
@@ -236,15 +232,14 @@ async function visionExtract(fileBuffer, mimetype, extraInstructions = "") {
   "disposedDlState": "MA"
 }
 
-RULES:
-- "purchasePrice" = The TOTAL amount paid (look for 'Total Price' or bottom-line amount).
-- "disposedPrice" = The TOTAL amount sold for (look for 'Total' or 'Final Balance').
-- "purchasedFrom" = SELLER on the document
-- "disposedTo" = BUYER/PURCHASER on the document
-- VIN = exactly 17 chars, no I/O/Q
-- Money = plain numbers (5300 not $5,300)
-- Use null if not found
-- Return ONLY JSON
+RULES & PATTERNS:
+- "purchasePrice" = The FINAL TOTAL amount paid (Look for 'Total Price', 'Amount Due', or 'Balance').
+- "disposedPrice" = The FINAL TOTAL SELLING PRICE (Look for 'Total' at the bottom, including any fees).
+- "purchasedFrom" = Look for the SELLER block. (On ADESA forms, it's labeled 'SELLER').
+- "disposedTo" = Look for the BUYER/PURCHASER block. (On retail forms, look for 'Print Name(s) of Purchaser(s)').
+- ADDRESSES: Include Apartment or Suite numbers if present.
+- VIN = Look for the 17-digit string. On some forms, it's at the top under 'Vehicle Information'.
+- Return ONLY valid JSON.
 
 ${extraInstructions ? `EXTRA INSTRUCTIONS:\n${extraInstructions}` : ''}`;
 
