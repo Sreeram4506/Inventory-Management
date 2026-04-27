@@ -23,7 +23,7 @@
   ],
   "rewrites": [
     {
-      "source": "/(api|auth|vehicles|sales|repairs|expenses|advertising)/:path*",
+      "source": "/api/:path*",
       "destination": "https://auto-profit-hub-server.onrender.com/api/:path*"
     },
     {
