@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send, Bot, User, Loader2 } from 'lucide-react';
+import { MessageSquare, X, Send, Bot, User, Loader2, Volume2, VolumeX, Mic } from 'lucide-react';
+import { useVoice } from '@/hooks/useVoice';
 import { useAuth } from '@/context/auth-hooks';
 import { apiUrl } from '@/lib/api';
 import { toast } from '@/components/ui/toast-utils';
@@ -14,11 +15,36 @@ export default function AIChatAssistant() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([{
     role: 'assistant',
-    content: "Hi there! I'm your Growth Expert AI. Ask me anything about your inventory, sales, or how to maximize your profits today."
+    content: "VOICE ENGINE ACTIVE: Ask me anything about your inventory, sales, or how to maximize your profits today."
   }]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const {
+    isListening,
+    supported,
+    toggleListening,
+    speak,
+    cancelSpeech
+  } = useVoice((transcript) => {
+    setInput(transcript);
+    // Auto-send when speaking is done
+    setTimeout(() => {
+      handleSendWithText(transcript);
+    }, 500);
+  });
+
+  // Handle bot speech
+  useEffect(() => {
+    if (voiceEnabled && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.role === 'assistant') {
+        speak(lastMessage.content);
+      }
+    }
+  }, [messages, voiceEnabled, speak]);
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
@@ -68,6 +94,39 @@ export default function AIChatAssistant() {
     }
   };
 
+  const handleSendWithText = async (text: string) => {
+    if (!text.trim() || isLoading) return;
+
+    const userMsg = text.trim();
+    const newMessages = [...messages, { role: 'user', content: userMsg } as Message];
+    setMessages(newMessages);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(apiUrl('/chat'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          message: userMsg,
+          history: newMessages.slice(1, -1) 
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to communicate with AI');
+
+      setMessages([...newMessages, { role: 'assistant', content: data.reply }]);
+    } catch (error: any) {
+      console.error('Chat error:', error);
+      setMessages([...newMessages, { role: 'assistant', content: 'Sorry, I am having trouble accessing the business data right now.' }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="fixed bottom-24 md:bottom-6 right-6 z-50 flex flex-col items-end">
       {/* Chat Window */}
@@ -84,12 +143,33 @@ export default function AIChatAssistant() {
                 <p className="text-[10px] text-profit uppercase tracking-widest font-black">Growth Expert</p>
               </div>
             </div>
-            <button 
-              onClick={() => setIsOpen(false)}
-              className="text-muted-foreground hover:text-foreground transition-colors p-1"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Voice Toggle Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (!supported.synthesis) {
+                    toast.error('Text-to-speech is not supported by your browser.');
+                    return;
+                  }
+                  if (voiceEnabled) cancelSpeech();
+                  setVoiceEnabled(!voiceEnabled);
+                }}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all ${voiceEnabled ? 'bg-profit/20 border-profit/40 text-profit' : 'bg-muted border-border text-muted-foreground'} ${!supported.synthesis ? 'opacity-50 cursor-not-allowed' : 'hover:border-profit/50'}`}
+                title={!supported.synthesis ? 'Speech not supported' : (voiceEnabled ? 'Disable Voice' : 'Enable Voice')}
+              >
+                {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                <span className="text-[9px] font-black uppercase">Voice</span>
+              </button>
+
+              <button 
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors p-1 bg-muted/50 rounded-md"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Messages Area */}
@@ -133,16 +213,33 @@ export default function AIChatAssistant() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask about inventory or profit..."
-                className="w-full bg-muted border border-border rounded-full pl-4 pr-12 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-profit/50 focus:ring-1 focus:ring-profit/50 transition-all font-body"
+                className="w-full bg-muted border border-border rounded-full pl-4 pr-24 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-profit/50 focus:ring-1 focus:ring-profit/50 transition-all font-body"
                 disabled={isLoading}
               />
-              <button
-                type="submit"
-                disabled={!input.trim() || isLoading}
-                className="absolute right-1.5 w-9 h-9 flex items-center justify-center bg-profit text-profit-foreground rounded-full disabled:opacity-50 disabled:cursor-not-allowed hover:bg-profit/90 transition-colors"
-              >
-                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 ml-0.5" />}
-              </button>
+              <div className="absolute right-1 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!supported.speech) {
+                      toast.error('Speech recognition is not supported by your browser.');
+                      return;
+                    }
+                    toggleListening();
+                  }}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-full transition-all ${isListening ? 'bg-profit text-profit-foreground animate-pulse shadow-lg' : 'bg-muted text-muted-foreground hover:text-profit'} ${!supported.speech ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title={!supported.speech ? 'Speech recognition not supported' : 'Voice Input'}
+                >
+                  <Mic className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-bold">Talk</span>
+                </button>
+                <button
+                  type="submit"
+                  disabled={!input.trim() || isLoading}
+                  className="w-9 h-9 flex items-center justify-center bg-profit text-profit-foreground rounded-full shadow-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-profit/90 transition-colors"
+                >
+                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 ml-0.5" />}
+                </button>
+              </div>
             </div>
           </form>
         </div>

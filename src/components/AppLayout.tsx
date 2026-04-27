@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import AppSidebar from './AppSidebar';
 import MobileNav from './MobileNav';
-import AIChatAssistant from './AIChatAssistant';
+import AIChatAssistant from './AIChatAssistantV2';
 
 interface AppLayoutProps {
   children: ReactNode;

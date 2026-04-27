@@ -11,7 +11,7 @@ import AddVehicleDialog from '@/components/AddVehicleDialog';
 import QueryErrorState from '@/components/QueryErrorState';
 import VehicleDetailDialog from '@/components/VehicleDetailDialog';
 import DocumentViewerDialog from '@/components/DocumentViewerDialog';
-import { Pencil, Trash2, AlertTriangle, FileText, Eye } from 'lucide-react';
+import { Pencil, Trash2, AlertTriangle, FileText, Eye, ShoppingCart } from 'lucide-react';
 import { apiUrl } from '@/lib/api';
 import { toast } from '@/components/ui/toast-utils';
 import { 
