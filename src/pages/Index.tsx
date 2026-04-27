@@ -1,10 +1,6 @@
 import AppLayout from '@/components/AppLayout';
 import StatCard from '@/components/StatCard';
-import { useInventory } from '@/hooks/useInventory';
-import { useSales } from '@/hooks/useSales';
-import { useAdvertising } from '@/hooks/useAdvertising';
-import { useExpenses } from '@/hooks/useExpenses';
-import { useTeam } from '@/hooks/useTeam';
+import { useDashboard } from '@/hooks/useDashboard';
 import { useAuth } from '@/context/auth-hooks';
 import { Car, ShoppingCart, DollarSign, TrendingUp, Package, Megaphone, Users } from 'lucide-react';
 import QueryErrorState from '@/components/QueryErrorState';
@@ -17,28 +13,29 @@ const ChartsSection = lazy(() => import('./ChartsSection'));
 const COLORS = ['#10b981', '#f59e0b', '#3b82f6', '#ef4444'];
 
 export default function Dashboard() {
-  const { vehicles, isLoading: invLoading, isError: invError } = useInventory();
-  const { sales, isLoading: salesLoading, isError: salesError } = useSales();
-  const { ads, isLoading: adsLoading, isError: adsError } = useAdvertising();
-  const { expenses, isLoading: expLoading, isError: expError } = useExpenses();
-  const { team, isLoading: teamLoading } = useTeam();
+  const { data, isLoading, isError } = useDashboard();
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
   const isStaff = user?.role === 'STAFF';
 
-  const isLoading = invLoading || salesLoading || (isAdmin && (adsLoading || expLoading));
-  const anyError = invError || salesError || (isAdmin && (adsError || expError));
-  if (anyError) {
+  if (isError) {
     return (
       <AppLayout>
         <QueryErrorState
           title="Could not load dashboard data"
-          description="One or more dashboard queries failed, so the overview is showing an error instead of misleading zero-value cards."
+          description="The unified dashboard query failed, likely due to a network issue or session timeout."
         />
       </AppLayout>
     );
   }
+
+  // Map data with fallbacks
+  const vehicles = data?.vehicles || [];
+  const sales = data?.sales || [];
+  const ads = data?.advertising || [];
+  const expenses = data?.expenses || [];
+  const team = data?.team || [];
 
   const inventoryStatusData = [
     { name: 'Available', value: vehicles.filter(v => v.status === 'Available').length },
@@ -95,14 +92,14 @@ export default function Dashboard() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <StatCard label="Inventory" value={invLoading ? "..." : String(vehicles.length)} icon={Car} />
-          <StatCard label="Units Sold" value={salesLoading ? "..." : String(sales.length)} icon={ShoppingCart} />
+          <StatCard label="Inventory" value={isLoading ? "..." : String(vehicles.length)} icon={Car} />
+          <StatCard label="Units Sold" value={isLoading ? "..." : String(sales.length)} icon={ShoppingCart} />
           {!isStaff && (
             <>
-              <StatCard label="Inventory Value" value={invLoading ? "..." : `$${inventoryValue.toLocaleString()}`} icon={Package} />
+              <StatCard label="Inventory Value" value={isLoading ? "..." : `$${inventoryValue.toLocaleString()}`} icon={Package} />
               <StatCard 
                 label="Total Revenue" 
-                value={salesLoading ? "..." : `$${totalRevenue.toLocaleString()}`} 
+                value={isLoading ? "..." : `$${totalRevenue.toLocaleString()}`} 
                 icon={DollarSign} 
                 iconClassName="bg-info/15 text-info" 
                 onClick={() => setReportModalOpen(true)}
@@ -111,8 +108,8 @@ export default function Dashboard() {
           )}
           {isAdmin && (
             <>
-              <StatCard label="Ad Spend" value={adsLoading ? "..." : `$${totalAdSpend.toLocaleString()}`} icon={Megaphone} iconClassName="bg-warning/15 text-warning" />
-              <StatCard label="Net Profit" value={salesLoading ? "..." : `$${totalProfit.toLocaleString()}`} icon={TrendingUp} iconClassName="bg-profit/15 text-profit" />
+              <StatCard label="Ad Spend" value={isLoading ? "..." : `$${totalAdSpend.toLocaleString()}`} icon={Megaphone} iconClassName="bg-warning/15 text-warning" />
+              <StatCard label="Net Profit" value={isLoading ? "..." : `$${totalProfit.toLocaleString()}`} icon={TrendingUp} iconClassName="bg-profit/15 text-profit" />
             </>
           )}
         </div>
@@ -145,7 +142,7 @@ export default function Dashboard() {
                 <span className="text-[11px] text-muted-foreground">Last 30 Days</span>
               </div>
               <div className="space-y-2">
-                {expLoading ? (
+                {isLoading ? (
                   Array.from({ length: 4 }).map((_, i) => (
                     <div key={i} className="h-12 w-full animate-pulse bg-muted/50 rounded-lg" />
                   ))
@@ -175,7 +172,7 @@ export default function Dashboard() {
                 <span className="text-[11px] text-muted-foreground">Staff & Managers</span>
               </div>
               <div className="space-y-2">
-                {teamLoading ? (
+                {isLoading ? (
                   Array.from({ length: 4 }).map((_, i) => (
                     <div key={i} className="h-12 w-full animate-pulse bg-muted/50 rounded-lg" />
                   ))
