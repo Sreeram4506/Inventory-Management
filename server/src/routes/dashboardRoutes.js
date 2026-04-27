@@ -11,7 +11,18 @@ router.get('/summary', authenticateToken, authorizeManagerOrAdmin, async (req, r
     // Fetch everything in parallel
     const [vehicles, sales, advertising, expenses, team] = await Promise.all([
       prisma.vehicle.findMany({
-        include: { purchase: true, repairs: true }
+        include: { 
+          purchase: {
+            select: {
+              documentBase64: true,
+              sourceDocumentBase64: true,
+              sellerName: true,
+              totalPurchaseCost: true
+            }
+          },
+          repairs: true,
+          sale: true 
+        }
       }),
       prisma.sale.findMany({
         include: {

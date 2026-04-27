@@ -25,6 +25,7 @@ export interface Vehicle {
   documentBase64?: string | null;
   hasDocument?: boolean;
   hasSourceDocument?: boolean;
+  hasBillOfSale?: boolean;
   purchase?: {
     id: string;
     sellerName: string;
@@ -83,6 +84,8 @@ export interface Sale {
   paymentMethod: PaymentMethod;
   loanDetails?: LoanDetails;
   profit: number;
+  hasBillOfSale?: boolean;
+  billOfSaleBase64?: string | null;
 }
 
 export interface AdvertisingExpense {

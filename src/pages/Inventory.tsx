@@ -24,6 +24,13 @@ import {
   AlertDialogHeader, 
   AlertDialogTitle 
 } from '@/components/ui/alert-dialog';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
+import { Receipt } from 'lucide-react';
 
 const statusStyles: Record<string, string> = {
   Available: 'bg-profit/10 text-profit border-profit/20',
@@ -59,7 +66,7 @@ export default function Inventory() {
     `${v.make} ${v.model} ${v.vin} ${v.year}`.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleQuickPreview = async (vehicle: Vehicle) => {
+  const handleViewDocument = async (vehicle: Vehicle, type: 'report' | 'source') => {
     if (!token) return;
     try {
       const resp = await fetch(apiUrl(`/vehicles/${vehicle.id}/data`), {
@@ -68,16 +75,16 @@ export default function Inventory() {
       if (!resp.ok) throw new Error('Failed to fetch document');
       const data = await resp.json();
       
-      const base64 = data.documentBase64 || data.sourceDocumentBase64;
+      const base64 = type === 'report' ? data.documentBase64 : data.sourceDocumentBase64;
       if (base64) {
         setViewerDoc({ 
           base64, 
           name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
-          type: data.documentBase64 ? 'Generated Record' : 'Source Document'
+          type: type === 'report' ? 'Used Vehicle Record' : 'Original Source'
         });
         setViewerOpen(true);
       } else {
-        toast.error('No document available for this vehicle.');
+        toast.error(`No ${type === 'report' ? 'Used Vehicle Record' : 'Original Source'} available for this vehicle.`);
       }
     } catch (e) {
       toast.error('Error loading document.');
@@ -157,15 +164,28 @@ export default function Inventory() {
                   </div>
                   <div className="flex items-center gap-2">
                     {(vehicle.hasDocument || vehicle.hasSourceDocument) && (
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleQuickPreview(vehicle);
-                        }}
-                        className="p-1.5 rounded-lg bg-profit/20 text-profit border border-profit/30 shadow-sm active:scale-95 transition-transform"
-                      >
-                        <FileText className="w-4 h-4" />
-                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button 
+                            onClick={(e) => e.stopPropagation()}
+                            className="p-1.5 rounded-lg bg-profit/20 text-profit border border-profit/30 shadow-sm active:scale-95 transition-transform"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="bg-white border-border min-w-[160px]">
+                          {vehicle.hasDocument && (
+                            <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2">
+                              <FileText className="w-3.5 h-3.5 mr-2" /> Used Vehicle Record
+                            </DropdownMenuItem>
+                          )}
+                          {vehicle.hasSourceDocument && (
+                            <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2">
+                              <Receipt className="w-3.5 h-3.5 mr-2" /> Original Source
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
                     <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase border shadow-sm", statusStyles[vehicle.status])}>
                       {vehicle.status}
@@ -255,19 +275,36 @@ export default function Inventory() {
                         <span className={cn("px-2 py-0.5 rounded text-[10px] font-semibold border", statusStyles[vehicle.status])}>
                           {vehicle.status}
                         </span>
-                        {(vehicle.hasDocument || vehicle.hasSourceDocument) && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-7 w-7 p-0 text-profit/60 hover:text-profit hover:bg-profit/10"
-                            title="Quick Preview Document"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleQuickPreview(vehicle);
-                            }}
-                          >
-                            <FileText className="w-3.5 h-3.5" />
-                          </Button>
+                        {(vehicle.hasDocument || vehicle.hasSourceDocument || vehicle.hasBillOfSale) && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 w-7 p-0 text-profit/60 hover:text-profit hover:bg-profit/10"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="bg-white border-border min-w-[160px]">
+                              {vehicle.hasDocument && (
+                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2">
+                                  <FileText className="w-3.5 h-3.5 mr-2" /> Used Vehicle Record
+                                </DropdownMenuItem>
+                              )}
+                              {vehicle.hasSourceDocument && (
+                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2">
+                                  <Receipt className="w-3.5 h-3.5 mr-2" /> Original Source
+                                </DropdownMenuItem>
+                              )}
+                              {vehicle.hasBillOfSale && (
+                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-info">
+                                  <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         )}
                       </div>
                     </td>

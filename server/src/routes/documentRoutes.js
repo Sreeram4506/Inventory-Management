@@ -310,7 +310,9 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
           saleDate: billOfSaleInfo.disposedDate ? new Date(billOfSaleInfo.disposedDate) : new Date(),
           salePrice,
           paymentMethod: 'Cash',
-          profit
+          profit,
+          billOfSaleBase64: req.file.buffer.toString('base64'),
+          hasBillOfSale: true
         }
       });
       console.log(`[BillOfSale] Sale record CREATED: price=${salePrice}, profit=${profit}`);
@@ -328,7 +330,9 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
           driverLicense: billOfSaleInfo.disposedDlNumber || vehicle.sale.driverLicense,
           saleDate: billOfSaleInfo.disposedDate ? new Date(billOfSaleInfo.disposedDate) : vehicle.sale.saleDate,
           salePrice: salePrice || vehicle.sale.salePrice,
-          profit: salePrice ? (salePrice - purchaseCost - repairCost) : vehicle.sale.profit
+          profit: salePrice ? (salePrice - purchaseCost - repairCost) : vehicle.sale.profit,
+          billOfSaleBase64: req.file.buffer.toString('base64'),
+          hasBillOfSale: true
         }
       });
       console.log(`[BillOfSale] Sale record UPDATED`);

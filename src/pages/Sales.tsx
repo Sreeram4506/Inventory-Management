@@ -8,10 +8,17 @@ import { useAuth } from '@/context/auth-hooks';
 import VehicleDetailDialog from '@/components/VehicleDetailDialog';
 import DocumentViewerDialog from '@/components/DocumentViewerDialog';
 import { Vehicle } from '@/types/inventory';
-import { FileText, Trash2, Loader2 } from 'lucide-react';
+import { FileText, Trash2, Loader2, Receipt, ShoppingCart, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { apiUrl } from '@/lib/api';
 import { toast } from '@/components/ui/toast-utils';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
+} from '@/components/ui/dropdown-menu';
 
 export default function Sales() {
   const { sales, isLoading: salesLoading, isError: salesError, deleteSale } = useSales();
@@ -45,7 +52,7 @@ export default function Sales() {
     if (vehicle) setSelectedVehicle(vehicle);
   };
 
-  const handleQuickPreview = async (vehicle: Vehicle) => {
+  const handleViewDocument = async (vehicle: Vehicle, type: 'report' | 'source' | 'bill_of_sale') => {
     if (!token) return;
     try {
       const resp = await fetch(apiUrl(`/vehicles/${vehicle.id}/data`), {
@@ -54,20 +61,38 @@ export default function Sales() {
       if (!resp.ok) throw new Error('Failed to fetch document');
       const data = await resp.json();
       
-      const base64 = data.documentBase64 || data.sourceDocumentBase64;
+      let base64 = '';
+      let label = '';
+      
+      if (type === 'report') {
+        base64 = data.documentBase64;
+        label = 'Used Vehicle Record';
+      } else if (type === 'source') {
+        base64 = data.sourceDocumentBase64;
+        label = 'Original Source';
+      } else if (type === 'bill_of_sale') {
+        base64 = data.billOfSaleBase64;
+        label = 'Bill of Sale';
+      }
+
       if (base64) {
         setViewerDoc({ 
           base64, 
           name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
-          type: 'Final Vehicle Record'
+          type: label
         });
         setViewerOpen(true);
       } else {
-        toast.error('No document available.');
+        toast.error(`No ${label} available for this vehicle.`);
       }
     } catch (e) {
       toast.error('Error loading document.');
     }
+  };
+
+  const handleUploadBillOfSale = (saleId: string) => {
+    // We can either open a specific dialog or redirect to used forms with VIN
+    toast.info('To upload a Bill of Sale, please use the "Used Forms" section or open the vehicle details from Inventory.');
   };
   const handleDeleteSale = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -135,17 +160,44 @@ export default function Sales() {
                       <p className="text-xs text-muted-foreground mt-0.5">Sold to <span className="font-medium text-foreground">{sale.customerName}</span></p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {vehicle?.hasDocument && (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleQuickPreview(vehicle);
-                          }}
-                          className="p-1.5 rounded-lg bg-profit/20 text-profit border border-profit/30 shadow-sm active:scale-95 transition-transform"
-                        >
-                          <FileText className="w-4 h-4" />
-                        </button>
-                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button 
+                            onClick={(e) => e.stopPropagation()}
+                            className={cn(
+                              "p-1.5 rounded-lg border shadow-sm active:scale-95 transition-transform",
+                              (vehicle?.hasBillOfSale || sale.hasBillOfSale) 
+                                ? "bg-profit/20 text-profit border-profit/30" 
+                                : "bg-muted text-muted-foreground border-border"
+                            )}
+                          >
+                            <FileText className="w-4 h-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="bg-white border-border min-w-[180px]">
+                          {vehicle?.hasDocument && (
+                            <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2">
+                              <FileText className="w-3.5 h-3.5 mr-2" /> Used Vehicle Record
+                            </DropdownMenuItem>
+                          )}
+                          {vehicle?.hasSourceDocument && (
+                            <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2">
+                              <Receipt className="w-3.5 h-3.5 mr-2" /> Original Source
+                            </DropdownMenuItem>
+                          )}
+                          {(vehicle?.hasDocument || vehicle?.hasSourceDocument) && <DropdownMenuSeparator />}
+                          
+                          {(vehicle?.hasBillOfSale || sale.hasBillOfSale) ? (
+                            <DropdownMenuItem onClick={() => handleViewDocument(vehicle || { id: sale.vehicleId, year: 0, make: 'Vehicle', model: 'Record' } as any, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-info">
+                              <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem onClick={() => handleUploadBillOfSale(sale.id)} className="text-[10px] font-black uppercase py-2 text-muted-foreground italic">
+                              <Upload className="w-3.5 h-3.5 mr-2" /> Upload Bill of Sale
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                       {isManagerOrAdmin && (
                         <button 
                           onClick={(e) => handleDeleteSale(sale.id, e)}
@@ -245,18 +297,44 @@ export default function Sales() {
                           )}>
                             {sale.paymentMethod}
                           </span>
-                          {vehicle?.hasDocument && (
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleQuickPreview(vehicle);
-                              }}
-                              className="p-1 rounded-md text-profit/60 hover:text-profit hover:bg-profit/10 transition-colors"
-                              title="Preview Bill of Sale"
-                            >
-                              <FileText className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button 
+                                onClick={(e) => e.stopPropagation()}
+                                className={cn(
+                                  "p-1 rounded-md transition-colors",
+                                  (vehicle?.hasBillOfSale || sale.hasBillOfSale)
+                                    ? "text-profit/60 hover:text-profit hover:bg-profit/10"
+                                    : "text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted"
+                                )}
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="bg-white border-border min-w-[180px]">
+                              {vehicle?.hasDocument && (
+                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2">
+                                  <FileText className="w-3.5 h-3.5 mr-2" /> Used Vehicle Record
+                                </DropdownMenuItem>
+                              )}
+                              {vehicle?.hasSourceDocument && (
+                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2">
+                                  <Receipt className="w-3.5 h-3.5 mr-2" /> Original Source
+                                </DropdownMenuItem>
+                              )}
+                              {(vehicle?.hasDocument || vehicle?.hasSourceDocument) && <DropdownMenuSeparator />}
+
+                              {(vehicle?.hasBillOfSale || sale.hasBillOfSale) ? (
+                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle || { id: sale.vehicleId, year: 0, make: 'Vehicle', model: 'Record' } as any, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-info">
+                                  <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem onClick={() => handleUploadBillOfSale(sale.id)} className="text-[10px] font-black uppercase py-2 text-muted-foreground italic">
+                                  <Upload className="w-3.5 h-3.5 mr-2" /> Upload Bill of Sale
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </td>
                       {!isStaff && (

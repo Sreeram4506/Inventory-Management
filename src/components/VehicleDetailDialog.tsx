@@ -10,7 +10,7 @@ import { useRepairs } from '@/hooks/useRepairs';
 import { useAdvertising } from '@/hooks/useAdvertising';
 import { useSales } from '@/hooks/useSales';
 import { toast } from '@/components/ui/toast-utils';
-import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download, ShoppingCart, Trash2, AlertTriangle } from 'lucide-react';
+import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download, ShoppingCart, Trash2, AlertTriangle, FileUp, CheckCircle2 } from 'lucide-react';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -45,8 +45,10 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [uploadingSale, setUploadingSale] = useState(false);
+  const [saleFile, setSaleFile] = useState<File | null>(null);
 
-  const handleView = async (isSource = false) => {
+  const handleView = async (docType: 'report' | 'source' | 'bill_of_sale') => {
     if (!token || !vehicle) return;
     try {
       const resp = await fetch(apiUrl(`/vehicles/${vehicle.id}/data`), {
@@ -55,15 +57,28 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
       if (!resp.ok) throw new Error('Failed to fetch document data');
       const data = await resp.json();
       
-      const targetBase64 = isSource ? data.sourceDocumentBase64 : data.documentBase64;
+      let targetBase64;
+      let name = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+      let typeLabel = '';
+
+      if (docType === 'source') {
+        targetBase64 = data.sourceDocumentBase64;
+        name += ' (Source)';
+        typeLabel = 'Original Source';
+      } else if (docType === 'bill_of_sale') {
+        targetBase64 = data.billOfSaleBase64;
+        name += ' (Bill of Sale)';
+        typeLabel = 'Bill of Sale';
+      } else {
+        targetBase64 = data.documentBase64;
+        typeLabel = 'Generated Record';
+      }
       
       if (targetBase64) {
-        let name = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
-        if (isSource) name += ' (Source)';
-        setViewerDoc({ base64: targetBase64, name, type: isSource ? 'Original Source' : 'Generated Record' });
+        setViewerDoc({ base64: targetBase64, name, type: typeLabel });
         setViewerOpen(true);
       } else {
-        toast.error(isSource ? 'No original source document available to preview.' : 'No generated document available to preview.');
+        toast.error(`No ${typeLabel.toLowerCase()} available to preview.`);
       }
     } catch (e) {
       toast.error('Error loading document preview.');
@@ -228,20 +243,39 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
 
   const handleSaleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setUploadingSale(true);
     try {
-      await addSale({
-        vehicleId: vehicle.id,
-        customerName: saleForm.customerName,
-        phone: saleForm.phone,
-        address: saleForm.address,
-        saleDate: saleForm.saleDate,
-        salePrice: parseFloat(saleForm.salePrice),
-        paymentMethod: saleForm.paymentMethod,
+      const formData = new FormData();
+      formData.append('vehicleId', vehicle.id);
+      formData.append('customerName', saleForm.customerName);
+      formData.append('phone', saleForm.phone);
+      formData.append('address', saleForm.address);
+      formData.append('saleDate', saleForm.saleDate);
+      formData.append('salePrice', saleForm.salePrice);
+      formData.append('paymentMethod', saleForm.paymentMethod);
+      if (saleFile) {
+        formData.append('file', saleFile);
+      }
+
+      const response = await fetch(apiUrl('/sales'), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
       });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || 'Failed to record sale');
+      }
+
       toast.success('Vehicle marked as sold!');
       onOpenChange(false);
-    } catch (err) {
-      toast.error('Failed to record sale');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to record sale');
+    } finally {
+      setUploadingSale(false);
     }
   };
 
@@ -278,20 +312,23 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                 </Button>
               )}
 
-              {(vehicle.hasDocument || vehicle.hasSourceDocument) && !isEditing && (
-                <div className="sm:hidden">
+              {(vehicle.hasDocument || vehicle.hasSourceDocument || vehicle.hasBillOfSale) && !isEditing && (
+                <div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-9 border-border/50 text-[10px] font-black uppercase tracking-widest">
-                        <Download className="w-3.5 h-3.5" />
+                      <Button variant="outline" size="sm" className="h-9 border-border/50 text-[10px] font-black uppercase tracking-widest gap-2">
+                        <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Documents</span>
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="bg-white border-border text-foreground">
+                    <DropdownMenuContent align="end" className="bg-white border-border text-foreground min-w-[160px]">
                        {vehicle.hasDocument && (
-                        <DropdownMenuItem onClick={() => handleView(false)} className="text-[10px] font-black uppercase">Preview</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleView('report')} className="text-[10px] font-black uppercase cursor-pointer py-2"><FileText className="w-3.5 h-3.5 mr-2" /> Used Vehicle Record</DropdownMenuItem>
                        )}
                        {vehicle.hasSourceDocument && (
-                        <DropdownMenuItem onClick={() => handleView(true)} className="text-[10px] font-black uppercase">Source</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleView('source')} className="text-[10px] font-black uppercase cursor-pointer py-2"><Receipt className="w-3.5 h-3.5 mr-2" /> Original Source</DropdownMenuItem>
+                       )}
+                       {vehicle.hasBillOfSale && (
+                        <DropdownMenuItem onClick={() => handleView('bill_of_sale')} className="text-[10px] font-black uppercase cursor-pointer py-2 text-info"><ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale</DropdownMenuItem>
                        )}
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -675,8 +712,38 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                       <option value="Check">Check</option>
                     </select>
                   </div>
-                  <Button className="col-span-2 bg-info text-primary-foreground hover:bg-info/90 font-black h-11 uppercase mt-2" type="submit">
-                    <ShoppingCart className="w-4 h-4 mr-2" /> Mark as Sold
+                  <div className="space-y-2 col-span-2">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Bill of Sale Document (Optional)</Label>
+                    <div 
+                      onClick={() => document.getElementById('sale-file-upload')?.click()}
+                      className="border-2 border-dashed border-border rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-info/50 hover:bg-info/5 transition-all"
+                    >
+                      {saleFile ? (
+                        <div className="flex items-center gap-2 text-info">
+                          <CheckCircle2 className="w-5 h-5" />
+                          <span className="text-xs font-bold">{saleFile.name}</span>
+                        </div>
+                      ) : (
+                        <>
+                          <FileUp className="w-6 h-6 text-muted-foreground" />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Click to upload Bill of Sale</span>
+                        </>
+                      )}
+                      <input 
+                        type="file" 
+                        id="sale-file-upload" 
+                        className="hidden" 
+                        accept="image/*,.pdf"
+                        onChange={(e) => setSaleFile(e.target.files?.[0] || null)}
+                      />
+                    </div>
+                  </div>
+                  <Button 
+                    className="col-span-2 bg-info text-primary-foreground hover:bg-info/90 font-black h-11 uppercase mt-2" 
+                    type="submit"
+                    disabled={uploadingSale}
+                  >
+                    {uploadingSale ? 'Processing...' : <><ShoppingCart className="w-4 h-4 mr-2" /> Mark as Sold</>}
                   </Button>
                 </form>
               </div>
@@ -756,9 +823,27 @@ function BuyerInfoSection({ vehicleId }: { vehicleId: string }) {
         <span className="text-muted-foreground">Payment Method</span>
         <span className="font-bold text-foreground">{sale.paymentMethod}</span>
       </div>
-      <div className="flex justify-between text-xs pt-2 border-t border-border/40">
+      <div className="flex justify-between items-center text-xs pt-2 border-t border-border/40">
         <span className="font-black uppercase tracking-widest text-[10px] text-info">Net Profit</span>
         <span className={`font-black ${sale.profit >= 0 ? 'text-profit' : 'text-loss'}`}>${sale.profit.toLocaleString()}</span>
+      </div>
+
+      <div className="pt-4 flex flex-wrap gap-2">
+        {sale.hasBillOfSale && (
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="h-8 text-[10px] font-black uppercase tracking-widest border-info/30 text-info hover:bg-info/10"
+            onClick={() => {
+              // We need a way to trigger handleViewDocument from here
+              // Since this is a sub-component, we'll assume the parent has handleViewDocument
+              // For now, let's just use a simple fetch
+              window.dispatchEvent(new CustomEvent('view-document', { detail: { type: 'bill_of_sale', vehicleId: sale.vehicleId } }));
+            }}
+          >
+            <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
+          </Button>
+        )}
       </div>
     </div>
   );

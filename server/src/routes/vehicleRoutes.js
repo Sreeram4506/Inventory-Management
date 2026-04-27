@@ -1,4 +1,5 @@
 import express from 'express';
+import multer from 'multer';
 import { readFile } from 'fs/promises';
 import prisma from '../db/prisma.js';
 import { authenticateToken, authorizeAdmin } from '../middlewares/authMiddleware.js';
@@ -6,6 +7,8 @@ import { validate, vehicleSchema } from '../utils/validators.js';
 import jwt from 'jsonwebtoken';
 import { vehicleCache } from '../utils/cache.js';
 import { fillUsedVehiclePdf } from '../../services/usedVehiclePdfService.js';
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 const defaultUsedVehicleTemplatePath = new URL('../../used-vechile-report.jpeg', import.meta.url);
 
@@ -30,23 +33,41 @@ router.get('/:id/document', async (req, res, next) => {
     // Verify the token manually
     try {
       jwt.verify(token, process.env.JWT_SECRET);
-      console.log(`[BinaryStream] Token verified successfully for vehicle ${req.params.id}`);
     } catch (e) {
-      console.error(`[BinaryStream] Token verification FAILED: ${e.message}`);
       return res.status(401).json({ message: 'Invalid token' });
     }
 
     const vehicle = await prisma.vehicle.findUnique({
       where: { id: req.params.id },
-      include: { purchase: true }
+      include: { purchase: true, sale: true }
     });
 
     if (!vehicle || !vehicle.purchase) {
       return res.status(404).json({ message: 'Vehicle not found' });
     }
 
-    const isSource = req.query.type === 'source';
-    let base64 = isSource ? vehicle.purchase.sourceDocumentBase64 : vehicle.purchase.documentBase64;
+    const docType = req.query.type; // 'source', 'bill_of_sale', or default 'report'
+    let base64;
+    let prefix;
+    let extension = 'pdf';
+
+    if (docType === 'source') {
+      base64 = vehicle.purchase.sourceDocumentBase64;
+      prefix = 'Source_';
+      // Basic detect for image vs pdf based on base64 magic number
+      extension = base64?.startsWith('JVBER') ? 'pdf' : 'jpg';
+    } else if (docType === 'bill_of_sale') {
+      if (!vehicle.sale || !vehicle.sale.billOfSaleBase64) {
+        return res.status(404).json({ message: 'Bill of Sale not found' });
+      }
+      base64 = vehicle.sale.billOfSaleBase64;
+      prefix = 'BillOfSale_';
+      extension = base64?.startsWith('JVBER') ? 'pdf' : 'jpg';
+    } else {
+      base64 = vehicle.purchase.documentBase64;
+      prefix = 'Report_';
+      extension = 'pdf';
+    }
 
     if (!base64) {
       return res.status(404).json({ message: 'Requested document data not available' });
@@ -58,19 +79,7 @@ router.get('/:id/document', async (req, res, next) => {
 
     const buffer = Buffer.from(base64, 'base64');
     
-    // Determine extension based on type and context
-    let extension = 'pdf';
-    if (isSource) {
-       // Since we don't store sourceFileName in Purchase, we try to detect or default.
-       // Most sources are images or PDFs.
-       extension = base64.startsWith('JVBER') ? 'pdf' : 'jpg';
-    }
-
-    const prefix = isSource ? 'Source_' : 'Report_';
     const safeFileName = `${prefix}${vehicle.make}_${vehicle.model}_${(vehicle.vin || 'unk').slice(-4)}.${extension}`;
-    
-    console.log(`[BinaryStream] Forcing Download for vehicle ${req.params.id}, type: ${isSource ? 'source' : 'report'}, size: ${buffer.length} bytes`);
-    
     const contentType = extension === 'pdf' ? 'application/pdf' : 'image/jpeg';
 
     res.writeHead(200, {
@@ -92,16 +101,31 @@ router.get('/:id/data', authenticateToken, async (req, res, next) => {
   try {
     const vehicle = await prisma.vehicle.findUnique({
       where: { id: req.params.id },
-      include: { purchase: true }
+      include: { purchase: true, sale: true }
     });
     
-    if (!vehicle || !vehicle.purchase) {
-      return res.status(404).json({ message: 'Vehicle or purchase record not found' });
+    if (!vehicle) {
+      return res.status(404).json({ message: 'Vehicle not found' });
+    }
+    
+    let sourceDocumentBase64 = vehicle.purchase?.sourceDocumentBase64;
+    
+    // Fallback: If not in purchase record, look in DocumentRegistry by VIN
+    if (!sourceDocumentBase64 && vehicle.vin) {
+      const registryEntry = await prisma.documentRegistry.findFirst({
+        where: { vin: vehicle.vin },
+        select: { sourceDocumentBase64: true },
+        orderBy: { createdAt: 'desc' }
+      });
+      if (registryEntry) {
+        sourceDocumentBase64 = registryEntry.sourceDocumentBase64;
+      }
     }
     
     res.json({
-      documentBase64: vehicle.purchase.documentBase64,
-      sourceDocumentBase64: vehicle.purchase.sourceDocumentBase64
+      documentBase64: vehicle.purchase?.documentBase64,
+      sourceDocumentBase64,
+      billOfSaleBase64: vehicle.sale?.billOfSaleBase64
     });
   } catch (err) {
     console.error('[Vehicle Data Error]', err);
@@ -136,7 +160,6 @@ router.get('/', authenticateToken, async (req, res, next) => {
             totalPurchaseCost: true,
             purchaseDate: true,
             paymentMethod: true,
-            // We only need to know IF a document exists, not the actual data
             documentBase64: true,
             sourceDocumentBase64: true,
           }
@@ -148,9 +171,18 @@ router.get('/', authenticateToken, async (req, res, next) => {
 
     const isStaff = req.user.role === 'STAFF';
 
+    // Fetch VINs that have entries in DocumentRegistry for the hasSourceDocument fallback
+    const allVins = vehicles.map(v => v.vin).filter(Boolean);
+    const registryEntries = await prisma.documentRegistry.findMany({
+      where: { vin: { in: allVins } },
+      select: { vin: true }
+    });
+    const vinsInRegistry = new Set(registryEntries.map(e => e.vin));
+
     const enrichedVehicles = vehicles.map(v => {
       const hasDocument = !!v.purchase?.documentBase64;
-      const hasSourceDocument = !!v.purchase?.sourceDocumentBase64;
+      const hasSourceDocument = !!v.purchase?.sourceDocumentBase64 || vinsInRegistry.has(v.vin);
+      const hasBillOfSale = !!v.sale?.hasBillOfSale;
       
       // Strip base64 strings
       const { documentBase64, sourceDocumentBase64, ...purchaseData } = v.purchase || {};
@@ -171,6 +203,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
           updatedAt: v.updatedAt,
           hasDocument,
           hasSourceDocument,
+          hasBillOfSale,
           // Hide all money fields for staff
           purchasePrice: 0,
           totalPurchaseCost: 0,
@@ -195,6 +228,7 @@ router.get('/', authenticateToken, async (req, res, next) => {
         repairCost: v.repairs.reduce((sum, r) => sum + r.partsCost + r.laborCost, 0),
         hasDocument,
         hasSourceDocument,
+        hasBillOfSale,
       };
     });
 

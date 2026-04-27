@@ -33,7 +33,7 @@ export default function DocumentViewerDialog({ open, onOpenChange, documentBase6
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] bg-card border-border text-foreground p-0 overflow-hidden">
         <DialogHeader className="p-5 pb-3 border-b border-border">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between pr-10">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
                 <FileText className="w-5 h-5 text-blue-400" />
@@ -43,7 +43,7 @@ export default function DocumentViewerDialog({ open, onOpenChange, documentBase6
                 <DialogDescription className="text-xs text-muted-foreground uppercase tracking-widest font-bold">{documentType}</DialogDescription>
               </div>
             </div>
-            <Button onClick={handleDownload} variant="outline" size="sm" className="border-profit/30 text-profit hover:bg-profit/10">
+            <Button onClick={handleDownload} variant="outline" size="sm" className="border-profit/30 text-profit hover:bg-profit/10 mt-1">
               <Download className="w-3.5 h-3.5 mr-2" /> Download
             </Button>
           </div>

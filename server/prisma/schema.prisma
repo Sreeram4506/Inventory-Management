@@ -104,6 +104,10 @@ model Sale {
   createdById    String?  @db.ObjectId
   createdBy      User?    @relation(fields: [createdById], references: [id])
 
+  // Document archiving
+  billOfSaleBase64 String?
+  hasBillOfSale    Boolean  @default(false)
+
   createdAt      DateTime @default(now())
 }
 

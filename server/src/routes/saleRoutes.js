@@ -5,6 +5,9 @@ import { validate, saleSchema } from '../utils/validators.js';
 
 import { salesCache, vehicleCache } from '../utils/cache.js';
 
+import multer from 'multer';
+const upload = multer({ storage: multer.memoryStorage() });
+
 const router = express.Router();
 
 // Allow all authenticated users, but we will mask data for STAFF
@@ -26,13 +29,16 @@ router.get('/', async (req, res, next) => {
     
     const isStaff = req.user.role === 'STAFF';
     
-    // Mask profit for staff
+    // Mask profit for staff and strip large base64 data
     const processedSales = sales.map(s => {
+      const { billOfSaleBase64, ...saleData } = s;
+      const hasBillOfSale = s.hasBillOfSale || !!s.billOfSaleBase64;
+      
       if (isStaff) {
-        const { profit, ...saleData } = s;
-        return { ...saleData, profit: 0 };
+        const { profit, ...rest } = saleData;
+        return { ...rest, profit: 0, hasBillOfSale };
       }
-      return s;
+      return { ...saleData, hasBillOfSale };
     });
 
     salesCache.set('sales-list', processedSales);
@@ -42,7 +48,7 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-router.post('/', authenticateToken, validate(saleSchema), async (req, res, next) => {
+router.post('/', upload.single('file'), validate(saleSchema), async (req, res, next) => {
   try {
     const { vehicleId, saleDate, salePrice, customerName, phone, address, paymentMethod, ...loanDetails } = req.body;
     
@@ -72,6 +78,8 @@ router.post('/', authenticateToken, validate(saleSchema), async (req, res, next)
           profit,
           vehicleId,
           createdById: req.user.id,
+          hasBillOfSale: !!req.file,
+          billOfSaleBase64: req.file ? req.file.buffer.toString('base64') : undefined,
           ...loanDetails
         }
       });
