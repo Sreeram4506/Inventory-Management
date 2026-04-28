@@ -101,16 +101,17 @@ async function textExtract(text, extraInstructions = "") {
   "disposedDlNumber": "S29353237",
   "disposedDlState": "MA"
 }
-
-IMPORTANT INSTRUCTIONS:
-- "purchasePrice" = The FINAL BOTTOM-LINE amount including all fees (e.g., on ADESA forms, look for 'Purchase Price' or 'Total Price').
-- "disposedPrice" = The FINAL TOTAL price the customer is paying (Look for 'Total' at the very bottom of the costs section, e.g., $8,150.00).
-- "purchasedFrom" = The SELLER. Look for the "SELLER" block or the "Seller's Printed Name".
-- "disposedTo" = The BUYER/PURCHASER. Look for "BUYER", "PURCHASER", or "Print Name(s) of Purchaser(s)".
-- TITLE NUMBER: Extract from 'Title Number' or 'Title State/Number'. If it looks like 'MA/BN1234', return only 'BN1234'.
-- ADDRESSES: Capture the full street address, including any "Apt", "Suite", or "Unit" numbers.
-- VIN: Must be exactly 17 characters. If the VIN is in boxes, read every single box from left to right.
-- Use null for any field not found. Do NOT guess.
+RULES & PATTERNS:
+1. DETERMINE DOCUMENT TYPE FIRST:
+   - AUCTION INVOICE (e.g., ADESA, Copart, Manheim): The "SELLER" is the entity we acquired the car from -> Map this to \`purchasedFrom\` and \`usedVehicleSourceAddress\` fields. The "BUYER" is the dealership acquiring the vehicle -> Do NOT put the dealership in \`disposedTo\`. Set all \`disposed\` fields to null. Ignore "Buying Representative" or bidder details.
+   - RETAIL BILL OF SALE (Consumer Sale): The "BUYER" or "Purchaser" is the customer -> Map this to \`disposedTo\` and \`disposedAddress\` fields. The "SELLER" is the dealership -> Do NOT put the dealership in \`purchasedFrom\`. Set all acquisition fields to null.
+2. PRICE EXTRACTION:
+   - For Acquisitions: \`purchasePrice\` is the FINAL TOTAL amount paid (e.g., 'Total Price', 'Amount Due').
+   - For Retail Sales: \`disposedPrice\` is the FINAL TOTAL SELLING PRICE to the customer (Look for 'Total' at the bottom of the Costs section, including Doc Fees, e.g., 5500).
+3. ADDRESS EXTRACTION:
+   - Separate the street address, city, state, and zip code accurately into their respective fields.
+4. TITLE NUMBER: Extract from 'Title Number' or 'Title State/Number'. If it looks like 'MA/BN1234', return only 'BN1234'.
+5. VIN EXTRACTION: Must be exactly 17 characters.
 
 ${extraInstructions ? `EXTRA INSTRUCTIONS:\n${extraInstructions}\n\n` : ''}Document text:
 ${text}`;
@@ -234,13 +235,16 @@ async function visionExtract(fileBuffer, mimetype, extraInstructions = "") {
 }
 
 RULES & PATTERNS:
-- "purchasePrice" = The FINAL TOTAL amount paid (Look for 'Total Price', 'Amount Due', or 'Balance').
-- "disposedPrice" = The FINAL TOTAL SELLING PRICE (Look for 'Total' at the bottom, including any fees).
-- "purchasedFrom" = Look for the SELLER block. (On ADESA forms, it's labeled 'SELLER').
-- "disposedTo" = Look for the BUYER/PURCHASER block. (On retail forms, look for 'Print Name(s) of Purchaser(s)').
-- ADDRESSES: Include Apartment or Suite numbers if present.
-- VIN = Look for the 17-digit string. On some forms, it's at the top under 'Vehicle Information'.
-- Return ONLY valid JSON.
+1. DETERMINE DOCUMENT TYPE FIRST:
+   - AUCTION INVOICE (e.g., ADESA, Copart, Manheim): The "SELLER" is the entity we acquired the car from -> Map this to \`purchasedFrom\` and \`usedVehicleSourceAddress\` fields. The "BUYER" is the dealership acquiring the vehicle -> Do NOT put the dealership in \`disposedTo\`. Set all \`disposed\` fields to null. Ignore "Buying Representative" or bidder details.
+   - RETAIL BILL OF SALE (Consumer Sale): The "BUYER" or "Purchaser" is the customer -> Map this to \`disposedTo\` and \`disposedAddress\` fields. The "SELLER" is the dealership -> Do NOT put the dealership in \`purchasedFrom\`. Set all acquisition fields to null.
+2. PRICE EXTRACTION:
+   - For Acquisitions: \`purchasePrice\` is the FINAL TOTAL amount paid (Look for 'Total Price', 'Amount Due', or 'Balance').
+   - For Retail Sales: \`disposedPrice\` is the FINAL TOTAL SELLING PRICE to the customer (Look for 'Total' at the bottom of the Costs section, including Doc Fees, e.g., 5500).
+3. ADDRESS EXTRACTION:
+   - Separate the street address, city, state, and zip code accurately into their respective fields. Include Apartment or Suite numbers if present.
+4. TITLE NUMBER: Extract from 'Title Number' or 'Title State/Number'. If it looks like 'MA/BN1234', return only 'BN1234'.
+5. VIN EXTRACTION: Must be exactly 17 characters.
 
 ${extraInstructions ? `EXTRA INSTRUCTIONS:\n${extraInstructions}` : ''}`;
 
