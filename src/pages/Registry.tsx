@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/context/auth-hooks';
 import { apiUrl } from '@/lib/api';
-import { FileArchive, Download, Search, FileText, Pencil, Trash2, Eye, Filter } from 'lucide-react';
+import { FileArchive, Download, Search, FileText, Pencil, Trash2, Eye, Filter, Receipt } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -188,24 +188,24 @@ export default function Registry() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8 hover:bg-blue-500/10 hover:text-blue-400"
+                                  className="h-8 w-8 text-profit/60 hover:bg-profit/10 hover:text-profit"
                                   title="View Document"
                                 >
-                                  <Eye className="h-4 w-4" />
+                                  <FileText className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="bg-muted border-border text-foreground">
+                              <DropdownMenuContent align="end" className="bg-white border-border min-w-[160px]">
                                 <DropdownMenuItem 
-                                  className="hover:bg-muted/50 focus:bg-muted/50 cursor-pointer"
+                                  className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50 focus:bg-muted/50"
                                   onClick={() => handleView(log)}
                                 >
-                                  Preview Generated Record
+                                  <FileText className="w-3.5 h-3.5 mr-2" /> Used Vehicle Record
                                 </DropdownMenuItem>
                                 <DropdownMenuItem 
-                                  className="hover:bg-muted/50 focus:bg-muted/50 cursor-pointer"
+                                  className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50 focus:bg-muted/50"
                                   onClick={() => handleView(log, true)}
                                 >
-                                  Preview Original Source
+                                  <Receipt className="w-3.5 h-3.5 mr-2" /> Original Source
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
