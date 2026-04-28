@@ -160,12 +160,22 @@ router.get('/', authenticateToken, async (req, res, next) => {
             totalPurchaseCost: true,
             purchaseDate: true,
             paymentMethod: true,
-            documentBase64: true,
-            sourceDocumentBase64: true,
+            // documentBase64 and sourceDocumentBase64 EXCLUDED for performance
           }
         },
         repairs: true,
-        sale: true 
+        sale: {
+          select: {
+            id: true,
+            customerName: true,
+            salePrice: true,
+            saleDate: true,
+            profit: true,
+            hasBillOfSale: true,
+            paymentMethod: true,
+            // billOfSaleBase64 EXCLUDED for performance
+          }
+        } 
       }
     });
 

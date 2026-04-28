@@ -13,6 +13,25 @@ router.get('/', authenticateToken, async (req, res, next) => {
   try {
     const allLogs = await prisma.documentRegistry.findMany({
       orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        vin: true,
+        make: true,
+        model: true,
+        year: true,
+        titleNumber: true,
+        purchasedFrom: true,
+        sellerAddress: true,
+        sellerCity: true,
+        sellerState: true,
+        sellerZip: true,
+        disposedTo: true,
+        disposedPrice: true,
+        disposedDate: true,
+        documentType: true,
+        sourceFileName: true,
+        createdAt: true
+      }
     });
     
     // De-duplicate: Keep only the latest entry for each (VIN + DocumentType) combination
@@ -24,9 +43,8 @@ router.get('/', authenticateToken, async (req, res, next) => {
       
       // Since it's ordered by createdAt DESC, the first one we see is the latest
       if (!uniqueLogsMap.has(key)) {
-        const { documentBase64, sourceDocumentBase64, ...rest } = log;
         uniqueLogsMap.set(key, {
-          ...rest,
+          ...log,
           documentType: type
         });
       }

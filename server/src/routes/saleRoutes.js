@@ -19,9 +19,31 @@ router.get('/', async (req, res, next) => {
     if (cachedData) return res.json(cachedData);
 
     const sales = await prisma.sale.findMany({
-      include: { 
+      select: {
+        id: true,
+        vehicleId: true,
+        customerName: true,
+        salePrice: true,
+        saleDate: true,
+        profit: true,
+        paymentMethod: true,
+        hasBillOfSale: true,
+        address: true,
+        phone: true,
+        // billOfSaleBase64 EXCLUDED for performance
         vehicle: {
-          include: { purchase: true, repairs: true }
+          include: { 
+            purchase: {
+              select: {
+                id: true,
+                sellerName: true,
+                totalPurchaseCost: true,
+                purchaseDate: true,
+                // base64 strings EXCLUDED
+              }
+            }, 
+            repairs: true 
+          }
         } 
       },
       orderBy: { saleDate: 'desc' }
@@ -29,16 +51,15 @@ router.get('/', async (req, res, next) => {
     
     const isStaff = req.user.role === 'STAFF';
     
-    // Mask profit for staff and strip large base64 data
+    // Mask profit for staff
     const processedSales = sales.map(s => {
-      const { billOfSaleBase64, ...saleData } = s;
-      const hasBillOfSale = s.hasBillOfSale || !!s.billOfSaleBase64;
+      const hasBillOfSale = s.hasBillOfSale || false;
       
       if (isStaff) {
-        const { profit, ...rest } = saleData;
+        const { profit, ...rest } = s;
         return { ...rest, profit: 0, hasBillOfSale };
       }
-      return { ...saleData, hasBillOfSale };
+      return { ...s, hasBillOfSale };
     });
 
     salesCache.set('sales-list', processedSales);
