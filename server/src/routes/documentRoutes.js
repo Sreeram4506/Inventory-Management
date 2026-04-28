@@ -29,6 +29,61 @@ function parseCurrency(value) {
   return isNaN(parsed) ? 0 : parsed;
 }
 
+/**
+ * Fuzzy VIN matching to handle OCR errors (5/S, 0/O, 1/I, etc)
+ */
+async function findFuzzyRegistryEntry(vin, type) {
+  if (!vin) return null;
+  const upperVin = vin.toUpperCase();
+
+  // 1. Exact match first
+  let entry = await prisma.documentRegistry.findFirst({
+    where: { vin: upperVin, documentType: type },
+    orderBy: { createdAt: 'desc' }
+  });
+  if (entry) return entry;
+
+  // 2. Try common OCR swaps
+  const swaps = { '5': 'S', 'S': '5', '0': 'O', 'O': '0', '1': 'I', 'I': '1', 'B': '8', '8': 'B' };
+  const vinChars = upperVin.split('');
+  
+  for (let i = 0; i < vinChars.length; i++) {
+    const char = vinChars[i];
+    if (swaps[char]) {
+      const altVin = [...vinChars];
+      altVin[i] = swaps[char];
+      const altVinStr = altVin.join('');
+      
+      entry = await prisma.documentRegistry.findFirst({
+        where: { vin: altVinStr, documentType: type },
+        orderBy: { createdAt: 'desc' }
+      });
+      if (entry) {
+        console.log(`[FuzzyMatch] Found match by swapping ${char}->${swaps[char]} at pos ${i}: ${altVinStr}`);
+        return entry;
+      }
+    }
+  }
+
+  // 3. Last 8 characters match (VIS)
+  if (upperVin.length >= 8) {
+    const vis = upperVin.substring(upperVin.length - 8);
+    entry = await prisma.documentRegistry.findFirst({
+      where: { 
+        vin: { endsWith: vis },
+        documentType: type 
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    if (entry) {
+      console.log(`[FuzzyMatch] Found match by VIS (last 8): ${entry.vin}`);
+      return entry;
+    }
+  }
+
+  return null;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // ROUTE: /scan-document — Quick scan, no inventory action
 // ═══════════════════════════════════════════════════════════════
@@ -123,16 +178,23 @@ router.post(
           createdAt: new Date() // Refresh timestamp to move to top
         };
 
-        const existingLog = await prisma.documentRegistry.findFirst({
-          where: { vin: info.vin, documentType: 'Used Vehicle Record' }
-        });
+        const existingLog = await findFuzzyRegistryEntry(info.vin, 'Used Vehicle Record');
 
         if (existingLog) {
           await prisma.documentRegistry.update({
             where: { id: existingLog.id },
-            data: docData
+            data: { ...docData, vin: info.vin } // Prefer the new (likely corrected) VIN
           });
-          console.log(`[Registry] Updated existing log for VIN: ${info.vin}`);
+          
+          // Cleanup any other duplicates for this VIN to keep it clean
+          await prisma.documentRegistry.deleteMany({
+            where: {
+              vin: { in: [info.vin, existingLog.vin] },
+              documentType: 'Used Vehicle Record',
+              id: { not: existingLog.id }
+            }
+          });
+          console.log(`[Registry] Updated existing log for VIN: ${info.vin} (matched ${existingLog.vin})`);
         } else {
           await prisma.documentRegistry.create({
             data: docData
@@ -350,10 +412,7 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
     }
 
     // ── Step 6: Update Registry entry with disposition data ──
-    const existingEntry = await prisma.documentRegistry.findFirst({
-      where: { vin: extractedVin, documentType: 'Used Vehicle Record' },
-      orderBy: { createdAt: 'desc' }
-    });
+    const existingEntry = await findFuzzyRegistryEntry(extractedVin, 'Used Vehicle Record');
 
     let filledPdf;
     if (existingEntry || vehicle) {
@@ -412,7 +471,16 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
             documentBase64: filledPdf
           }
         });
-        console.log(`[BillOfSale] Registry entry UPDATED with disposition data`);
+        
+        // Delete any other duplicates for this VIN (and the matched VIN) to keep the registry clean
+        await prisma.documentRegistry.deleteMany({
+          where: {
+            vin: { in: [extractedVin, existingEntry.vin] },
+            documentType: 'Used Vehicle Record',
+            id: { not: existingEntry.id }
+          }
+        });
+        console.log(`[BillOfSale] Registry duplicates CLEANED for VIN: ${extractedVin} (matched ${existingEntry.vin})`);
       } else {
         await prisma.documentRegistry.create({
           data: {
