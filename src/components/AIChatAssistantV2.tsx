@@ -22,19 +22,21 @@ export default function AIChatAssistant() {
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const handleVoiceResult = React.useCallback((transcript: string) => {
+    setInput(transcript);
+    // Auto-send when speaking is done
+    setTimeout(() => {
+      handleSendWithText(transcript);
+    }, 500);
+  }, []); // Only create once
+
   const {
     isListening,
     supported,
     toggleListening,
     speak,
     cancelSpeech
-  } = useVoice((transcript) => {
-    setInput(transcript);
-    // Auto-send when speaking is done
-    setTimeout(() => {
-      handleSendWithText(transcript);
-    }, 500);
-  });
+  } = useVoice(handleVoiceResult);
 
   // Handle bot speech
   useEffect(() => {

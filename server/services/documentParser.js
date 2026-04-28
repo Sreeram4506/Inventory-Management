@@ -199,7 +199,35 @@ async function visionExtract(fileBuffer, mimetype, extraInstructions = "") {
   if (!base64Image) return null;
 
   try {
-    const prompt = `Read this vehicle document image and extract ALL data. Return ONLY a JSON object.
+    const prompt = `Return ONLY a raw JSON object. Do NOT include any introduction, headers, or markdown text.
+    
+    REQUIRED JSON STRUCTURE:
+    {
+      "vin": "...",
+      "make": "...",
+      "model": "...",
+      "year": 0,
+      "color": "...",
+      "mileage": 0,
+      "titleNumber": "...",
+      "purchasedFrom": "...",
+      "purchasePrice": 0,
+      "purchaseDate": "...",
+      "usedVehicleSourceAddress": "...",
+      "usedVehicleSourceCity": "...",
+      "usedVehicleSourceState": "...",
+      "usedVehicleSourceZipCode": "...",
+      "disposedTo": "...",
+      "disposedAddress": "...",
+      "disposedCity": "...",
+      "disposedState": "...",
+      "disposedZip": "...",
+      "disposedDate": "...",
+      "disposedPrice": 0,
+      "disposedOdometer": 0,
+      "disposedDlNumber": "...",
+      "disposedDlState": "..."
+    }
 
     VIN EXTRACTION RULE:
     - Extract the EXACT 17-character VIN accurately.
