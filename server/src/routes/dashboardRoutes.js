@@ -8,24 +8,38 @@ router.get('/summary', authenticateToken, authorizeManagerOrAdmin, async (req, r
   try {
     const isAdmin = req.user.role === 'ADMIN';
 
-    // Fetch everything in parallel
+    // Fetch everything in parallel - EXCLUDING heavy base64 strings
     const [vehicles, sales, advertising, expenses, team] = await Promise.all([
       prisma.vehicle.findMany({
         include: { 
           purchase: {
             select: {
-              documentBase64: true,
-              sourceDocumentBase64: true,
               sellerName: true,
-              totalPurchaseCost: true
+              totalPurchaseCost: true,
+              purchasePrice: true,
+              purchaseDate: true,
+              // base64 strings EXCLUDED
             }
           },
           repairs: true,
-          sale: true 
+          sale: {
+            select: {
+              id: true,
+              salePrice: true,
+              profit: true,
+              saleDate: true,
+              // base64 strings EXCLUDED
+            }
+          } 
         }
       }),
       prisma.sale.findMany({
-        include: {
+        select: {
+          id: true,
+          salePrice: true,
+          profit: true,
+          saleDate: true,
+          customerName: true,
           vehicle: {
             select: { make: true, model: true }
           }
