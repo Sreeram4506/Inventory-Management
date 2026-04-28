@@ -98,6 +98,50 @@ router.post('/', upload.single('file'), validate(saleSchema), async (req, res, n
   }
 });
 
+router.patch('/:id', authenticateToken, authorizeManagerOrAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { salePrice, saleDate, customerName, phone, address, paymentMethod } = req.body;
+
+    const existingSale = await prisma.sale.findUnique({
+      where: { id },
+      include: { 
+        vehicle: {
+          include: { purchase: true, repairs: true }
+        }
+      }
+    });
+
+    if (!existingSale) return res.status(404).json({ message: 'Sale not found' });
+
+    let profit = existingSale.profit;
+    if (salePrice !== undefined) {
+      const vehicle = existingSale.vehicle;
+      const totalPurchaseCost = vehicle.purchase?.totalPurchaseCost || 0;
+      const totalRepairCost = vehicle.repairs.reduce((sum, r) => sum + r.partsCost + r.laborCost, 0);
+      profit = Number(salePrice) - totalPurchaseCost - totalRepairCost;
+    }
+
+    const updatedSale = await prisma.sale.update({
+      where: { id },
+      data: {
+        salePrice: salePrice !== undefined ? Number(salePrice) : undefined,
+        saleDate: saleDate ? new Date(saleDate) : undefined,
+        customerName,
+        phone,
+        address,
+        paymentMethod,
+        profit
+      }
+    });
+
+    salesCache.delete('sales-list');
+    res.json(updatedSale);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.delete('/:id', authenticateToken, authorizeManagerOrAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;

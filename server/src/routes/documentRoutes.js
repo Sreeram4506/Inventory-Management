@@ -22,6 +22,13 @@ async function getTemplateBuffer() {
   return cachedTemplateBuffer;
 }
 
+function parseCurrency(value) {
+  if (!value) return 0;
+  if (typeof value === 'number') return value;
+  const parsed = Number(String(value).replace(/[^0-9.-]+/g, ""));
+  return isNaN(parsed) ? 0 : parsed;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // ROUTE: /scan-document — Quick scan, no inventory action
 // ═══════════════════════════════════════════════════════════════
@@ -135,11 +142,11 @@ router.post(
 
       // ── Push to Inventory with status = "Available" ──
       if (isPushToInventory) {
-        const purchasePrice = Number(info.purchasePrice) || 0;
-        const transportCost = Number(info.transportCost) || 0;
-        const repairCost = Number(info.repairCost) || 0;
-        const inspectionCost = Number(info.inspectionCost) || 0;
-        const registrationCost = Number(info.registrationCost) || 0;
+        const purchasePrice = parseCurrency(info.purchasePrice);
+        const transportCost = parseCurrency(info.transportCost);
+        const repairCost = parseCurrency(info.repairCost);
+        const inspectionCost = parseCurrency(info.inspectionCost);
+        const registrationCost = parseCurrency(info.registrationCost);
         const totalPurchaseCost = purchasePrice + transportCost + inspectionCost + registrationCost;
 
         const vehicle = await prisma.vehicle.create({
@@ -289,7 +296,7 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
     console.log(`[BillOfSale] Vehicle status updated: Available → Sold`);
 
     // ── Step 5: Create Sale record (move to SALES) ──
-    const salePrice = Number(billOfSaleInfo.disposedPrice) || 0;
+    const salePrice = parseCurrency(billOfSaleInfo.disposedPrice);
     const purchaseCost = vehicle.purchase?.totalPurchaseCost || 0;
     const repairCost = vehicle.repairs?.reduce((acc, r) => acc + (r.partsCost || 0) + (r.laborCost || 0), 0) || 0;
     const profit = salePrice - purchaseCost - repairCost;
@@ -375,7 +382,7 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
         disposedState: billOfSaleInfo.disposedState || '',
         disposedZip: billOfSaleInfo.disposedZip || '',
         disposedDate: billOfSaleInfo.disposedDate || new Date().toISOString(),
-        disposedPrice: billOfSaleInfo.disposedPrice || 0,
+        disposedPrice: parseCurrency(billOfSaleInfo.disposedPrice),
         disposedOdometer: billOfSaleInfo.disposedOdometer || '',
         disposedDlNumber: billOfSaleInfo.disposedDlNumber || '',
         disposedDlState: billOfSaleInfo.disposedDlState || '',
@@ -394,7 +401,7 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
             disposedState: String(billOfSaleInfo.disposedState || ''),
             disposedZip: String(billOfSaleInfo.disposedZip || ''),
             disposedDate: billOfSaleInfo.disposedDate ? String(billOfSaleInfo.disposedDate) : null,
-            disposedPrice: billOfSaleInfo.disposedPrice ? String(billOfSaleInfo.disposedPrice) : null,
+            disposedPrice: String(parseCurrency(billOfSaleInfo.disposedPrice) || ''),
             disposedOdometer: billOfSaleInfo.disposedOdometer ? String(billOfSaleInfo.disposedOdometer) : null,
             disposedDlNumber: String(billOfSaleInfo.disposedDlNumber || ''),
             disposedDlState: String(billOfSaleInfo.disposedDlState || ''),
@@ -417,7 +424,7 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
             disposedState: String(billOfSaleInfo.disposedState || ''),
             disposedZip: String(billOfSaleInfo.disposedZip || ''),
             disposedDate: billOfSaleInfo.disposedDate ? String(billOfSaleInfo.disposedDate) : null,
-            disposedPrice: billOfSaleInfo.disposedPrice ? String(billOfSaleInfo.disposedPrice) : null,
+            disposedPrice: String(parseCurrency(billOfSaleInfo.disposedPrice) || ''),
             disposedOdometer: billOfSaleInfo.disposedOdometer ? String(billOfSaleInfo.disposedOdometer) : null,
             disposedDlNumber: String(billOfSaleInfo.disposedDlNumber || ''),
             disposedDlState: String(billOfSaleInfo.disposedDlState || ''),

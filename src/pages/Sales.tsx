@@ -7,8 +7,9 @@ import { useState } from 'react';
 import { useAuth } from '@/context/auth-hooks';
 import VehicleDetailDialog from '@/components/VehicleDetailDialog';
 import DocumentViewerDialog from '@/components/DocumentViewerDialog';
+import EditSaleDialog from '@/components/EditSaleDialog';
 import { Vehicle } from '@/types/inventory';
-import { FileText, Trash2, Loader2, Receipt, ShoppingCart, Download, Upload } from 'lucide-react';
+import { FileText, Trash2, Loader2, Receipt, ShoppingCart, Download, Upload, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { apiUrl } from '@/lib/api';
 import { toast } from '@/components/ui/toast-utils';
@@ -28,6 +29,7 @@ export default function Sales() {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [saleToEdit, setSaleToEdit] = useState<any | null>(null);
   const isStaff = user?.role === 'STAFF';
   const isManagerOrAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
 
@@ -187,7 +189,7 @@ export default function Sales() {
                           )}
                           {(vehicle?.hasDocument || vehicle?.hasSourceDocument) && <DropdownMenuSeparator />}
                           
-                          {(vehicle?.hasBillOfSale || sale.hasBillOfSale) ? (
+                      {(vehicle?.hasBillOfSale || sale.hasBillOfSale) ? (
                             <DropdownMenuItem onClick={() => handleViewDocument(vehicle || { id: sale.vehicleId, year: 0, make: 'Vehicle', model: 'Record' } as any, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-info">
                               <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
                             </DropdownMenuItem>
@@ -199,13 +201,21 @@ export default function Sales() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                       {isManagerOrAdmin && (
-                        <button 
-                          onClick={(e) => handleDeleteSale(sale.id, e)}
-                          disabled={deletingId === sale.id}
-                          className="p-1.5 rounded-lg bg-red-500/10 text-red-500 border border-red-500/20 shadow-sm active:scale-95 transition-transform disabled:opacity-50"
-                        >
-                          {deletingId === sale.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                        </button>
+                        <>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setSaleToEdit(sale); }}
+                            className="p-1.5 rounded-lg bg-primary/10 text-primary border border-primary/20 shadow-sm active:scale-95 transition-transform"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={(e) => handleDeleteSale(sale.id, e)}
+                            disabled={deletingId === sale.id}
+                            className="p-1.5 rounded-lg bg-red-500/10 text-red-500 border border-red-500/20 shadow-sm active:scale-95 transition-transform disabled:opacity-50"
+                          >
+                            {deletingId === sale.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          </button>
+                        </>
                       )}
                       <span className={cn(
                         "px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase border shadow-sm",
@@ -346,15 +356,25 @@ export default function Sales() {
                       )}
                       {isManagerOrAdmin && (
                         <td className="px-4 py-3 text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => handleDeleteSale(sale.id, e)}
-                            disabled={deletingId === sale.id}
-                            className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-                          >
-                            {deletingId === sale.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                          </Button>
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => { e.stopPropagation(); setSaleToEdit(sale); }}
+                              className="h-8 w-8 text-primary hover:bg-primary/10"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => handleDeleteSale(sale.id, e)}
+                              disabled={deletingId === sale.id}
+                              className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                            >
+                              {deletingId === sale.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                            </Button>
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -377,6 +397,12 @@ export default function Sales() {
         documentBase64={viewerDoc?.base64 || null}
         vehicleName={viewerDoc?.name || ''}
         documentType={viewerDoc?.type || ''}
+      />
+      <EditSaleDialog 
+        sale={saleToEdit}
+        open={!!saleToEdit}
+        onOpenChange={(open) => !open && setSaleToEdit(null)}
+        token={token}
       />
     </AppLayout>
   );
