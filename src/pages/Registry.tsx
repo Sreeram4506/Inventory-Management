@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/context/auth-hooks';
 import { apiUrl } from '@/lib/api';
-import { FileArchive, Download, Search, FileText, Pencil, Trash2, Eye, Filter, Receipt } from 'lucide-react';
+import { FileArchive, Download, Search, FileText, Pencil, Trash2, Eye, Filter, Receipt, ShoppingCart } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -73,7 +73,7 @@ export default function Registry() {
     setEditDialogOpen(true);
   };
 
-  const handleView = async (log: DocumentLog, isSource = false) => {
+  const handleView = async (log: DocumentLog, type: 'report' | 'source' | 'sale' = 'report') => {
     if (!token) return;
     try {
       const resp = await fetch(apiUrl(`/registry/${log.id}/data`), {
@@ -82,15 +82,26 @@ export default function Registry() {
       if (!resp.ok) throw new Error('Failed to fetch document data');
       const data = await resp.json();
       
-      const targetBase64 = isSource ? data.sourceDocumentBase64 : data.documentBase64;
+      let base64 = '';
+      let label = '';
       
-      if (targetBase64) {
+      if (type === 'report') {
+        base64 = data.documentBase64;
+        label = log.documentType || 'Used Vehicle Record';
+      } else if (type === 'source') {
+        base64 = data.sourceDocumentBase64;
+        label = 'Original Source';
+      } else if (type === 'sale') {
+        base64 = data.billOfSaleBase64;
+        label = 'Bill of Sale';
+      }
+      
+      if (base64) {
         let vehicleName = [log.year, log.make, log.model].filter(Boolean).join(' ') || 'Document';
-        if (isSource) vehicleName += ' (Source)';
-        setViewerDoc({ base64: targetBase64, name: vehicleName, type: isSource ? 'Source Document' : log.documentType });
+        setViewerDoc({ base64, name: vehicleName, type: label });
         setViewerOpen(true);
       } else {
-        toast.error(isSource ? 'No original source document available to preview.' : 'No generated document available to preview.');
+        toast.error(`No ${label.toLowerCase()} available to preview.`);
       }
     } catch (e) {
       toast.error('Error loading document preview.');
@@ -197,15 +208,21 @@ export default function Registry() {
                               <DropdownMenuContent align="end" className="bg-white border-border min-w-[160px]">
                                 <DropdownMenuItem 
                                   className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50 focus:bg-muted/50"
-                                  onClick={() => handleView(log)}
+                                  onClick={() => handleView(log, 'report')}
                                 >
                                   <FileText className="w-3.5 h-3.5 mr-2" /> Used Vehicle Record
                                 </DropdownMenuItem>
                                 <DropdownMenuItem 
                                   className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50 focus:bg-muted/50"
-                                  onClick={() => handleView(log, true)}
+                                  onClick={() => handleView(log, 'source')}
                                 >
                                   <Receipt className="w-3.5 h-3.5 mr-2" /> Original Source
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50 focus:bg-muted/50"
+                                  onClick={() => handleView(log, 'sale')}
+                                >
+                                  <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>

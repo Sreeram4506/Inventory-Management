@@ -34,14 +34,29 @@ router.get('/:id/data', authenticateToken, async (req, res, next) => {
     const { id } = req.params;
     const log = await prisma.documentRegistry.findUnique({
       where: { id },
-      select: { documentBase64: true, sourceDocumentBase64: true }
+      select: { documentBase64: true, sourceDocumentBase64: true, vin: true }
     });
     
     if (!log) {
       return res.status(404).json({ message: 'Document log not found' });
     }
     
-    res.json(log);
+    // Also try to find a Bill of Sale associated with this VIN
+    let billOfSaleBase64 = null;
+    if (log.vin) {
+      const vehicle = await prisma.vehicle.findUnique({
+        where: { vin: log.vin },
+        include: { sale: true }
+      });
+      if (vehicle?.sale?.hasBillOfSale) {
+        billOfSaleBase64 = vehicle.sale.billOfSaleBase64;
+      }
+    }
+    
+    res.json({
+      ...log,
+      billOfSaleBase64
+    });
   } catch (err) {
     console.error('[Registry Data Error]', err);
     next(err);
