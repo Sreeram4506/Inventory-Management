@@ -15,13 +15,25 @@ router.get('/', authenticateToken, async (req, res, next) => {
       orderBy: { createdAt: 'desc' },
     });
     
-    console.log(`[Registry] Found ${allLogs.length} logs in DB`);
-    // Exclude the heavy base64 strings from the list view
-    const logs = allLogs.map(({ documentBase64, sourceDocumentBase64, ...rest }) => ({
-      ...rest,
-      documentType: rest.documentType || 'Used Vehicle Record'
-    }));
+    // De-duplicate: Keep only the latest entry for each (VIN + DocumentType) combination
+    const uniqueLogsMap = new Map();
     
+    allLogs.forEach(log => {
+      const type = log.documentType || 'Used Vehicle Record';
+      const key = `${log.vin}-${type}`;
+      
+      // Since it's ordered by createdAt DESC, the first one we see is the latest
+      if (!uniqueLogsMap.has(key)) {
+        const { documentBase64, sourceDocumentBase64, ...rest } = log;
+        uniqueLogsMap.set(key, {
+          ...rest,
+          documentType: type
+        });
+      }
+    });
+
+    const logs = Array.from(uniqueLogsMap.values());
+    console.log(`[Registry] Found ${allLogs.length} logs, returning ${logs.length} unique entries`);
     res.json(logs);
   } catch (err) {
     console.error('[Registry Error]', err);

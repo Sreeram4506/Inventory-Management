@@ -103,41 +103,45 @@ router.post(
         });
       }
 
-      // ── Check for duplicate in registry ──
-      const existingLog = await prisma.documentRegistry.findFirst({
-        where: { vin: info.vin, documentType: 'Used Vehicle Record' },
-        orderBy: { createdAt: 'desc' }
-      });
-      if (existingLog && (Date.now() - new Date(existingLog.createdAt).getTime()) < 5 * 60 * 1000) {
-        return res.status(409).json({ 
-          status: 'error', 
-          message: `Vehicle with VIN ${info.vin} already exists in inventory.` 
-        });
-      }
-
-      // ── Save to Document Registry ──
+      // ── Save/Update in Document Registry ──
       try {
-        await prisma.documentRegistry.create({
-          data: {
-            vin: info.vin,
-            make: info.make || null,
-            model: info.model || null,
-            year: info.year ? String(info.year) : null,
-            titleNumber: info.titleNumber || null,
-            purchasedFrom: info.purchasedFrom || null,
-            sellerAddress: info.usedVehicleSourceAddress || null,
-            sellerCity: info.usedVehicleSourceCity || null,
-            sellerState: info.usedVehicleSourceState || null,
-            sellerZip: info.usedVehicleSourceZipCode || null,
-            documentType: 'Used Vehicle Record',
-            documentBase64: pdfBase64Str,
-            sourceFileName: sourceFile.originalname || null,
-            sourceDocumentBase64: sourceFile.buffer.toString('base64'),
-          }
+        const docData = {
+          vin: info.vin,
+          make: info.make || null,
+          model: info.model || null,
+          year: info.year ? String(info.year) : null,
+          titleNumber: info.titleNumber || null,
+          purchasedFrom: info.purchasedFrom || null,
+          sellerAddress: info.usedVehicleSourceAddress || null,
+          sellerCity: info.usedVehicleSourceCity || null,
+          sellerState: info.usedVehicleSourceState || null,
+          sellerZip: info.usedVehicleSourceZipCode || null,
+          documentType: 'Used Vehicle Record',
+          documentBase64: pdfBase64Str,
+          sourceFileName: sourceFile.originalname || null,
+          sourceDocumentBase64: sourceFile.buffer.toString('base64'),
+          createdAt: new Date() // Refresh timestamp to move to top
+        };
+
+        const existingLog = await prisma.documentRegistry.findFirst({
+          where: { vin: info.vin, documentType: 'Used Vehicle Record' }
         });
+
+        if (existingLog) {
+          await prisma.documentRegistry.update({
+            where: { id: existingLog.id },
+            data: docData
+          });
+          console.log(`[Registry] Updated existing log for VIN: ${info.vin}`);
+        } else {
+          await prisma.documentRegistry.create({
+            data: docData
+          });
+          console.log(`[Registry] Created new log for VIN: ${info.vin}`);
+        }
         registryId = 'logged';
       } catch (logErr) {
-        console.error('Failed to save to DocumentRegistry:', logErr);
+        console.error('Failed to save/update DocumentRegistry:', logErr);
       }
 
       // ── Push to Inventory with status = "Available" ──
