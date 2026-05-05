@@ -19,17 +19,6 @@ export default function Dashboard() {
   const isAdmin = user?.role === 'ADMIN';
   const isStaff = user?.role === 'STAFF';
 
-  if (isError) {
-    return (
-      <AppLayout>
-        <QueryErrorState
-          title="Could not load dashboard data"
-          description="The unified dashboard query failed, likely due to a network issue or session timeout."
-        />
-      </AppLayout>
-    );
-  }
-
   // Map data with fallbacks
   const vehicles = data?.vehicles || [];
   const sales = data?.sales || [];
@@ -64,6 +53,17 @@ export default function Dashboard() {
     revenue: s.salePrice,
     profit: s.profit
   })), [sales]);
+
+  if (isError) {
+    return (
+      <AppLayout>
+        <QueryErrorState
+          title="Could not load dashboard data"
+          description="The unified dashboard query failed, likely due to a network issue or session timeout."
+        />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>

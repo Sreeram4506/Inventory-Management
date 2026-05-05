@@ -50,18 +50,6 @@ export default function Inventory() {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const isStaff = user?.role === 'STAFF';
 
-  if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading inventory...</div>;
-  if (isError) {
-    return (
-      <AppLayout>
-        <QueryErrorState
-          title="Could not load inventory"
-          description="The inventory API request failed, so the page is not showing fallback zero values."
-        />
-      </AppLayout>
-    );
-  }
-
   // useDeferredValue keeps the search input responsive while filtering is deferred
   const deferredSearch = useDeferredValue(search);
 
@@ -74,6 +62,18 @@ export default function Inventory() {
       `${v.make} ${v.model} ${v.vin} ${v.year}`.toLowerCase().includes(term)
     );
   }, [vehicles, deferredSearch]);
+
+  if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading inventory...</div>;
+  if (isError) {
+    return (
+      <AppLayout>
+        <QueryErrorState
+          title="Could not load inventory"
+          description="The inventory API request failed, so the page is not showing fallback zero values."
+        />
+      </AppLayout>
+    );
+  }
 
   const handleViewDocument = async (vehicle: Vehicle, type: 'report' | 'source') => {
     if (!token) return;
