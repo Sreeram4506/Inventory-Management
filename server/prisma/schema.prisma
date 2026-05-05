@@ -43,7 +43,26 @@ model Vehicle {
   // Activity tracking
   createdById       String?  @db.ObjectId
   createdBy         User?    @relation(fields: [createdById], references: [id])
+  customerNotes     CustomerNote[]
+
+  // Indexes for common query patterns
+  @@index([status])           // Dashboard filters by status
+  @@index([createdAt])        // Sorted listing by creation date
 }
+
+model CustomerNote {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  vehicle      Vehicle  @relation(fields: [vehicleId], references: [id])
+  vehicleId    String   @db.ObjectId
+  customerName String
+  phone        String
+  email        String?
+  note         String
+  createdAt    DateTime @default(now())
+
+  @@index([vehicleId])        // Lookup notes by vehicle
+}
+
 
 model Purchase {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
@@ -77,6 +96,8 @@ model Repair {
   description     String?
   repairDate      DateTime @default(now())
   createdAt       DateTime @default(now())
+
+  @@index([vehicleId])        // Lookup repairs by vehicle
 }
 
 model Sale {
@@ -109,6 +130,9 @@ model Sale {
   hasBillOfSale    Boolean  @default(false)
 
   createdAt      DateTime @default(now())
+
+  @@index([saleDate])         // Dashboard sorted by sale date
+  @@index([createdById])      // Team analytics queries
 }
 
 model AdvertisingExpense {
@@ -164,4 +188,6 @@ model DocumentRegistry {
   disposedDlState   String?
 
   createdAt         DateTime @default(now())
+
+  @@index([vin])              // VIN lookup for document searches
 }

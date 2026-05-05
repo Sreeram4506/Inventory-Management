@@ -13,8 +13,7 @@ export interface DashboardSummary {
 }
 
 export function useDashboard() {
-  const { user, token, logout } = useAuth();
-  const isManagerOrAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
+  const { token, logout } = useAuth();
 
   const dashboardQuery = useQuery({
     queryKey: ['dashboard-summary'],
@@ -22,7 +21,7 @@ export function useDashboard() {
       const response = await apiFetch('/dashboard/summary', token);
       return handleApiResponse<DashboardSummary>(response, logout);
     },
-    enabled: !!token && isManagerOrAdmin,
+    enabled: !!token,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 

@@ -3,15 +3,15 @@ import { useInventory } from '@/hooks/useInventory';
 import { useAuth } from '@/context/auth-hooks';
 import { Vehicle } from '@/types/inventory';
 import { cn } from '@/lib/utils';
-import { Search, Plus, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+// Consolidated icon imports — avoids duplicate module references
+import { Search, Plus, ChevronRight, Pencil, Trash2, AlertTriangle, FileText, ShoppingCart, LayoutGrid, List, Receipt } from 'lucide-react';
+import { useState, useMemo, useDeferredValue } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AddVehicleDialog from '@/components/AddVehicleDialog';
 import QueryErrorState from '@/components/QueryErrorState';
 import VehicleDetailDialog from '@/components/VehicleDetailDialog';
 import DocumentViewerDialog from '@/components/DocumentViewerDialog';
-import { Pencil, Trash2, AlertTriangle, FileText, Eye, ShoppingCart } from 'lucide-react';
 import { apiUrl } from '@/lib/api';
 import { toast } from '@/components/ui/toast-utils';
 import { 
@@ -30,7 +30,6 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
-import { Receipt } from 'lucide-react';
 
 const statusStyles: Record<string, string> = {
   Available: 'bg-profit/10 text-profit border-profit/20',
@@ -48,6 +47,7 @@ export default function Inventory() {
   const { token, user } = useAuth();
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const isStaff = user?.role === 'STAFF';
 
   if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading inventory...</div>;
@@ -62,9 +62,18 @@ export default function Inventory() {
     );
   }
 
-  const filtered = vehicles.filter(v =>
-    `${v.make} ${v.model} ${v.vin} ${v.year}`.toLowerCase().includes(search.toLowerCase())
-  );
+  // useDeferredValue keeps the search input responsive while filtering is deferred
+  const deferredSearch = useDeferredValue(search);
+
+  // useMemo prevents recalculating the filter on unrelated state changes
+  // (e.g., opening a dialog, changing view mode)
+  const filtered = useMemo(() => {
+    if (!deferredSearch) return vehicles;
+    const term = deferredSearch.toLowerCase();
+    return vehicles.filter(v =>
+      `${v.make} ${v.model} ${v.vin} ${v.year}`.toLowerCase().includes(term)
+    );
+  }, [vehicles, deferredSearch]);
 
   const handleViewDocument = async (vehicle: Vehicle, type: 'report' | 'source') => {
     if (!token) return;
@@ -91,6 +100,8 @@ export default function Inventory() {
     }
   };
 
+
+
   return (
     <AppLayout>
       <div className="space-y-5 page-enter">
@@ -103,12 +114,28 @@ export default function Inventory() {
                 <span className="text-primary font-bold">{vehicles.length}</span> total vehicles <span className="text-border mx-2">|</span> <span className="text-profit font-bold">{vehicles.filter(v => v.status === 'Available').length}</span> ready for sale
               </p>
             </div>
-            <Button 
-              onClick={() => setDialogOpen(true)} 
-              className="gap-2 h-11 px-6 rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
-            >
-              <Plus className="w-5 h-5" /> Add New Vehicle
-            </Button>
+            <div className="flex items-center gap-2">
+              <div className="hidden md:flex bg-muted p-1 rounded-xl border border-border/50 mr-2">
+                <button 
+                  onClick={() => setViewMode('list')}
+                  className={cn("p-2 rounded-lg transition-all", viewMode === 'list' ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                >
+                  <List className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => setViewMode('grid')}
+                  className={cn("p-2 rounded-lg transition-all", viewMode === 'grid' ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+              </div>
+              <Button 
+                onClick={() => setDialogOpen(true)} 
+                className="gap-2 h-11 px-6 rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
+              >
+                <Plus className="w-5 h-5" /> Add New Vehicle
+              </Button>
+            </div>
           </div>
 
           <div className="relative w-full max-w-xl group">
@@ -226,108 +253,168 @@ export default function Inventory() {
           )}
         </div>
 
-        {/* Desktop View: Table */}
-        <div className="hidden md:block bg-card rounded-xl border border-border overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Vehicle</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">VIN</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Year</th>
-                  {!isStaff && (
-                    <>
-                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Purchase</th>
-                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Cost</th>
-                    </>
-                  )}
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Days</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-20"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((vehicle) => (
-                  <tr 
-                    key={vehicle.id} 
-                    onClick={() => setSelectedVehicle(vehicle)}
-                    className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors cursor-pointer group"
-                  >
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-foreground text-sm">{vehicle.make} {vehicle.model}</p>
-                      <p className="text-[11px] text-muted-foreground">{vehicle.color} · {vehicle.mileage.toLocaleString()} mi</p>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{vehicle.vin.slice(-8)}</td>
-                    <td className="px-4 py-3 text-sm text-foreground">{vehicle.year}</td>
-                    {!isStaff && (
-                      <>
-                        <td className="px-4 py-3 text-sm font-medium text-foreground tabular-nums">${vehicle.purchasePrice.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-sm font-semibold text-profit tabular-nums">${((vehicle.totalPurchaseCost || 0) + (vehicle.repairCost || 0)).toLocaleString()}</td>
-                      </>
-                    )}
-                    <td className="px-4 py-3">
-                      <span className={cn("text-sm font-medium", vehicle.daysInInventory >= 60 ? "text-warning" : "text-foreground")}>
-                        {vehicle.daysInInventory}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className={cn("px-2 py-0.5 rounded text-[10px] font-semibold border", statusStyles[vehicle.status])}>
-                          {vehicle.status}
-                        </span>
-                        {(vehicle.hasDocument || vehicle.hasSourceDocument || vehicle.hasBillOfSale) && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="h-7 w-7 p-0 text-profit/60 hover:text-profit hover:bg-profit/10"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <FileText className="w-3.5 h-3.5" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="bg-white border-border min-w-[160px]">
-                              {vehicle.hasDocument && (
-                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2">
-                                  <FileText className="w-3.5 h-3.5 mr-2" /> Used Vehicle Record
-                                </DropdownMenuItem>
-                              )}
-                              {vehicle.hasSourceDocument && (
-                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2">
-                                  <Receipt className="w-3.5 h-3.5 mr-2" /> Original Source
-                                </DropdownMenuItem>
-                              )}
-                              {vehicle.hasBillOfSale && (
-                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-info">
-                                  <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+        {/* Desktop View: Table or Grid */}
+        <div className="hidden md:block">
+          {viewMode === 'list' ? (
+            <div className="bg-card rounded-xl border border-border overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full" role="table" aria-label="Vehicle inventory">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Vehicle</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">VIN</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Year</th>
+                      {!isStaff && (
+                        <>
+                          <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Purchase</th>
+                          <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Cost</th>
+                        </>
+                      )}
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Days</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider w-20"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((vehicle) => (
+                      <tr 
+                        key={vehicle.id} 
+                        onClick={() => setSelectedVehicle(vehicle)}
+                        className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors cursor-pointer group"
+                      >
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-foreground text-sm">{vehicle.make} {vehicle.model}</p>
+                          <p className="text-[11px] text-muted-foreground">{vehicle.color} · {vehicle.mileage.toLocaleString()} mi</p>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{vehicle.vin.slice(-8)}</td>
+                        <td className="px-4 py-3 text-sm text-foreground">{vehicle.year}</td>
+                        {!isStaff && (
+                          <>
+                            <td className="px-4 py-3 text-sm font-medium text-foreground tabular-nums">${vehicle.purchasePrice.toLocaleString()}</td>
+                            <td className="px-4 py-3 text-sm font-semibold text-profit tabular-nums">${((vehicle.totalPurchaseCost || 0) + (vehicle.repairCost || 0)).toLocaleString()}</td>
+                          </>
                         )}
+                        <td className="px-4 py-3">
+                          <span className={cn("text-sm font-medium", vehicle.daysInInventory >= 60 ? "text-warning" : "text-foreground")}>
+                            {vehicle.daysInInventory}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className={cn("px-2 py-0.5 rounded text-[10px] font-semibold border", statusStyles[vehicle.status])}>
+                              {vehicle.status}
+                            </span>
+                            {(vehicle.hasDocument || vehicle.hasSourceDocument || vehicle.hasBillOfSale) && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-7 w-7 p-0 text-profit/60 hover:text-profit hover:bg-profit/10"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <FileText className="w-3.5 h-3.5" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="bg-white border-border min-w-[160px]">
+                                  {vehicle.hasDocument && (
+                                    <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2">
+                                      <FileText className="w-3.5 h-3.5 mr-2" /> Used Vehicle Record
+                                    </DropdownMenuItem>
+                                  )}
+                                  {vehicle.hasSourceDocument && (
+                                    <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2">
+                                      <Receipt className="w-3.5 h-3.5 mr-2" /> Original Source
+                                    </DropdownMenuItem>
+                                  )}
+                                  {vehicle.hasBillOfSale && (
+                                    <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-info">
+                                      <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setSelectedVehicle(vehicle)}>
+                               <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-7 w-7 p-0 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => setVehicleToDelete(vehicle)}
+                            >
+                               <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filtered.map((vehicle) => (
+                <div 
+                  key={vehicle.id}
+                  onClick={() => setSelectedVehicle(vehicle)}
+                  className="group relative flex flex-col bg-card/60 backdrop-blur-xl border border-border/50 rounded-3xl overflow-hidden cursor-pointer hover:shadow-2xl hover:shadow-primary/10 transition-all duration-500 hover:-translate-y-2"
+                >
+                  {/* Vehicle "Cover" Image/Gradient */}
+                  <div className="relative h-32 overflow-hidden bg-gradient-to-br from-primary/20 via-primary/5 to-card">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1),transparent)]" />
+                    <div className="absolute bottom-3 left-4">
+                       <span className={cn("px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border backdrop-blur-md shadow-sm", statusStyles[vehicle.status])}>
+                         {vehicle.status}
+                       </span>
+                    </div>
+                  </div>
+
+                  <div className="p-5 flex-1 flex flex-col">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h3 className="font-display font-black text-lg text-foreground tracking-tight group-hover:text-primary transition-colors leading-tight">
+                          {vehicle.year} {vehicle.make}
+                        </h3>
+                        <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest">{vehicle.model}</p>
                       </div>
-                    </td>
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setSelectedVehicle(vehicle)}>
-                           <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-7 w-7 p-0 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => setVehicleToDelete(vehicle)}
-                        >
-                           <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                      <div className="p-2 bg-muted/50 rounded-xl group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                        <ChevronRight className="w-4 h-4" />
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-5 py-3 border-y border-border/30">
+                      <div>
+                        <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest mb-1">Mileage</p>
+                        <p className="text-xs font-bold text-foreground tabular-nums">{vehicle.mileage.toLocaleString()} mi</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest mb-1">Aging</p>
+                        <p className={cn("text-xs font-bold tabular-nums", vehicle.daysInInventory >= 60 ? "text-warning" : "text-foreground")}>
+                          {vehicle.daysInInventory} Days
+                        </p>
+                      </div>
+                    </div>
+
+                    {!isStaff && (
+                      <div className="mt-auto">
+                        <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest mb-1">Total Investment</p>
+                        <p className="text-2xl font-black text-profit tabular-nums tracking-tighter">
+                          ${((vehicle.totalPurchaseCost || 0) + (vehicle.repairCost || 0)).toLocaleString()}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <AlertDialog open={!!vehicleToDelete} onOpenChange={(open) => !open && setVehicleToDelete(null)}>
             <AlertDialogContent className="bg-card border-border">

@@ -496,8 +496,9 @@ router.patch('/:id', authenticateToken, async (req, res, next) => {
 
 router.delete('/:id', authenticateToken, authorizeAdmin, async (req, res, next) => {
   try {
-    // Delete associated purchase, repairs, and sale first in a transaction
+    // Delete associated records in order, including customer notes
     await prisma.$transaction([
+      prisma.customerNote.deleteMany({ where: { vehicleId: req.params.id } }),
       prisma.sale.deleteMany({ where: { vehicleId: req.params.id } }),
       prisma.purchase.deleteMany({ where: { vehicleId: req.params.id } }),
       prisma.repair.deleteMany({ where: { vehicleId: req.params.id } }),

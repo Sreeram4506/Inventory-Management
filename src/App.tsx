@@ -5,16 +5,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, memo } from "react";
 
 // Preload critical routes
 const preloadDashboard = () => import("./pages/Index");
 const preloadInventory = () => import("./pages/Inventory");
 
-// Standard imports for reporting to avoid lazy-loading issues during transition
-import Reports from "./pages/Reports";
-
-// Lazy load other pages for code splitting
+// Lazy load ALL pages for code splitting (Reports was previously eager-imported)
 const Index = lazy(preloadDashboard);
 const Inventory = lazy(preloadInventory);
 const Sales = lazy(() => import("./pages/Sales"));
@@ -24,41 +21,47 @@ const CashFlow = lazy(() => import("./pages/CashFlow"));
 const UsedVehicleForms = lazy(() => import("./pages/UsedVehicleForms"));
 const Registry = lazy(() => import("./pages/Registry"));
 const TeamAnalytics = lazy(() => import("./pages/TeamAnalytics"));
+const Reports = lazy(() => import("./pages/Reports"));
 const Login = lazy(() => import("./pages/Login"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-// Preload manager component
-function PreloadManager() {
+// Preload manager — memoized to prevent re-renders from parent
+const PreloadManager = memo(function PreloadManager() {
   const location = useLocation();
 
   useEffect(() => {
+    // Predictive preloading: load the next likely route
     if (location.pathname === '/login') {
       preloadDashboard();
     }
     if (location.pathname === '/') {
       preloadInventory();
     }
-  }, [location]);
+  }, [location.pathname]); // Only re-run when pathname changes, not entire location object
 
   return null;
-}
+});
 
-// Loading component
-const PageLoader = () => (
-  <div className="flex h-screen items-center justify-center bg-card text-foreground">
-    <div className="flex flex-col items-center gap-4">
-      <div className="w-12 h-12 rounded-full border-4 border-profit/20 border-t-profit animate-spin" />
-      <p className="text-muted-foreground font-display animate-pulse font-bold tracking-widest text-xs uppercase">Loading Hub...</p>
+// Loading component — memoized since it never changes
+const PageLoader = memo(function PageLoader() {
+  return (
+    <div className="flex h-screen items-center justify-center bg-card text-foreground" role="status" aria-label="Loading page">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-12 h-12 rounded-full border-4 border-profit/20 border-t-profit animate-spin" aria-hidden="true" />
+        <p className="text-muted-foreground font-display animate-pulse font-bold tracking-widest text-xs uppercase">Loading Hub...</p>
+      </div>
     </div>
-  </div>
-);
+  );
+});
 
+// QueryClient configured once at module scope — stable reference
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
-      staleTime: 5 * 60 * 1000,
+      staleTime: 5 * 60 * 1000, // 5 minutes — reduces redundant fetches
+      gcTime: 10 * 60 * 1000,   // 10 minutes — keeps unused data in cache longer for back-nav
     },
   },
 });
@@ -68,7 +71,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <TooltipProvider>
+          <TooltipProvider delayDuration={300}>
             <Suspense fallback={<PageLoader />}>
               <PreloadManager />
               <Routes>

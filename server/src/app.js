@@ -17,8 +17,13 @@ import registryRoutes from './routes/registryRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import teamRoutes from './routes/teamRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
+import noteRoutes from './routes/noteRoutes.js';
+
 
 const app = express();
+
+// Enable ETags for conditional GET responses — saves bandwidth on repeated requests
+app.set('etag', 'strong');
 
 // Set security HTTP headers with custom CSP for PDF blob support
 app.use(helmet({
@@ -35,14 +40,21 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-// Enable compression
-app.use(compression());
+// Enable compression with smart filtering —
+// skip compression for already-compressed binary data (PDFs, images)
+app.use(compression({
+  threshold: 1024,  // Only compress responses > 1KB
+  filter: (req, res) => {
+    // Don't compress document download responses (already binary)
+    if (req.path.includes('/document')) return false;
+    return compression.filter(req, res);
+  },
+}));
 
-// Logging
+// Logging — use 'tiny' format in dev for less noise
 if (process.env.NODE_ENV !== 'production') {
-  app.use(morgan('dev'));
+  app.use(morgan('tiny'));
 } else {
-  // Use combined format for production
   app.use(morgan('combined'));
 }
 
@@ -85,6 +97,8 @@ app.use('/api/registry', registryRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/team', teamRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/notes', noteRoutes);
+
 app.use('/api', documentRoutes);
 
 // Custom error handling middleware
@@ -92,5 +106,3 @@ app.use(notFound);
 app.use(errorHandler);
 
 export default app;
-
-

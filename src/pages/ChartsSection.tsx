@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 
 interface ChartsSectionProps {
@@ -7,20 +8,22 @@ interface ChartsSectionProps {
   COLORS: string[];
 }
 
-export default function ChartsSection({ salesHistory, inventoryStatusData, profitData, COLORS }: ChartsSectionProps) {
+// Memoized — recharts is expensive to re-render and the chart data only changes
+// when the dashboard summary data changes, not on every parent render
+const ChartsSection = memo(function ChartsSection({ salesHistory, inventoryStatusData, profitData, COLORS }: ChartsSectionProps) {
   return (
     <>
       {/* Revenue & Profit Area Chart */}
-      <div className="stat-card lg:col-span-2 overflow-hidden">
+      <div className="stat-card lg:col-span-2 overflow-hidden" role="figure" aria-label="Revenue and Profit chart">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-foreground">Revenue & Profit</h3>
           <div className="flex items-center gap-4 text-[11px]">
             <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-info" />
+              <div className="w-2 h-2 rounded-full bg-info" aria-hidden="true" />
               <span className="text-muted-foreground">Revenue</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-profit" />
+              <div className="w-2 h-2 rounded-full bg-profit" aria-hidden="true" />
               <span className="text-muted-foreground">Profit</span>
             </div>
           </div>
@@ -57,7 +60,7 @@ export default function ChartsSection({ salesHistory, inventoryStatusData, profi
       </div>
 
       {/* Inventory Status Pie */}
-      <div className="stat-card">
+      <div className="stat-card" role="figure" aria-label="Inventory status distribution">
         <h3 className="font-semibold text-foreground mb-4">Inventory Status</h3>
         <ResponsiveContainer width="100%" height={260}>
           <PieChart>
@@ -88,7 +91,7 @@ export default function ChartsSection({ salesHistory, inventoryStatusData, profi
       </div>
 
       {/* Profit Bar Chart */}
-      <div className="stat-card">
+      <div className="stat-card" role="figure" aria-label="Top vehicle profits">
         <h3 className="font-semibold text-foreground mb-4">Top Vehicle Profits</h3>
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={profitData} layout="vertical" margin={{ left: 10 }}>
@@ -111,4 +114,6 @@ export default function ChartsSection({ salesHistory, inventoryStatusData, profi
       </div>
     </>
   );
-}
+});
+
+export default ChartsSection;

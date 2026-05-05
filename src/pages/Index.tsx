@@ -4,10 +4,10 @@ import { useDashboard } from '@/hooks/useDashboard';
 import { useAuth } from '@/context/auth-hooks';
 import { Car, ShoppingCart, DollarSign, TrendingUp, Package, Megaphone, Users } from 'lucide-react';
 import QueryErrorState from '@/components/QueryErrorState';
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useState, useMemo } from 'react';
 import RevenueReportDialog from '@/components/RevenueReportDialog';
 
-// Lazy load charts
+// Lazy load charts — recharts is ~200KB and only shown for non-staff users
 const ChartsSection = lazy(() => import('./ChartsSection'));
 
 const COLORS = ['#10b981', '#f59e0b', '#3b82f6', '#ef4444'];
@@ -37,29 +37,33 @@ export default function Dashboard() {
   const expenses = data?.expenses || [];
   const team = data?.team || [];
 
-  const inventoryStatusData = [
+  // Memoize all derived computations — these were recalculating on every render
+  // (e.g., when the report modal opens/closes), but only depend on the data arrays
+  const inventoryStatusData = useMemo(() => [
     { name: 'Available', value: vehicles.filter(v => v.status === 'Available').length },
     { name: 'Reserved', value: vehicles.filter(v => v.status === 'Reserved').length },
     { name: 'Sold', value: vehicles.filter(v => v.status === 'Sold').length },
-  ];
+  ], [vehicles]);
 
-  const profitData = sales.slice(0, 5).map(s => ({
+  const profitData = useMemo(() => sales.slice(0, 5).map(s => ({
     vehicle: s.vehicle ? `${s.vehicle.make} ${s.vehicle.model}` : 'Unknown',
     profit: s.profit,
-  }));
+  })), [sales]);
 
-  const totalRevenue = sales.reduce((sum, s) => sum + s.salePrice, 0);
-  const totalProfit = sales.reduce((sum, s) => sum + s.profit, 0);
-  const totalAdSpend = ads.reduce((sum, a) => sum + a.amountSpent, 0);
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const inventoryValue = vehicles.filter(v => v.status !== 'Sold').reduce((sum, v) => sum + (v.totalPurchaseCost || 0) + (v.repairCost || 0), 0);
+  const { totalRevenue, totalProfit, totalAdSpend, totalExpenses, inventoryValue } = useMemo(() => ({
+    totalRevenue: sales.reduce((sum, s) => sum + s.salePrice, 0),
+    totalProfit: sales.reduce((sum, s) => sum + s.profit, 0),
+    totalAdSpend: ads.reduce((sum, a) => sum + a.amountSpent, 0),
+    totalExpenses: expenses.reduce((sum, e) => sum + e.amount, 0),
+    inventoryValue: vehicles.filter(v => v.status !== 'Sold').reduce((sum, v) => sum + (v.totalPurchaseCost || 0) + (v.repairCost || 0), 0),
+  }), [sales, ads, expenses, vehicles]);
   
   // Recent sales for AreaChart
-  const salesHistory = sales.slice(0, 7).reverse().map(s => ({
+  const salesHistory = useMemo(() => sales.slice(0, 7).reverse().map(s => ({
     date: new Date(s.saleDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
     revenue: s.salePrice,
     profit: s.profit
-  }));
+  })), [sales]);
 
   return (
     <AppLayout>
@@ -73,7 +77,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             {isAdmin && (
               <div className="hidden sm:flex items-center gap-2 bg-profit/10 px-3 py-1.5 rounded-full border border-profit/20 shadow-sm">
-                <div className="relative flex h-2 w-2">
+                <div className="relative flex h-2 w-2" aria-hidden="true">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-profit opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-profit"></span>
                 </div>
@@ -84,14 +88,14 @@ export default function Dashboard() {
               onClick={() => window.location.href = '/inventory'}
               className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
             >
-              <Car className="w-4 h-4" />
+              <Car className="w-4 h-4" aria-hidden="true" />
               Manage Inventory
             </button>
           </div>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3" role="region" aria-label="Key metrics">
           <StatCard label="Inventory" value={isLoading ? "..." : String(vehicles.length)} icon={Car} />
           <StatCard label="Units Sold" value={isLoading ? "..." : String(sales.length)} icon={ShoppingCart} />
           {!isStaff && (
@@ -118,7 +122,7 @@ export default function Dashboard() {
         {!isStaff && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <Suspense fallback={
-              <div className="lg:col-span-3 flex items-center justify-center h-72 bg-card rounded-xl border border-border/60">
+              <div className="lg:col-span-3 flex items-center justify-center h-72 bg-card rounded-xl border border-border/60" role="status">
                 <div className="text-muted-foreground text-sm">Loading charts...</div>
               </div>
             }>
@@ -136,9 +140,9 @@ export default function Dashboard() {
         {isAdmin && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Recent Expenses */}
-            <div className="stat-card">
+            <section className="stat-card" aria-labelledby="expenses-heading">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-foreground">Recent Expenses</h3>
+                <h3 id="expenses-heading" className="font-semibold text-foreground">Recent Expenses</h3>
                 <span className="text-[11px] text-muted-foreground">Last 30 Days</span>
               </div>
               <div className="space-y-2">
@@ -149,7 +153,7 @@ export default function Dashboard() {
                 ) : expenses.length > 0 ? expenses.slice(0, 5).map((exp) => (
                   <div key={exp.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center text-muted-foreground">
+                      <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center text-muted-foreground" aria-hidden="true">
                         <DollarSign className="w-3.5 h-3.5" />
                       </div>
                       <div>
@@ -163,12 +167,12 @@ export default function Dashboard() {
                   <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">No recent expenses.</div>
                 )}
               </div>
-            </div>
+            </section>
 
             {/* Team Performance */}
-            <div className="stat-card">
+            <section className="stat-card" aria-labelledby="team-heading">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-foreground">Team Performance</h3>
+                <h3 id="team-heading" className="font-semibold text-foreground">Team Performance</h3>
                 <span className="text-[11px] text-muted-foreground">Staff & Managers</span>
               </div>
               <div className="space-y-2">
@@ -179,7 +183,7 @@ export default function Dashboard() {
                 ) : team.length > 0 ? team.map((member) => (
                   <div key={member.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center text-muted-foreground">
+                      <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center text-muted-foreground" aria-hidden="true">
                         <Users className="w-3.5 h-3.5" />
                       </div>
                       <div>
@@ -196,7 +200,7 @@ export default function Dashboard() {
                   <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">No team members found.</div>
                 )}
               </div>
-            </div>
+            </section>
           </div>
         )}
       </div>

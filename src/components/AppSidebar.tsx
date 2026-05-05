@@ -4,7 +4,7 @@ import {
   Receipt, ChevronLeft, ChevronRight,
   LogOut, User as UserIcon, BarChart3, FileCheck2, FileArchive, Users
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, memo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/auth-hooks';
 
@@ -17,25 +17,32 @@ const navItems = [
   { to: '/registry', icon: FileArchive, label: 'Registry', roles: ['ADMIN', 'MANAGER'] },
   { to: '/reports', icon: BarChart3, label: 'Reports', roles: ['ADMIN', 'MANAGER'] },
   { to: '/team-analytics', icon: Users, label: 'Team', roles: ['ADMIN'] },
-];
+] as const;
 
-export default function AppSidebar() {
+// Memoized to prevent re-renders when page content changes but sidebar state hasn't
+const AppSidebar = memo(function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { user, logout } = useAuth();
+
+  const toggleCollapsed = useCallback(() => setCollapsed(prev => !prev), []);
 
   const filteredNavItems = navItems.filter(item => 
     !item.roles || (user && item.roles.includes(user.role))
   );
 
   return (
-    <aside className={cn(
-      "hidden md:flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-200 h-screen sticky top-0 shrink-0 z-40",
-      collapsed ? "w-[68px]" : "w-[240px]"
-    )}>
+    <aside 
+      className={cn(
+        "hidden md:flex flex-col bg-sidebar/80 backdrop-blur-xl border-r border-sidebar-border shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-all duration-200 h-screen sticky top-0 shrink-0 z-40",
+        collapsed ? "w-[68px]" : "w-[240px]"
+      )}
+      role="navigation"
+      aria-label="Main navigation"
+    >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
-        <div className="w-8 h-8 rounded-lg bg-sidebar-primary/90 flex items-center justify-center shrink-0">
+        <div className="w-8 h-8 rounded-lg bg-sidebar-primary/90 flex items-center justify-center shrink-0" aria-hidden="true">
           <Car className="w-4 h-4 text-sidebar-primary-foreground" />
         </div>
         {!collapsed && (
@@ -45,13 +52,14 @@ export default function AppSidebar() {
         )}
       </div>
 
-      <nav className="flex-1 px-3 py-6 space-y-1.5">
+      <nav className="flex-1 px-3 py-6 space-y-1.5" aria-label="Primary">
         {filteredNavItems.map((item) => {
           const isActive = location.pathname === item.to;
           return (
             <NavLink
               key={item.to}
               to={item.to}
+              aria-current={isActive ? 'page' : undefined}
               className={cn(
                 "group flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 relative",
                 isActive
@@ -60,9 +68,9 @@ export default function AppSidebar() {
               )}
             >
               {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-sidebar-primary rounded-r-full shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-sidebar-primary rounded-r-full shadow-[0_0_8px_rgba(16,185,129,0.4)]" aria-hidden="true" />
               )}
-              <item.icon className={cn("w-[18px] h-[18px] shrink-0 transition-transform group-hover:scale-110", isActive && "text-sidebar-primary")} />
+              <item.icon className={cn("w-[18px] h-[18px] shrink-0 transition-transform group-hover:scale-110", isActive && "text-sidebar-primary")} aria-hidden="true" />
               {!collapsed && <span className="truncate tracking-tight">{item.label}</span>}
             </NavLink>
           );
@@ -75,7 +83,7 @@ export default function AppSidebar() {
           "flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] text-sidebar-muted",
           collapsed && "justify-center"
         )}>
-          <UserIcon className="w-[18px] h-[18px] shrink-0" />
+          <UserIcon className="w-[18px] h-[18px] shrink-0" aria-hidden="true" />
           {!collapsed && (
             <div className="flex flex-col min-w-0">
               <span className="font-medium text-sidebar-accent-foreground truncate">{user?.name}</span>
@@ -86,26 +94,30 @@ export default function AppSidebar() {
         
         <button
           onClick={logout}
+          aria-label="Sign out"
           className={cn(
             "flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] text-destructive/80 hover:bg-destructive/10 hover:text-destructive w-full transition-colors",
             collapsed && "justify-center"
           )}
         >
-          <LogOut className="w-[18px] h-[18px] shrink-0" />
+          <LogOut className="w-[18px] h-[18px] shrink-0" aria-hidden="true" />
           {!collapsed && <span>Sign Out</span>}
         </button>
 
         <button
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           className={cn(
             "flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] text-sidebar-foreground hover:bg-sidebar-accent/60 w-full transition-colors",
             collapsed && "justify-center"
           )}
         >
-          {collapsed ? <ChevronRight className="w-[18px] h-[18px]" /> : <ChevronLeft className="w-[18px] h-[18px]" />}
+          {collapsed ? <ChevronRight className="w-[18px] h-[18px]" aria-hidden="true" /> : <ChevronLeft className="w-[18px] h-[18px]" aria-hidden="true" />}
           {!collapsed && <span>Collapse</span>}
         </button>
       </div>
     </aside>
   );
-}
+});
+
+export default AppSidebar;

@@ -10,7 +10,7 @@ import { useRepairs } from '@/hooks/useRepairs';
 import { useAdvertising } from '@/hooks/useAdvertising';
 import { useSales } from '@/hooks/useSales';
 import { toast } from '@/components/ui/toast-utils';
-import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download, ShoppingCart, Trash2, AlertTriangle, FileUp, CheckCircle2 } from 'lucide-react';
+import { Pencil, Receipt, Megaphone, Info, Plus, FileText, Download, ShoppingCart, Trash2, AlertTriangle, FileUp, CheckCircle2, Copy, Users, MessageSquare } from 'lucide-react';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -24,6 +24,7 @@ import {
 import { useInventory } from '@/hooks/useInventory';
 import { useAuth } from '@/context/auth-hooks';
 import { apiUrl } from '@/lib/api';
+import { useNotes } from '@/hooks/useNotes';
 import DocumentViewerDialog from './DocumentViewerDialog';
 
 interface VehicleDetailDialogProps {
@@ -39,6 +40,7 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
   const { addSale } = useSales();
   const { deleteVehicle } = useInventory();
   const { user } = useAuth();
+  const { notes, addNote, deleteNote } = useNotes(vehicle?.id);
   const isAdmin = user?.role === 'ADMIN';
   
   const [isEditing, setIsEditing] = useState(false);
@@ -128,6 +130,13 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
     salePrice: '',
     saleDate: new Date().toISOString().split('T')[0],
     paymentMethod: 'Cash',
+  });
+
+  const [noteForm, setNoteForm] = useState({
+    customerName: '',
+    phone: '',
+    email: '',
+    note: '',
   });
 
   const handleDelete = async () => {
@@ -279,6 +288,24 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
     }
   };
 
+  const handleNoteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vehicle) return;
+    try {
+      await addNote({
+        vehicleId: vehicle.id,
+        customerName: noteForm.customerName,
+        phone: noteForm.phone,
+        email: noteForm.email,
+        note: noteForm.note,
+      });
+      toast.success('Customer viewing note added');
+      setNoteForm({ customerName: '', phone: '', email: '', note: '' });
+    } catch (err) {
+      toast.error('Failed to add viewing note');
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-card border-border text-foreground custom-scrollbar p-0 md:p-6">
@@ -338,8 +365,9 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
           </div>
 
           <div className="flex flex-wrap gap-2 mt-4">
-            <div className="text-[10px] font-black uppercase tracking-[0.1em] text-muted-foreground bg-muted/50 border border-border/60 px-3 py-1.5 rounded-lg">
-              VIN: {vehicle.vin}
+            <div className="group relative flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.1em] text-muted-foreground bg-muted/50 border border-border/60 px-3 py-1.5 rounded-lg cursor-pointer hover:bg-muted transition-colors" onClick={() => { navigator.clipboard.writeText(vehicle.vin); toast.success('VIN copied to clipboard'); }}>
+              <span>VIN: {vehicle.vin}</span>
+              <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             {vehicle.titleNumber && (
               <div className="text-[10px] font-black uppercase tracking-[0.1em] text-blue-500 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-lg">
@@ -368,6 +396,9 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
                 <ShoppingCart className="w-3.5 h-3.5" /> Record Sale
               </TabsTrigger>
             )}
+            <TabsTrigger value="notes" className="data-[state=active]:bg-amber-500 data-[state=active]:text-primary-foreground px-3 sm:px-5 py-2.5 rounded-lg font-black uppercase text-[9px] sm:text-[10px] tracking-widest gap-2 transition-all">
+              <MessageSquare className="w-3.5 h-3.5" /> Viewing Notes
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="edit" className="animate-in fade-in slide-in-from-top-2 duration-300">
@@ -749,6 +780,85 @@ export default function VehicleDetailDialog({ vehicle, open, onOpenChange }: Veh
               </div>
             </TabsContent>
           )}
+
+          <TabsContent value="notes" className="animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="bg-secondary/10 border border-border/40 rounded-xl p-5 mt-4 space-y-4">
+              <h4 className="text-sm font-black uppercase tracking-widest text-amber-500">Customer Viewing Notes</h4>
+              <form onSubmit={handleNoteSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Customer Name<span className="text-red-500 ml-1">*</span></Label>
+                  <Input 
+                    value={noteForm.customerName} 
+                    onChange={e => setNoteForm({...noteForm, customerName: e.target.value})}
+                    placeholder="Full Name" required className="bg-muted border-border"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Contact Number<span className="text-red-500 ml-1">*</span></Label>
+                  <Input 
+                    value={noteForm.phone} 
+                    onChange={e => setNoteForm({...noteForm, phone: e.target.value})}
+                    placeholder="Phone Number" required className="bg-muted border-border"
+                  />
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Email (Optional)</Label>
+                  <Input 
+                    type="email" value={noteForm.email} 
+                    onChange={e => setNoteForm({...noteForm, email: e.target.value})}
+                    placeholder="customer@email.com" className="bg-muted border-border"
+                  />
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Note/Feedback<span className="text-red-500 ml-1">*</span></Label>
+                  <textarea 
+                    value={noteForm.note} 
+                    onChange={e => setNoteForm({...noteForm, note: e.target.value})}
+                    placeholder="Describe customer interaction or feedback..." required 
+                    className="flex min-h-[100px] w-full rounded-md border border-border bg-muted px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </div>
+                <Button className="col-span-2 bg-amber-500 text-primary-foreground font-black h-11 uppercase" type="submit">
+                  <Plus className="w-4 h-4 mr-2" /> Add Viewing Note
+                </Button>
+              </form>
+
+              {notes && notes.length > 0 && (
+                <div className="mt-6 space-y-3">
+                  <h5 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Previous Viewings</h5>
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                    {notes.map((note) => (
+                      <div key={note.id} className="bg-black/20 border border-white/5 rounded-xl p-4 space-y-2 relative group">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h6 className="font-bold text-foreground flex items-center gap-2">
+                              <Users className="w-3.5 h-3.5 text-amber-500" /> {note.customerName}
+                            </h6>
+                            <p className="text-[10px] text-muted-foreground font-medium">{note.phone} {note.email ? `• ${note.email}` : ''}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[9px] text-muted-foreground uppercase font-black">{new Date(note.createdAt).toLocaleDateString()}</p>
+                            <p className="text-[8px] text-muted-foreground/60 uppercase">{new Date(note.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                          </div>
+                        </div>
+                        <div className="bg-muted/30 rounded-lg p-3">
+                          <p className="text-xs text-foreground leading-relaxed italic">"{note.note}"</p>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => deleteNote(note.id)}
+                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </TabsContent>
         </Tabs>
 
         <DocumentViewerDialog 

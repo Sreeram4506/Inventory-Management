@@ -41,6 +41,17 @@ export interface Vehicle {
     purchaseDate: string;
   };
   repairs?: Repair[];
+  customerNotes?: CustomerNote[];
+}
+
+export interface CustomerNote {
+  id: string;
+  vehicleId: string;
+  customerName: string;
+  phone: string;
+  email?: string;
+  note: string;
+  createdAt: string;
 }
 
 export interface ExtractedVehicleDocumentInfo extends Partial<Vehicle> {
