@@ -1,3 +1,4 @@
+// Cache buster: database wiped, clearing in-memory server cache on next boot
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
