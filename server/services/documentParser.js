@@ -106,9 +106,10 @@ RULES & PATTERNS:
    - AUCTION INVOICE (e.g., ADESA, Copart, Manheim): The "SELLER" is the entity we acquired the car from -> Map this to \`purchasedFrom\` and \`usedVehicleSourceAddress\` fields. The "BUYER" is the dealership acquiring the vehicle -> Do NOT put the dealership in \`disposedTo\`. Set all \`disposed\` fields to null. Ignore "Buying Representative" or bidder details.
    - RETAIL BILL OF SALE (Consumer Sale): The "BUYER" or "Purchaser" is the customer -> Map this to \`disposedTo\` and \`disposedAddress\` fields. The "SELLER" is the dealership -> Do NOT put the dealership in \`purchasedFrom\`. Set all acquisition fields to null.
 2. PRICE EXTRACTION:
-   - For Acquisitions: \`purchasePrice\` is the FINAL TOTAL amount paid (e.g., 'Total Price', 'Amount Due').
-   - For Retail Sales: \`disposedPrice\` is the FINAL TOTAL SELLING PRICE to the customer (Look for 'Total' at the bottom of the Costs section, including Doc Fees, e.g., 5500).
-3. ADDRESS EXTRACTION:
+   - For Acquisitions: `purchasePrice` is the FINAL TOTAL amount paid (e.g., 'Total Price', 'Amount Due').
+   - For Retail Sales: `disposedPrice` is the FINAL TOTAL SELLING PRICE to the customer (Look for 'Total' at the bottom of the Costs section, including Doc Fees, e.g., 5500).
+3. DEALERSHIP RULE: Our dealership is "Broadway Used Auto Sales" (or similar). NEVER put our dealership in `purchasedFrom` for acquisitions. NEVER put our dealership in `disposedTo` for retail sales.
+4. ADDRESS EXTRACTION:
    - Separate the street address, city, state, and zip code accurately into their respective fields.
 4. TITLE NUMBER: Extract from 'Title Number' or 'Title State/Number'. If it looks like 'MA/BN1234', return only 'BN1234'.
 5. VIN EXTRACTION: Must be exactly 17 characters.
@@ -118,8 +119,8 @@ RULES & PATTERNS:
    - TOTAL (Bottom Right): This is the 'purchasePrice'.
    - ODOMETER: Extract from the 'Odometer Disclosure Statement' section.
 7. CARMAX WHOLESALE:
-   - SELLER (Bottom Right): CarMax location (e.g., 'CarMax - Norwood') and its address. This is the 'purchasedFrom'.
-   - BUYER (Bottom Left Box): This is the dealership. Do NOT set 'disposedTo' if this is the dealership.
+   - SELLER (Bottom Right): CarMax location (e.g., 'CarMax - Norwood') and its address. This MUST be the 'purchasedFrom'.
+   - BUYER (Bottom Left Box): This is the dealership (e.g., 'Broadway Used Auto Sales'). Do NOT put this in 'purchasedFrom' or 'disposedTo'. Set all 'disposed' fields to null.
    - TOTAL (Middle Right Box): The 'TOTAL' amount is the 'purchasePrice'.
    - ODOMETER: Extract from the 'VEHICLE MILEAGE AND CONDITION STATEMENT' section.
 
@@ -277,9 +278,10 @@ RULES & PATTERNS:
    - AUCTION INVOICE (e.g., ADESA, Copart, Manheim): The "SELLER" is the entity we acquired the car from -> Map this to \`purchasedFrom\` and \`usedVehicleSourceAddress\` fields. The "BUYER" is the dealership acquiring the vehicle -> Do NOT put the dealership in \`disposedTo\`. Set all \`disposed\` fields to null. Ignore "Buying Representative" or bidder details.
    - RETAIL BILL OF SALE (Consumer Sale): The "BUYER" or "Purchaser" is the customer -> Map this to \`disposedTo\` and \`disposedAddress\` fields. The "SELLER" is the dealership -> Do NOT put the dealership in \`purchasedFrom\`. Set all acquisition fields to null.
 2. PRICE EXTRACTION:
-   - For Acquisitions: \`purchasePrice\` is the FINAL TOTAL amount paid (Look for 'Total Price', 'Amount Due', or 'Balance').
-   - For Retail Sales: \`disposedPrice\` is the FINAL TOTAL SELLING PRICE to the customer (Look for 'Total' at the bottom of the Costs section, including Doc Fees, e.g., 5500).
-3. ADDRESS EXTRACTION:
+   - For Acquisitions: `purchasePrice` is the FINAL TOTAL amount paid (Look for 'Total Price', 'Amount Due', or 'Balance').
+   - For Retail Sales: `disposedPrice` is the FINAL TOTAL SELLING PRICE to the customer (Look for 'Total' at the bottom of the Costs section, including Doc Fees, e.g., 5500).
+3. DEALERSHIP RULE: Our dealership is "Broadway Used Auto Sales" (or similar). NEVER put our dealership in `purchasedFrom` for acquisitions. NEVER put our dealership in `disposedTo` for retail sales.
+4. ADDRESS EXTRACTION:
    - Separate the street address, city, state, and zip code accurately into their respective fields. Include Apartment or Suite numbers if present.
 4. TITLE NUMBER: Extract from 'Title Number' or 'Title State/Number'. If it looks like 'MA/BN1234', return only 'BN1234'.
 5. VIN EXTRACTION: Must be exactly 17 characters.
@@ -289,8 +291,8 @@ RULES & PATTERNS:
    - TOTAL (Bottom Right): Look for the 'TOTAL' line with a dollar amount (e.g., 4,195.00). This is the 'purchasePrice'.
    - ODOMETER: Look for the 'ODOMETER DISCLOSURE STATEMENT' and extract the number (e.g., 111223).
 7. CARMAX WHOLESALE:
-   - SELLER (Bottom Right Signature Block): Look for the seller name (e.g., 'CarMax - Norwood') and address (e.g., '1320 Boston Providence Tpke, Norwood, MA 02062'). This is the 'purchasedFrom'.
-   - BUYER (Left Box): Look for 'COMPANY', 'ADDRESS', 'CITY', 'STATE / ZIP'. If this is the dealership, set all 'disposed' fields to null.
+   - SELLER (Bottom Right Signature Block): Look for the seller name (e.g., 'CarMax - Norwood') and address (e.g., '1320 Boston Providence Tpke, Norwood, MA 02062'). This MUST be the 'purchasedFrom'.
+   - BUYER (Left Box): Look for 'COMPANY', 'ADDRESS', 'CITY', 'STATE / ZIP'. If this is the dealership (e.g., 'Broadway Used Auto Sales'), do NOT put it in 'purchasedFrom' or 'disposedTo'. Set all 'disposed' fields to null.
    - PRICE (Right Box): Look for 'TOTAL' with a dollar amount (e.g., 1,635.00). This is the 'purchasePrice'.
    - ODOMETER: Look for the 'VEHICLE MILEAGE AND CONDITION STATEMENT' and extract the number (e.g., 139367).
 
