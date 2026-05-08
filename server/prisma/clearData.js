@@ -24,6 +24,9 @@ async function main() {
     console.log('Deleting Document Registry...')
     await prisma.documentRegistry.deleteMany({})
     
+    console.log('Deleting Customer Notes...')
+    await prisma.customerNote.deleteMany({})
+    
     console.log('Deleting Vehicle inventory...')
     await prisma.vehicle.deleteMany({})
 
