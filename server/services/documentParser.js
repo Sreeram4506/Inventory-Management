@@ -117,6 +117,11 @@ RULES & PATTERNS:
    - BUYER BOX (Bottom Left): This is the dealership. Do NOT set 'disposedTo' if this is the dealership.
    - TOTAL (Bottom Right): This is the 'purchasePrice'.
    - ODOMETER: Extract from the 'Odometer Disclosure Statement' section.
+7. CARMAX WHOLESALE:
+   - SELLER (Bottom Right): CarMax location (e.g., 'CarMax - Norwood') and its address. This is the 'purchasedFrom'.
+   - BUYER (Bottom Left Box): This is the dealership. Do NOT set 'disposedTo' if this is the dealership.
+   - TOTAL (Middle Right Box): The 'TOTAL' amount is the 'purchasePrice'.
+   - ODOMETER: Extract from the 'VEHICLE MILEAGE AND CONDITION STATEMENT' section.
 
 ${extraInstructions ? `EXTRA INSTRUCTIONS:\n${extraInstructions}\n\n` : ''}Document text:
 ${text}`;
@@ -283,6 +288,11 @@ RULES & PATTERNS:
    - BUYER BOX (Bottom Left): Contains the dealership name. If the buyer is a dealership (like 'Broadway Used Auto Sales'), this is an ACQUISITION. Set 'purchasedFrom' to the SELLER name and set all 'disposed' fields to null.
    - TOTAL (Bottom Right): Look for the 'TOTAL' line with a dollar amount (e.g., 4,195.00). This is the 'purchasePrice'.
    - ODOMETER: Look for the 'ODOMETER DISCLOSURE STATEMENT' and extract the number (e.g., 111223).
+7. CARMAX WHOLESALE:
+   - SELLER (Bottom Right Signature Block): Look for the seller name (e.g., 'CarMax - Norwood') and address (e.g., '1320 Boston Providence Tpke, Norwood, MA 02062'). This is the 'purchasedFrom'.
+   - BUYER (Left Box): Look for 'COMPANY', 'ADDRESS', 'CITY', 'STATE / ZIP'. If this is the dealership, set all 'disposed' fields to null.
+   - PRICE (Right Box): Look for 'TOTAL' with a dollar amount (e.g., 1,635.00). This is the 'purchasePrice'.
+   - ODOMETER: Look for the 'VEHICLE MILEAGE AND CONDITION STATEMENT' and extract the number (e.g., 139367).
 
 ${extraInstructions ? `EXTRA INSTRUCTIONS:\n${extraInstructions}` : ''}`;
 
