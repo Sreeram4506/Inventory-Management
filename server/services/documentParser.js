@@ -17,18 +17,19 @@ const ocrLangPath = path.dirname(
 
 // ═══════════════════════════════════════════════════════════════
 // SINGLE ENTRY POINT — Extract everything from any document
+// purpose: "acquisition" | "sale" | "" (unknown)
 // ═══════════════════════════════════════════════════════════════
-export async function extractVehicleInfo(fileBuffer, mimetype, extraInstructions = "") {
-  console.log(`[Parser] START | mime=${mimetype} | nvidia=${hasNvidiaKey}`);
+export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
+  console.log(`[Parser] START | mime=${mimetype} | purpose=${purpose || 'auto'} | nvidia=${hasNvidiaKey}`);
 
   // For images — go straight to Vision AI
   if (mimetype.startsWith('image/')) {
-    const visionResult = await visionExtract(fileBuffer, mimetype, extraInstructions);
+    const visionResult = await visionExtract(fileBuffer, mimetype, purpose);
     if (visionResult) return visionResult;
     // Fallback: OCR the image then send text to LLM
     const ocrText = await ocrImage(fileBuffer);
     if (hasNvidiaKey && ocrText.length > 30) {
-      const textResult = await textExtract(ocrText, extraInstructions);
+      const textResult = await textExtract(ocrText, purpose);
       if (textResult) return textResult;
     }
     return {};
@@ -41,12 +42,12 @@ export async function extractVehicleInfo(fileBuffer, mimetype, extraInstructions
 
     // If PDF has native text, use text LLM
     if (combinedText.replace(/\s/g, '').length > 30 && hasNvidiaKey) {
-      const textResult = await textExtract(combinedText, extraInstructions);
+      const textResult = await textExtract(combinedText, purpose);
       if (textResult) return textResult;
     }
 
     // Scanned PDF — render to image, use vision
-    const visionResult = await visionExtract(fileBuffer, mimetype, extraInstructions);
+    const visionResult = await visionExtract(fileBuffer, mimetype, purpose);
     if (visionResult) return visionResult;
 
     return {};
@@ -55,79 +56,127 @@ export async function extractVehicleInfo(fileBuffer, mimetype, extraInstructions
   // Word docs and other text
   const text = await extractText(fileBuffer, mimetype);
   if (hasNvidiaKey && text.length > 30) {
-    const textResult = await textExtract(text, extraInstructions);
+    const textResult = await textExtract(text, purpose);
     if (textResult) return textResult;
   }
   return {};
 }
 
 // ═══════════════════════════════════════════════════════════════
-// TEXT LLM — One simple prompt, extract ALL fields
+// PROMPT BUILDERS — Separate focused prompts for acquisition vs sale
 // ═══════════════════════════════════════════════════════════════
-async function textExtract(text, extraInstructions = "") {
-  try {
-    const prompt = `Read this vehicle document carefully and extract ALL information. Return ONLY a JSON object.
-    
-    VIN EXTRACTION RULE:
-    - Extract the EXACT 17-character VIN accurately.
-    - The VIN may be printed with widely spaced characters or in individual boxes. Read ALL characters from left to right.
-    - Do NOT include any labels like "VIN:", "VIN NO:", or "Serial:" in the value. Return ONLY the 17 characters.
-    - Pay special attention to the very first character. Do not skip it.
+function buildAcquisitionPrompt(textOrEmpty) {
+  const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
+  return `You are extracting data from a VEHICLE ACQUISITION document (auction invoice, wholesale bill of sale, or dealer purchase).
+This document records a vehicle WE PURCHASED. Our dealership is "Broadway Used Auto Sales" (or variants like "Auto Sales on Broadway").
+
+Return ONLY a raw JSON object with these fields. Set any field you cannot find to null.
 
 {
-  "vin": "5FNYF4H61BB077174",
-  "make": "Honda",
-  "model": "Fit",
-  "year": 2013,
-  "color": "Black",
-  "mileage": 135182,
-  "titleNumber": "BN815993",
-  "stockNumber": "477843",
-  "purchasedFrom": "name of the SELLER of the vehicle",
-  "purchasePrice": 4100,
-  "purchaseDate": "2024-08-23",
-  "usedVehicleSourceAddress": "seller street address",
-  "usedVehicleSourceCity": "Norwood",
-  "usedVehicleSourceState": "MA",
-  "usedVehicleSourceZipCode": "02062",
-  "disposedTo": "name of the BUYER/PURCHASER/CUSTOMER",
-  "disposedAddress": "buyer street address",
-  "disposedCity": "buyer city",
-  "disposedState": "MA",
-  "disposedZip": "02703",
-  "disposedDate": "2025-02-11",
-  "disposedPrice": 5300,
-  "disposedOdometer": 135361,
-  "disposedDlNumber": "S29353237",
-  "disposedDlState": "MA"
+  "vin": "exact 17-char VIN",
+  "make": "manufacturer",
+  "model": "model name",
+  "year": 2014,
+  "color": "color",
+  "mileage": 131575,
+  "titleNumber": "title number only, no state prefix",
+  "stockNumber": "stock number if present",
+  "purchasedFrom": "SELLER name (the entity we bought from, NOT Broadway)",
+  "purchasePrice": 6340,
+  "purchaseDate": "YYYY-MM-DD",
+  "usedVehicleSourceAddress": "SELLER street address",
+  "usedVehicleSourceCity": "SELLER city",
+  "usedVehicleSourceState": "XX",
+  "usedVehicleSourceZipCode": "SELLER zip"
 }
-RULES & PATTERNS:
-1. DETERMINE DOCUMENT TYPE FIRST:
-   - AUCTION INVOICE (e.g., ADESA, Copart, Manheim): The "SELLER" is the entity we acquired the car from -> Map this to \`purchasedFrom\` and \`usedVehicleSourceAddress\` fields. The "BUYER" is the dealership acquiring the vehicle -> Do NOT put the dealership in \`disposedTo\`. Set all \`disposed\` fields to null. Ignore "Buying Representative" or bidder details.
-   - RETAIL BILL OF SALE (Consumer Sale): The "BUYER" or "Purchaser" is the customer -> Map this to \`disposedTo\` and \`disposedAddress\` fields. The "SELLER" is the dealership -> Do NOT put the dealership in \`purchasedFrom\`. Set all acquisition fields to null.
-2. PRICE EXTRACTION:
-   - For Acquisitions: 'purchasePrice' is the FINAL TOTAL amount paid (e.g., 'Total Price', 'Amount Due').
-   - For Retail Sales: 'disposedPrice' is the FINAL TOTAL SELLING PRICE to the customer (Look for 'Total' at the bottom of the Costs section, including Doc Fees, e.g., 5500).
-3. DEALERSHIP RULE: Our dealership is "Broadway Used Auto Sales" (or similar). NEVER put our dealership in 'purchasedFrom' for acquisitions. NEVER put our dealership in 'disposedTo' for retail sales.
-4. ADDRESS EXTRACTION:
-   - Separate the street address, city, state, and zip code accurately into their respective fields.
-4. TITLE NUMBER: Extract from 'Title Number' or 'Title State/Number'. If it looks like 'MA/BN1234', return only 'BN1234'.
-5. VIN EXTRACTION: Must be exactly 17 characters.
-6. AUCTION SPECIFIC (CMAA):
-   - SELLER BOX (Top Left): This is the 'purchasedFrom'.
-   - BUYER BOX (Bottom Left): This is the dealership. Do NOT set 'disposedTo' if this is the dealership.
-   - TOTAL (Bottom Right): This is the 'purchasePrice'.
-   - ODOMETER: Extract from the 'Odometer Disclosure Statement' section.
-7. CARMAX WHOLESALE:
-   - SELLER (Bottom Right): CarMax location (e.g., 'CarMax - Norwood') and its address. This MUST be the 'purchasedFrom'.
-   - BUYER (Bottom Left Box): This is the dealership (e.g., 'Broadway Used Auto Sales'). Do NOT put this in 'purchasedFrom' or 'disposedTo'. Set all 'disposed' fields to null.
-   - TOTAL (Middle Right Box): The 'TOTAL' amount is the 'purchasePrice'.
-   - ODOMETER: Extract from the 'VEHICLE MILEAGE AND CONDITION STATEMENT' section.
 
-${extraInstructions ? `EXTRA INSTRUCTIONS:\n${extraInstructions}\n\n` : ''}Document text:
-${text}`;
+CRITICAL RULES:
+1. The SELLER is the entity that sold the vehicle TO us. Extract their name and address.
+2. Broadway Used Auto Sales is the BUYER (us). NEVER put Broadway in "purchasedFrom".
+3. "purchasePrice" = the TOTAL amount (look for "TOTAL", "Net Due", "Amount Due", "Total Price"). Include all fees.
+4. For ADESA docs: SELLER is in the "SELLER:" box. Price is "Total" or "Net Due" in the VEHICLE PURCHASE section.
+5. For CMAA docs: SELLER is in the left box (labeled S/E/L/L/E/R). Price is "TOTAL" on the right side.
+6. For CarMax: SELLER is at the bottom right (e.g., "CarMax - Westborough"). Price is "TOTAL" in the pricing box.
+7. "titleNumber": If format is "MA/BN355731", return only "BN355731".
+8. VIN must be exactly 17 characters. Read carefully character by character.
+9. "mileage": Extract from odometer reading in the Odometer Disclosure Statement section.
+10. Set ALL "disposed" fields to null — this is an acquisition, not a sale.${docText}`;
+}
 
-    console.log(`[Parser:Text] Sending ${text.length} chars to LLM...`);
+function buildSalePrompt(textOrEmpty) {
+  const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
+  return `You are extracting data from a VEHICLE SALE document (retail bill of sale or purchase contract).
+This document records a vehicle WE SOLD to a customer. Our dealership is "Broadway Used Auto Sales" (or variants like "Auto Sales on Broadway").
+
+Return ONLY a raw JSON object with these fields. Set any field you cannot find to null.
+
+{
+  "vin": "exact 17-char VIN",
+  "make": "manufacturer",
+  "model": "model name",
+  "year": 2014,
+  "color": "color",
+  "titleNumber": "title number only, no state prefix",
+  "disposedTo": "PURCHASER/BUYER full name (the customer, NOT Broadway)",
+  "disposedAddress": "PURCHASER street address",
+  "disposedCity": "PURCHASER city",
+  "disposedState": "XX",
+  "disposedZip": "PURCHASER zip code",
+  "disposedDate": "YYYY-MM-DD",
+  "disposedPrice": 5500,
+  "disposedOdometer": 136623,
+  "disposedDlNumber": "PURCHASER driver license number",
+  "disposedDlState": "XX"
+}
+
+CRITICAL RULES:
+1. The PURCHASER/BUYER is the customer who bought from us. Extract their full name, address, and DL info.
+2. Broadway Used Auto Sales is the SELLER (us). NEVER put Broadway in "disposedTo".
+3. "disposedTo" = the "Print Name(s) of Purchaser(s)" or "Purchaser's Printed Name" field.
+4. "disposedAddress" = the customer's street address (e.g., "55 David Ter Apt 08").
+5. "disposedPrice" = the TOTAL from the "COSTS AND DISCOUNTS" section (includes Selling Price + Doc Fee + other fees).
+6. "disposedOdometer" = the odometer reading from the boxes in the Odometer Disclosure Statement.
+7. "disposedDlNumber" = the DL Number field next to the purchaser name.
+8. "disposedDlState" = the DL State field (usually "MA").
+9. "disposedDate" = the "Date of Sale" field.
+10. For Motor Vehicle Purchase Contract: "disposedTo" is the "Purchaser(s) Name(s) and Address(es)" at top right. "disposedPrice" is "Total Contract Price" (line 25).
+11. "titleNumber": If format is "MA/BN355731", return only "BN355731".
+12. VIN must be exactly 17 characters.
+13. Set ALL "purchasedFrom" and "usedVehicleSource" fields to null — this is a sale, not an acquisition.${docText}`;
+}
+
+function buildAutoPrompt(textOrEmpty) {
+  const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
+  return `Extract all vehicle information from this document. Return ONLY a raw JSON object.
+Determine if this is an ACQUISITION (we bought) or a SALE (we sold). Our dealership is "Broadway Used Auto Sales".
+If Broadway is the BUYER → this is an acquisition. Extract the SELLER info into purchasedFrom/usedVehicleSource fields.
+If Broadway is the SELLER → this is a sale. Extract the PURCHASER info into disposed fields.
+
+{
+  "vin": "17-char VIN", "make": "", "model": "", "year": 0, "color": "", "mileage": 0,
+  "titleNumber": "", "stockNumber": "",
+  "purchasedFrom": "SELLER name if acquisition", "purchasePrice": 0, "purchaseDate": "YYYY-MM-DD",
+  "usedVehicleSourceAddress": "", "usedVehicleSourceCity": "", "usedVehicleSourceState": "", "usedVehicleSourceZipCode": "",
+  "disposedTo": "BUYER name if sale", "disposedAddress": "", "disposedCity": "", "disposedState": "", "disposedZip": "",
+  "disposedDate": "YYYY-MM-DD", "disposedPrice": 0, "disposedOdometer": 0, "disposedDlNumber": "", "disposedDlState": ""
+}${docText}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TEXT LLM — Purpose-aware extraction
+// ═══════════════════════════════════════════════════════════════
+async function textExtract(text, purpose = "") {
+  try {
+    let prompt;
+    if (purpose === 'acquisition') {
+      prompt = buildAcquisitionPrompt(text);
+    } else if (purpose === 'sale') {
+      prompt = buildSalePrompt(text);
+    } else {
+      prompt = buildAutoPrompt(text);
+    }
+
+    console.log(`[Parser:Text] Sending ${text.length} chars to LLM (purpose=${purpose || 'auto'})...`);
     const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -140,7 +189,7 @@ ${text}`;
           { role: "system", content: "You are a document data extractor. Output ONLY valid JSON. No markdown, no explanation, no extra text." },
           { role: "user", content: prompt }
         ],
-        temperature: 0.05,
+        temperature: 0,
         max_tokens: 1500,
         stream: false
       })
@@ -168,7 +217,7 @@ ${text}`;
 // ═══════════════════════════════════════════════════════════════
 // VISION LLM — For images and scanned PDFs
 // ═══════════════════════════════════════════════════════════════
-async function visionExtract(fileBuffer, mimetype, extraInstructions = "") {
+async function visionExtract(fileBuffer, mimetype, purpose = "") {
   if (!hasNvidiaKey) return null;
 
   let base64Image = '';
@@ -183,11 +232,11 @@ async function visionExtract(fileBuffer, mimetype, extraInstructions = "") {
       const txt = tc.items.map(i => ('str' in i ? i.str : '')).join(' ').trim();
       if (txt.length > 40) return null; // has native text, skip vision
 
-      const vp = page.getViewport({ scale: 1.5 });
+      const vp = page.getViewport({ scale: 2.0 });
       const cf = createCanvasFactory();
       const { canvas, context } = cf.create(Math.ceil(vp.width), Math.ceil(vp.height));
       await page.render({ canvasContext: context, viewport: vp, canvasFactory: cf }).promise;
-      base64Image = canvas.toBuffer('image/jpeg', { quality: 0.8 }).toString('base64');
+      base64Image = canvas.toBuffer('image/jpeg', { quality: 0.85 }).toString('base64');
       imgMime = 'image/jpeg';
       cf.destroy({ canvas, context });
     } catch (e) {
@@ -210,95 +259,17 @@ async function visionExtract(fileBuffer, mimetype, extraInstructions = "") {
   if (!base64Image) return null;
 
   try {
-    const prompt = `Return ONLY a raw JSON object. Do NOT include any introduction, headers, or markdown text.
-    
-    REQUIRED JSON STRUCTURE:
-    {
-      "vin": "...",
-      "make": "...",
-      "model": "...",
-      "year": 0,
-      "color": "...",
-      "mileage": 0,
-      "titleNumber": "...",
-      "purchasedFrom": "...",
-      "purchasePrice": 0,
-      "purchaseDate": "...",
-      "usedVehicleSourceAddress": "...",
-      "usedVehicleSourceCity": "...",
-      "usedVehicleSourceState": "...",
-      "usedVehicleSourceZipCode": "...",
-      "disposedTo": "...",
-      "disposedAddress": "...",
-      "disposedCity": "...",
-      "disposedState": "...",
-      "disposedZip": "...",
-      "disposedDate": "...",
-      "disposedPrice": 0,
-      "disposedOdometer": 0,
-      "disposedDlNumber": "...",
-      "disposedDlState": "..."
+    // Use the same purpose-based prompts, but without document text (image is the source)
+    let prompt;
+    if (purpose === 'acquisition') {
+      prompt = buildAcquisitionPrompt('');
+    } else if (purpose === 'sale') {
+      prompt = buildSalePrompt('');
+    } else {
+      prompt = buildAutoPrompt('');
     }
 
-    VIN EXTRACTION RULE:
-    - Extract the EXACT 17-character VIN accurately.
-    - The VIN may be printed with widely spaced characters or in individual boxes. Read ALL characters from left to right.
-    - Do NOT include any labels like "VIN:", "VIN NO:", or "Serial:" in the value. Return ONLY the 17 characters.
-    - Look closely for the first and last characters of the VIN. Do not skip the first digit.
-
-{
-  "vin": "5FNYF4H61BB077174",
-  "make": "Honda",
-  "model": "Fit",
-  "year": 2013,
-  "color": "Black",
-  "mileage": 135182,
-  "titleNumber": "BN815993",
-  "purchasedFrom": "SELLER name",
-  "purchasePrice": 4100,
-  "purchaseDate": "2024-08-23",
-  "usedVehicleSourceAddress": "seller address",
-  "usedVehicleSourceCity": "city",
-  "usedVehicleSourceState": "MA",
-  "usedVehicleSourceZipCode": "02062",
-  "disposedTo": "BUYER/PURCHASER name",
-  "disposedAddress": "buyer address",
-  "disposedCity": "city",
-  "disposedState": "MA",
-  "disposedZip": "02703",
-  "disposedDate": "2025-02-11",
-  "disposedPrice": 5300,
-  "disposedOdometer": 135361,
-  "disposedDlNumber": "S29353237",
-  "disposedDlState": "MA"
-}
-
-RULES & PATTERNS:
-1. DETERMINE DOCUMENT TYPE FIRST:
-   - AUCTION INVOICE (e.g., ADESA, Copart, Manheim): The "SELLER" is the entity we acquired the car from -> Map this to \`purchasedFrom\` and \`usedVehicleSourceAddress\` fields. The "BUYER" is the dealership acquiring the vehicle -> Do NOT put the dealership in \`disposedTo\`. Set all \`disposed\` fields to null. Ignore "Buying Representative" or bidder details.
-   - RETAIL BILL OF SALE (Consumer Sale): The "BUYER" or "Purchaser" is the customer -> Map this to \`disposedTo\` and \`disposedAddress\` fields. The "SELLER" is the dealership -> Do NOT put the dealership in \`purchasedFrom\`. Set all acquisition fields to null.
-2. PRICE EXTRACTION:
-   - For Acquisitions: 'purchasePrice' is the FINAL TOTAL amount paid (Look for 'Total Price', 'Amount Due', or 'Balance').
-   - For Retail Sales: 'disposedPrice' is the FINAL TOTAL SELLING PRICE to the customer (Look for 'Total' at the bottom of the Costs section, including Doc Fees, e.g., 5500).
-3. DEALERSHIP RULE: Our dealership is "Broadway Used Auto Sales" (or similar). NEVER put our dealership in 'purchasedFrom' for acquisitions. NEVER put our dealership in 'disposedTo' for retail sales.
-4. ADDRESS EXTRACTION:
-   - Separate the street address, city, state, and zip code accurately into their respective fields. Include Apartment or Suite numbers if present.
-4. TITLE NUMBER: Extract from 'Title Number' or 'Title State/Number'. If it looks like 'MA/BN1234', return only 'BN1234'.
-5. VIN EXTRACTION: Must be exactly 17 characters.
-6. AUCTION SPECIFIC (CMAA):
-   - SELLER BOX (Top Left): Contains the 'purchasedFrom' name and address.
-   - BUYER BOX (Bottom Left): Contains the dealership name. If the buyer is a dealership (like 'Broadway Used Auto Sales'), this is an ACQUISITION. Set 'purchasedFrom' to the SELLER name and set all 'disposed' fields to null.
-   - TOTAL (Bottom Right): Look for the 'TOTAL' line with a dollar amount (e.g., 4,195.00). This is the 'purchasePrice'.
-   - ODOMETER: Look for the 'ODOMETER DISCLOSURE STATEMENT' and extract the number (e.g., 111223).
-7. CARMAX WHOLESALE:
-   - SELLER (Bottom Right Signature Block): Look for the seller name (e.g., 'CarMax - Norwood') and address (e.g., '1320 Boston Providence Tpke, Norwood, MA 02062'). This MUST be the 'purchasedFrom'.
-   - BUYER (Left Box): Look for 'COMPANY', 'ADDRESS', 'CITY', 'STATE / ZIP'. If this is the dealership (e.g., 'Broadway Used Auto Sales'), do NOT put it in 'purchasedFrom' or 'disposedTo'. Set all 'disposed' fields to null.
-   - PRICE (Right Box): Look for 'TOTAL' with a dollar amount (e.g., 1,635.00). This is the 'purchasePrice'.
-   - ODOMETER: Look for the 'VEHICLE MILEAGE AND CONDITION STATEMENT' and extract the number (e.g., 139367).
-
-${extraInstructions ? `EXTRA INSTRUCTIONS:\n${extraInstructions}` : ''}`;
-
-    console.log(`[Parser:Vision] Sending image to Vision AI...`);
+    console.log(`[Parser:Vision] Sending image to Vision AI (purpose=${purpose || 'auto'})...`);
     const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -315,6 +286,7 @@ ${extraInstructions ? `EXTRA INSTRUCTIONS:\n${extraInstructions}` : ''}`;
           ]
         }],
         max_tokens: 1500,
+        temperature: 0,
         stream: false
       })
     });

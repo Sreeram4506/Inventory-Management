@@ -132,8 +132,8 @@ router.post(
         });
       }
 
-      // ── Extract data from document ──
-      info = await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype);
+      // ── Extract data from document (purpose: acquisition) ──
+      info = await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype, 'acquisition');
       console.log(`[UserForm] Extracted VIN: ${info.vin}, Make: ${info.make}, Model: ${info.model}`);
 
       // ── Generate PDF ──
@@ -308,8 +308,8 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
       return res.status(400).json({ status: 'error', message: 'No file uploaded' });
     }
 
-    // ── Step 1: Extract ONLY Disposition + VIN from Bill of Sale ──
-    const billOfSaleInfo = await extractVehicleInfo(req.file.buffer, req.file.mimetype);
+    // ── Step 1: Extract Disposition + VIN from Bill of Sale (purpose: sale) ──
+    const billOfSaleInfo = await extractVehicleInfo(req.file.buffer, req.file.mimetype, 'sale');
     
     console.log(`[BillOfSale] Extracted:`, JSON.stringify(billOfSaleInfo, null, 2));
 
