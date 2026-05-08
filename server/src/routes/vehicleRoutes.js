@@ -108,22 +108,24 @@ router.get('/:id/data', authenticateToken, async (req, res, next) => {
       return res.status(404).json({ message: 'Vehicle not found' });
     }
     
+    let documentBase64 = vehicle.purchase?.documentBase64;
     let sourceDocumentBase64 = vehicle.purchase?.sourceDocumentBase64;
     
-    // Fallback: If not in purchase record, look in DocumentRegistry by VIN
-    if (!sourceDocumentBase64 && vehicle.vin) {
+    // Fallback: If data missing in purchase record, look in DocumentRegistry by VIN
+    if ((!documentBase64 || !sourceDocumentBase64) && vehicle.vin) {
       const registryEntry = await prisma.documentRegistry.findFirst({
-        where: { vin: vehicle.vin },
-        select: { sourceDocumentBase64: true },
+        where: { vin: vehicle.vin, documentType: 'Used Vehicle Record' },
+        select: { documentBase64: true, sourceDocumentBase64: true },
         orderBy: { createdAt: 'desc' }
       });
       if (registryEntry) {
-        sourceDocumentBase64 = registryEntry.sourceDocumentBase64;
+        if (!documentBase64) documentBase64 = registryEntry.documentBase64;
+        if (!sourceDocumentBase64) sourceDocumentBase64 = registryEntry.sourceDocumentBase64;
       }
     }
     
     res.json({
-      documentBase64: vehicle.purchase?.documentBase64,
+      documentBase64,
       sourceDocumentBase64,
       billOfSaleBase64: vehicle.sale?.billOfSaleBase64
     });
@@ -160,7 +162,8 @@ router.get('/', authenticateToken, async (req, res, next) => {
             totalPurchaseCost: true,
             purchaseDate: true,
             paymentMethod: true,
-            // documentBase64 and sourceDocumentBase64 EXCLUDED for performance
+            documentBase64: true,
+            sourceDocumentBase64: true,
           }
         },
         repairs: true,
@@ -181,17 +184,23 @@ router.get('/', authenticateToken, async (req, res, next) => {
 
     const isStaff = req.user.role === 'STAFF';
 
-    // Fetch VINs that have entries in DocumentRegistry for the hasSourceDocument fallback
+    // Fetch VINs that have entries in DocumentRegistry for fallbacks
     const allVins = vehicles.map(v => v.vin).filter(Boolean);
     const registryEntries = await prisma.documentRegistry.findMany({
       where: { vin: { in: allVins } },
-      select: { vin: true }
+      select: { vin: true, documentType: true }
     });
-    const vinsInRegistry = new Set(registryEntries.map(e => e.vin));
+    
+    const vinsWithSource = new Set(registryEntries.map(e => e.vin));
+    const vinsWithGeneratedRecord = new Set(
+      registryEntries
+        .filter(e => e.documentType === 'Used Vehicle Record')
+        .map(e => e.vin)
+    );
 
     const enrichedVehicles = vehicles.map(v => {
-      const hasDocument = !!v.purchase?.documentBase64;
-      const hasSourceDocument = !!v.purchase?.sourceDocumentBase64 || vinsInRegistry.has(v.vin);
+      const hasDocument = !!v.purchase?.documentBase64 || vinsWithGeneratedRecord.has(v.vin);
+      const hasSourceDocument = !!v.purchase?.sourceDocumentBase64 || vinsWithSource.has(v.vin);
       const hasBillOfSale = !!v.sale?.hasBillOfSale;
       
       // Strip base64 strings

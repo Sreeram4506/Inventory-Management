@@ -506,6 +506,14 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
         });
         console.log(`[BillOfSale] New Registry entry CREATED with disposition data`);
       }
+      // Also update the Purchase record's documentBase64 if the vehicle exists
+      if (vehicle && vehicle.purchase) {
+        await prisma.purchase.update({
+          where: { id: vehicle.purchase.id },
+          data: { documentBase64: filledPdf }
+        });
+        console.log(`[BillOfSale] Purchase record UPDATED with new Generated Record for vehicle: ${vehicle.id}`);
+      }
     }
 
     // ── Step 7: Invalidate caches ──

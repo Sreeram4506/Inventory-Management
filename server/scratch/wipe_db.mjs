@@ -5,6 +5,7 @@ const prisma = new PrismaClient();
 async function wipeAllData() {
   console.log('🧹 Wiping ALL Database Records...');
   try {
+    const noteCount = await prisma.customerNote.deleteMany();
     const saleCount = await prisma.sale.deleteMany();
     const purchaseCount = await prisma.purchase.deleteMany();
     const repairCount = await prisma.repair.deleteMany();
@@ -20,7 +21,8 @@ async function wipeAllData() {
     - ${adCount.count} Ad Expenses
     - ${bizCount.count} Biz Expenses
     - ${vehicleCount.count} Vehicles
-    - ${registryCount.count} Document Registry entries`);
+    - ${registryCount.count} Document Registry entries
+    - ${noteCount.count} Customer Notes`);
 
   } catch (error) {
     console.error('❌ Wipe Failed:', error);

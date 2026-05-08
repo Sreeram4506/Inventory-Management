@@ -92,6 +92,21 @@ export default function Sales() {
     }
   };
 
+  const handleDownloadDocument = (vehicle: Vehicle, type: 'report' | 'source' | 'sale' = 'report') => {
+    if (!token) return;
+    let typeParam = '';
+    if (type === 'source') typeParam = '&type=source';
+    else if (type === 'sale') typeParam = '&type=sale';
+    
+    const downloadUrl = apiUrl(`/vehicles/${vehicle.id}/document?token=${encodeURIComponent(token)}${typeParam}`);
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = downloadUrl;
+    document.body.appendChild(iframe);
+    setTimeout(() => { if (iframe.parentNode) document.body.removeChild(iframe); }, 60000);
+    toast.success(`Downloading ${type.replace('_', ' ')} for ${vehicle.make} ${vehicle.model}...`);
+  };
+
   const handleUploadBillOfSale = (saleId: string) => {
     // We can either open a specific dialog or redirect to used forms with VIN
     toast.info('To upload a Bill of Sale, please use the "Used Forms" section or open the vehicle details from Inventory.');
@@ -176,26 +191,43 @@ export default function Sales() {
                             <FileText className="w-4 h-4" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-white border-border min-w-[180px]">
+                        <DropdownMenuContent align="end" className="bg-white border-border min-w-[200px]">
+                          <div className="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-border/50 mb-1">Preview Documents</div>
                           {vehicle?.hasDocument && (
-                            <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2">
+                            <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
                               <FileText className="w-3.5 h-3.5 mr-2" /> Used Vehicle Record
                             </DropdownMenuItem>
                           )}
                           {vehicle?.hasSourceDocument && (
-                            <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2">
+                            <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
                               <Receipt className="w-3.5 h-3.5 mr-2" /> Original Source
                             </DropdownMenuItem>
                           )}
-                          {(vehicle?.hasDocument || vehicle?.hasSourceDocument) && <DropdownMenuSeparator />}
                           
-                      {(vehicle?.hasBillOfSale || sale.hasBillOfSale) ? (
-                            <DropdownMenuItem onClick={() => handleViewDocument(vehicle || { id: sale.vehicleId, year: 0, make: 'Vehicle', model: 'Record' } as any, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-info">
+                          {(vehicle?.hasBillOfSale || sale.hasBillOfSale) ? (
+                            <DropdownMenuItem onClick={() => handleViewDocument(vehicle || { id: sale.vehicleId, year: 0, make: 'Vehicle', model: 'Record' } as any, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-info cursor-pointer hover:bg-muted/50">
                               <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
                             </DropdownMenuItem>
                           ) : (
-                            <DropdownMenuItem onClick={() => handleUploadBillOfSale(sale.id)} className="text-[10px] font-black uppercase py-2 text-muted-foreground italic">
+                            <DropdownMenuItem onClick={() => handleUploadBillOfSale(sale.id)} className="text-[10px] font-black uppercase py-2 text-muted-foreground italic cursor-pointer hover:bg-muted/50">
                               <Upload className="w-3.5 h-3.5 mr-2" /> Upload Bill of Sale
+                            </DropdownMenuItem>
+                          )}
+                          
+                          <div className="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-t border-border/50 my-1">Download Files</div>
+                          {vehicle?.hasDocument && (
+                            <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                              <Download className="w-3.5 h-3.5 mr-2 text-profit" /> Download Record
+                            </DropdownMenuItem>
+                          )}
+                          {vehicle?.hasSourceDocument && (
+                            <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                              <Download className="w-3.5 h-3.5 mr-2 text-profit" /> Download Source
+                            </DropdownMenuItem>
+                          )}
+                          {(vehicle?.hasBillOfSale || sale.hasBillOfSale) && (
+                            <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle || { id: sale.vehicleId, make: 'Vehicle', model: 'Record' } as any, 'sale')} className="text-[10px] font-black uppercase py-2 text-info cursor-pointer hover:bg-muted/50">
+                              <Download className="w-3.5 h-3.5 mr-2" /> Download Bill of Sale
                             </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
@@ -321,26 +353,43 @@ export default function Sales() {
                                 <FileText className="w-3.5 h-3.5" />
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="bg-white border-border min-w-[180px]">
+                            <DropdownMenuContent align="end" className="bg-white border-border min-w-[200px]">
+                              <div className="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-border/50 mb-1">Preview Documents</div>
                               {vehicle?.hasDocument && (
-                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2">
+                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
                                   <FileText className="w-3.5 h-3.5 mr-2" /> Used Vehicle Record
                                 </DropdownMenuItem>
                               )}
                               {vehicle?.hasSourceDocument && (
-                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2">
+                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
                                   <Receipt className="w-3.5 h-3.5 mr-2" /> Original Source
                                 </DropdownMenuItem>
                               )}
-                              {(vehicle?.hasDocument || vehicle?.hasSourceDocument) && <DropdownMenuSeparator />}
-
+                              
                               {(vehicle?.hasBillOfSale || sale.hasBillOfSale) ? (
-                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle || { id: sale.vehicleId, year: 0, make: 'Vehicle', model: 'Record' } as any, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-info">
+                                <DropdownMenuItem onClick={() => handleViewDocument(vehicle || { id: sale.vehicleId, year: 0, make: 'Vehicle', model: 'Record' } as any, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-info cursor-pointer hover:bg-muted/50">
                                   <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
                                 </DropdownMenuItem>
                               ) : (
-                                <DropdownMenuItem onClick={() => handleUploadBillOfSale(sale.id)} className="text-[10px] font-black uppercase py-2 text-muted-foreground italic">
+                                <DropdownMenuItem onClick={() => handleUploadBillOfSale(sale.id)} className="text-[10px] font-black uppercase py-2 text-muted-foreground italic cursor-pointer hover:bg-muted/50">
                                   <Upload className="w-3.5 h-3.5 mr-2" /> Upload Bill of Sale
+                                </DropdownMenuItem>
+                              )}
+                              
+                              <div className="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-t border-border/50 my-1">Download Files</div>
+                              {vehicle?.hasDocument && (
+                                <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                                  <Download className="w-3.5 h-3.5 mr-2 text-profit" /> Download Record
+                                </DropdownMenuItem>
+                              )}
+                              {vehicle?.hasSourceDocument && (
+                                <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                                  <Download className="w-3.5 h-3.5 mr-2 text-profit" /> Download Source
+                                </DropdownMenuItem>
+                              )}
+                              {(vehicle?.hasBillOfSale || sale.hasBillOfSale) && (
+                                <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle || { id: sale.vehicleId, make: 'Vehicle', model: 'Record' } as any, 'sale')} className="text-[10px] font-black uppercase py-2 text-info cursor-pointer hover:bg-muted/50">
+                                  <Download className="w-3.5 h-3.5 mr-2" /> Download Bill of Sale
                                 </DropdownMenuItem>
                               )}
                             </DropdownMenuContent>

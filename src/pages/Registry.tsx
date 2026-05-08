@@ -47,9 +47,13 @@ export default function Registry() {
     );
   }
 
-  const handleDownload = (id: string, customName: string, isSource = false) => {
+  const handleDownload = (id: string, customName: string, type: 'report' | 'source' | 'sale' = 'report') => {
     if (!token) return;
-    const downloadUrl = apiUrl(`/registry/${id}/download?token=${encodeURIComponent(token)}${isSource ? '&type=source' : ''}`);
+    let typeParam = '';
+    if (type === 'source') typeParam = '&type=source';
+    else if (type === 'sale') typeParam = '&type=sale';
+    
+    const downloadUrl = apiUrl(`/registry/${id}/download?token=${encodeURIComponent(token)}${typeParam}`);
     const iframe = document.createElement('iframe');
     iframe.style.display = 'none';
     iframe.src = downloadUrl;
@@ -261,9 +265,15 @@ export default function Registry() {
                                 </DropdownMenuItem>
                                 <DropdownMenuItem 
                                   className="hover:bg-muted/50 focus:bg-muted/50 cursor-pointer"
-                                  onClick={() => handleDownload(log.id, downloadName, true)}
+                                  onClick={() => handleDownload(log.id, downloadName, 'source')}
                                 >
                                   Original Source File
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  className="hover:bg-muted/50 focus:bg-muted/50 cursor-pointer text-info"
+                                  onClick={() => handleDownload(log.id, downloadName, 'sale')}
+                                >
+                                  Bill of Sale Document
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>

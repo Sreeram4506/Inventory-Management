@@ -6,7 +6,11 @@ import { validate, saleSchema } from '../utils/validators.js';
 import { salesCache, vehicleCache } from '../utils/cache.js';
 
 import multer from 'multer';
+import { readFile } from 'fs/promises';
+import { fillUsedVehiclePdf } from '../../services/usedVehiclePdfService.js';
 const upload = multer({ storage: multer.memoryStorage() });
+
+const defaultUsedVehicleTemplatePath = new URL('../../used-vechile-report.jpeg', import.meta.url);
 
 const router = express.Router();
 
@@ -108,6 +112,85 @@ router.post('/', upload.single('file'), validate(saleSchema), async (req, res, n
         where: { id: vehicleId },
         data: { status: 'Sold' }
       });
+
+      // ── Step 3: Regenerate Used Vehicle Record PDF with Disposition Data ──
+      try {
+        const fullVehicle = await tx.vehicle.findUnique({
+          where: { id: vehicleId },
+          include: { purchase: true, sale: { where: { id: s.id } } }
+        });
+
+        if (fullVehicle && fullVehicle.purchase) {
+          const templateBuffer = await readFile(defaultUsedVehicleTemplatePath);
+          
+          const registryEntry = await tx.documentRegistry.findFirst({
+            where: { vin: fullVehicle.vin, documentType: 'Used Vehicle Record' },
+            orderBy: { createdAt: 'desc' }
+          });
+
+          let parsedCity = '', parsedState = '', parsedZip = '';
+          const addr = fullVehicle.sale?.address || '';
+          const addrParts = addr.split(',').map(p => p.trim());
+          if (addrParts.length >= 3) {
+            parsedZip = addrParts.pop() || '';
+            parsedState = addrParts.pop() || '';
+            parsedCity = addrParts.pop() || '';
+          }
+
+          const pdfInfo = {
+            vin: fullVehicle.vin,
+            make: fullVehicle.make,
+            model: fullVehicle.model,
+            year: fullVehicle.year,
+            color: fullVehicle.color,
+            mileage: fullVehicle.mileage,
+            titleNumber: fullVehicle.titleNumber || registryEntry?.titleNumber || '',
+            purchaseDate: fullVehicle.purchaseDate,
+            purchasedFrom: fullVehicle.purchase.sellerName,
+            usedVehicleSourceAddress: fullVehicle.purchase.sellerAddress,
+            usedVehicleSourceCity: fullVehicle.purchase.sellerCity,
+            usedVehicleSourceState: fullVehicle.purchase.sellerState,
+            usedVehicleSourceZipCode: fullVehicle.purchase.sellerZip,
+            purchasePrice: fullVehicle.purchase.purchasePrice,
+            disposedTo: fullVehicle.sale?.customerName || '',
+            disposedAddress: addrParts.join(', ') || addr,
+            disposedCity: parsedCity,
+            disposedState: parsedState,
+            disposedZip: parsedZip,
+            disposedDate: fullVehicle.sale?.saleDate,
+            disposedPrice: fullVehicle.sale?.salePrice,
+            disposedOdometer: fullVehicle.mileage, 
+            disposedDlNumber: fullVehicle.sale?.driverLicense || '',
+            paymentMethod: fullVehicle.sale?.paymentMethod || '',
+          };
+
+          const newPdfBase64 = await fillUsedVehiclePdf(templateBuffer, pdfInfo, 'image/jpeg');
+
+          await tx.purchase.update({
+            where: { id: fullVehicle.purchase.id },
+            data: { documentBase64: newPdfBase64 }
+          });
+
+          if (registryEntry) {
+            await tx.documentRegistry.update({
+              where: { id: registryEntry.id },
+              data: {
+                disposedTo: String(fullVehicle.sale?.customerName || ''),
+                disposedAddress: String(pdfInfo.disposedAddress),
+                disposedCity: String(pdfInfo.disposedCity),
+                disposedState: String(pdfInfo.disposedState),
+                disposedZip: String(pdfInfo.disposedZip),
+                disposedDate: fullVehicle.sale?.saleDate ? String(fullVehicle.sale.saleDate) : null,
+                disposedPrice: String(fullVehicle.sale?.salePrice || ''),
+                documentBase64: newPdfBase64
+              }
+            });
+          }
+        }
+      } catch (pdfErr) {
+        console.error('[Sale PDF Update] Failed to regenerate record:', pdfErr);
+      }
+
       return s;
     });
 
@@ -157,6 +240,85 @@ router.patch('/:id', authenticateToken, authorizeManagerOrAdmin, async (req, res
     });
 
     salesCache.delete('sales-list');
+    vehicleCache.delete('vehicle-list');
+
+    // ── Step 4: Regenerate Used Vehicle Record PDF ──
+    try {
+      const fullVehicle = await prisma.vehicle.findUnique({
+        where: { id: updatedSale.vehicleId },
+        include: { purchase: true, sale: true }
+      });
+
+      if (fullVehicle && fullVehicle.purchase) {
+        const templateBuffer = await readFile(defaultUsedVehicleTemplatePath);
+        const registryEntry = await prisma.documentRegistry.findFirst({
+          where: { vin: fullVehicle.vin, documentType: 'Used Vehicle Record' },
+          orderBy: { createdAt: 'desc' }
+        });
+
+        let parsedCity = '', parsedState = '', parsedZip = '';
+        const addr = fullVehicle.sale?.address || '';
+        const addrParts = addr.split(',').map(p => p.trim());
+        if (addrParts.length >= 3) {
+          parsedZip = addrParts.pop() || '';
+          parsedState = addrParts.pop() || '';
+          parsedCity = addrParts.pop() || '';
+        }
+
+        const pdfInfo = {
+          vin: fullVehicle.vin,
+          make: fullVehicle.make,
+          model: fullVehicle.model,
+          year: fullVehicle.year,
+          color: fullVehicle.color,
+          mileage: fullVehicle.mileage,
+          titleNumber: fullVehicle.titleNumber || registryEntry?.titleNumber || '',
+          purchaseDate: fullVehicle.purchaseDate,
+          purchasedFrom: fullVehicle.purchase.sellerName,
+          usedVehicleSourceAddress: fullVehicle.purchase.sellerAddress,
+          usedVehicleSourceCity: fullVehicle.purchase.sellerCity,
+          usedVehicleSourceState: fullVehicle.purchase.sellerState,
+          usedVehicleSourceZipCode: fullVehicle.purchase.sellerZip,
+          purchasePrice: fullVehicle.purchase.purchasePrice,
+          disposedTo: fullVehicle.sale?.customerName || '',
+          disposedAddress: addrParts.join(', ') || addr,
+          disposedCity: parsedCity,
+          disposedState: parsedState,
+          disposedZip: parsedZip,
+          disposedDate: fullVehicle.sale?.saleDate,
+          disposedPrice: fullVehicle.sale?.salePrice,
+          disposedOdometer: fullVehicle.mileage,
+          disposedDlNumber: fullVehicle.sale?.driverLicense || '',
+          paymentMethod: fullVehicle.sale?.paymentMethod || '',
+        };
+
+        const newPdfBase64 = await fillUsedVehiclePdf(templateBuffer, pdfInfo, 'image/jpeg');
+
+        await prisma.purchase.update({
+          where: { id: fullVehicle.purchase.id },
+          data: { documentBase64: newPdfBase64 }
+        });
+
+        if (registryEntry) {
+          await prisma.documentRegistry.update({
+            where: { id: registryEntry.id },
+            data: {
+              disposedTo: String(fullVehicle.sale?.customerName || ''),
+              disposedAddress: String(pdfInfo.disposedAddress),
+              disposedCity: String(pdfInfo.disposedCity),
+              disposedState: String(pdfInfo.disposedState),
+              disposedZip: String(pdfInfo.disposedZip),
+              disposedDate: fullVehicle.sale?.saleDate ? String(fullVehicle.sale.saleDate) : null,
+              disposedPrice: String(fullVehicle.sale?.salePrice || ''),
+              documentBase64: newPdfBase64
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[Sale Update PDF] Error:', err);
+    }
+
     res.json(updatedSale);
   } catch (err) {
     next(err);
@@ -185,6 +347,75 @@ router.delete('/:id', authenticateToken, authorizeManagerOrAdmin, async (req, re
         data: { status: 'Available' }
       })
     ]);
+
+    // ── Step 3: Regenerate Used Vehicle Record (Clear Disposition) ──
+    try {
+      const fullVehicle = await prisma.vehicle.findUnique({
+        where: { id: sale.vehicleId },
+        include: { purchase: true }
+      });
+
+      if (fullVehicle && fullVehicle.purchase) {
+        const templateBuffer = await readFile(defaultUsedVehicleTemplatePath);
+        const registryEntry = await prisma.documentRegistry.findFirst({
+          where: { vin: fullVehicle.vin, documentType: 'Used Vehicle Record' },
+          orderBy: { createdAt: 'desc' }
+        });
+
+        const pdfInfo = {
+          vin: fullVehicle.vin,
+          make: fullVehicle.make,
+          model: fullVehicle.model,
+          year: fullVehicle.year,
+          color: fullVehicle.color,
+          mileage: fullVehicle.mileage,
+          titleNumber: fullVehicle.titleNumber || registryEntry?.titleNumber || '',
+          purchaseDate: fullVehicle.purchaseDate,
+          purchasedFrom: fullVehicle.purchase.sellerName,
+          usedVehicleSourceAddress: fullVehicle.purchase.sellerAddress,
+          usedVehicleSourceCity: fullVehicle.purchase.sellerCity,
+          usedVehicleSourceState: fullVehicle.purchase.sellerState,
+          usedVehicleSourceZipCode: fullVehicle.purchase.sellerZip,
+          purchasePrice: fullVehicle.purchase.purchasePrice,
+          // Clear disposition fields
+          disposedTo: '',
+          disposedAddress: '',
+          disposedCity: '',
+          disposedState: '',
+          disposedZip: '',
+          disposedDate: null,
+          disposedPrice: 0,
+          disposedOdometer: 0,
+          disposedDlNumber: '',
+          paymentMethod: '',
+        };
+
+        const newPdfBase64 = await fillUsedVehiclePdf(templateBuffer, pdfInfo, 'image/jpeg');
+
+        await prisma.purchase.update({
+          where: { id: fullVehicle.purchase.id },
+          data: { documentBase64: newPdfBase64 }
+        });
+
+        if (registryEntry) {
+          await prisma.documentRegistry.update({
+            where: { id: registryEntry.id },
+            data: {
+              disposedTo: '',
+              disposedAddress: '',
+              disposedCity: '',
+              disposedState: '',
+              disposedZip: '',
+              disposedDate: null,
+              disposedPrice: '',
+              documentBase64: newPdfBase64
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[Sale Delete PDF] Error:', err);
+    }
 
     // 3. Clear caches
     salesCache.delete('sales-list');

@@ -164,8 +164,25 @@ router.get('/:id/download', async (req, res, next) => {
       return res.status(404).json({ message: 'Document not found' });
     }
 
-    const isSource = req.query.type === 'source';
-    let base64 = isSource ? log.sourceDocumentBase64 : log.documentBase64;
+    const docType = req.query.type;
+    let base64;
+    let prefix = '';
+
+    if (docType === 'source') {
+      base64 = log.sourceDocumentBase64;
+      prefix = 'Source_';
+    } else if (docType === 'sale') {
+      if (log.vin) {
+        const vehicle = await prisma.vehicle.findUnique({
+          where: { vin: log.vin },
+          include: { sale: true }
+        });
+        base64 = vehicle?.sale?.billOfSaleBase64;
+      }
+      prefix = 'BillOfSale_';
+    } else {
+      base64 = log.documentBase64;
+    }
 
     if (!base64) {
       return res.status(404).json({ message: 'Requested document data not available' });
@@ -187,7 +204,6 @@ router.get('/:id/download', async (req, res, next) => {
        extension = 'pdf';
     }
 
-    const prefix = isSource ? 'Source_' : '';
     const safeFileName = `${prefix}${(log.documentType || 'Document').replace(/\s+/g, '_')}_${(log.sourceFileName || 'log').split('.')[0]}.${extension}`;
     
     const contentType = extension === 'pdf' ? 'application/pdf' : 

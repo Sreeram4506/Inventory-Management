@@ -4,7 +4,7 @@ import { useAuth } from '@/context/auth-hooks';
 import { Vehicle } from '@/types/inventory';
 import { cn } from '@/lib/utils';
 // Consolidated icon imports — avoids duplicate module references
-import { Search, Plus, ChevronRight, Pencil, Trash2, AlertTriangle, FileText, ShoppingCart, LayoutGrid, List, Receipt } from 'lucide-react';
+import { Search, Plus, ChevronRight, Pencil, Trash2, AlertTriangle, FileText, ShoppingCart, LayoutGrid, List, Receipt, Download } from 'lucide-react';
 import { useState, useMemo, useDeferredValue } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -75,7 +75,7 @@ export default function Inventory() {
     );
   }
 
-  const handleViewDocument = async (vehicle: Vehicle, type: 'report' | 'source') => {
+  const handleViewDocument = async (vehicle: Vehicle, type: 'report' | 'source' | 'bill_of_sale') => {
     if (!token) return;
     try {
       const resp = await fetch(apiUrl(`/vehicles/${vehicle.id}/data`), {
@@ -84,20 +84,51 @@ export default function Inventory() {
       if (!resp.ok) throw new Error('Failed to fetch document');
       const data = await resp.json();
       
-      const base64 = type === 'report' ? data.documentBase64 : data.sourceDocumentBase64;
+      let base64 = '';
+      let label = '';
+      
+      if (type === 'report') {
+        base64 = data.documentBase64;
+        label = 'Used Vehicle Record';
+      } else if (type === 'source') {
+        base64 = data.sourceDocumentBase64;
+        label = 'Original Source';
+      } else if (type === 'bill_of_sale') {
+        base64 = data.billOfSaleBase64;
+        label = 'Bill of Sale';
+      }
+
       if (base64) {
         setViewerDoc({ 
           base64, 
           name: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
-          type: type === 'report' ? 'Used Vehicle Record' : 'Original Source'
+          type: label
         });
         setViewerOpen(true);
       } else {
-        toast.error(`No ${type === 'report' ? 'Used Vehicle Record' : 'Original Source'} available for this vehicle.`);
+        toast.error(`No ${label} available for this vehicle.`);
       }
     } catch (e) {
       toast.error('Error loading document.');
     }
+  };
+
+  const handleDownloadDocument = (vehicle: Vehicle, type: 'report' | 'source' | 'sale' = 'report') => {
+    if (!token) return;
+    let typeParam = '';
+    if (type === 'source') typeParam = '&type=source';
+    else if (type === 'sale') typeParam = '&type=sale';
+    
+    // Using a different endpoint for direct vehicle download if available, 
+    // or leveraging the registry endpoint if that's how the backend is structured.
+    // Assuming /vehicles/:id/download exists based on naming conventions
+    const downloadUrl = apiUrl(`/vehicles/${vehicle.id}/document?token=${encodeURIComponent(token)}${typeParam}`);
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = downloadUrl;
+    document.body.appendChild(iframe);
+    setTimeout(() => { if (iframe.parentNode) document.body.removeChild(iframe); }, 60000);
+    toast.success(`Downloading ${type.replace('_', ' ')} for ${vehicle.make} ${vehicle.model}...`);
   };
 
 
@@ -200,15 +231,38 @@ export default function Inventory() {
                             <FileText className="w-4 h-4" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-white border-border min-w-[160px]">
+                        <DropdownMenuContent align="end" className="bg-white border-border min-w-[200px]">
+                          <div className="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-border/50 mb-1">Preview Documents</div>
                           {vehicle.hasDocument && (
-                            <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2">
+                            <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
                               <FileText className="w-3.5 h-3.5 mr-2" /> Used Vehicle Record
                             </DropdownMenuItem>
                           )}
                           {vehicle.hasSourceDocument && (
-                            <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2">
+                            <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
                               <Receipt className="w-3.5 h-3.5 mr-2" /> Original Source
+                            </DropdownMenuItem>
+                          )}
+                          {vehicle.hasBillOfSale && (
+                            <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-info cursor-pointer hover:bg-muted/50">
+                              <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
+                            </DropdownMenuItem>
+                          )}
+                          
+                          <div className="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-t border-border/50 my-1">Download Files</div>
+                          {vehicle.hasDocument && (
+                            <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                              <Download className="w-3.5 h-3.5 mr-2 text-profit" /> Download Record
+                            </DropdownMenuItem>
+                          )}
+                          {vehicle.hasSourceDocument && (
+                            <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                              <Download className="w-3.5 h-3.5 mr-2 text-profit" /> Download Source
+                            </DropdownMenuItem>
+                          )}
+                          {vehicle.hasBillOfSale && (
+                            <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle, 'sale')} className="text-[10px] font-black uppercase py-2 text-info cursor-pointer hover:bg-muted/50">
+                              <Download className="w-3.5 h-3.5 mr-2" /> Download Bill of Sale
                             </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
@@ -316,23 +370,41 @@ export default function Inventory() {
                                     <FileText className="w-3.5 h-3.5" />
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="bg-white border-border min-w-[160px]">
-                                  {vehicle.hasDocument && (
-                                    <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2">
-                                      <FileText className="w-3.5 h-3.5 mr-2" /> Used Vehicle Record
-                                    </DropdownMenuItem>
-                                  )}
-                                  {vehicle.hasSourceDocument && (
-                                    <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2">
-                                      <Receipt className="w-3.5 h-3.5 mr-2" /> Original Source
-                                    </DropdownMenuItem>
-                                  )}
-                                  {vehicle.hasBillOfSale && (
-                                    <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-info">
-                                      <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
-                                    </DropdownMenuItem>
-                                  )}
-                                </DropdownMenuContent>
+                                  <DropdownMenuContent align="end" className="bg-white border-border min-w-[200px]">
+                                    <div className="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-border/50 mb-1">Preview Documents</div>
+                                    {vehicle.hasDocument && (
+                                      <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                                        <FileText className="w-3.5 h-3.5 mr-2" /> Used Vehicle Record
+                                      </DropdownMenuItem>
+                                    )}
+                                    {vehicle.hasSourceDocument && (
+                                      <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                                        <Receipt className="w-3.5 h-3.5 mr-2" /> Original Source
+                                      </DropdownMenuItem>
+                                    )}
+                                    {vehicle.hasBillOfSale && (
+                                      <DropdownMenuItem onClick={() => handleViewDocument(vehicle, 'bill_of_sale')} className="text-[10px] font-black uppercase py-2 text-info cursor-pointer hover:bg-muted/50">
+                                        <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
+                                      </DropdownMenuItem>
+                                    )}
+                                    
+                                    <div className="px-2 py-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-t border-border/50 my-1">Download Files</div>
+                                    {vehicle.hasDocument && (
+                                      <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle, 'report')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                                        <Download className="w-3.5 h-3.5 mr-2 text-profit" /> Download Record
+                                      </DropdownMenuItem>
+                                    )}
+                                    {vehicle.hasSourceDocument && (
+                                      <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle, 'source')} className="text-[10px] font-black uppercase py-2 cursor-pointer hover:bg-muted/50">
+                                        <Download className="w-3.5 h-3.5 mr-2 text-profit" /> Download Source
+                                      </DropdownMenuItem>
+                                    )}
+                                    {vehicle.hasBillOfSale && (
+                                      <DropdownMenuItem onClick={() => handleDownloadDocument(vehicle, 'sale')} className="text-[10px] font-black uppercase py-2 text-info cursor-pointer hover:bg-muted/50">
+                                        <Download className="w-3.5 h-3.5 mr-2" /> Download Bill of Sale
+                                      </DropdownMenuItem>
+                                    )}
+                                  </DropdownMenuContent>
                               </DropdownMenu>
                             )}
                           </div>
