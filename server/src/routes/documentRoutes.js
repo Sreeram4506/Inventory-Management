@@ -148,6 +148,13 @@ router.post(
       let vehicleId = null;
       let registryId = null;
 
+      if (!info.vin) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Could not extract a valid VIN from the document. Please ensure the image is clear and try again.'
+        });
+      }
+
       // ── Check for duplicate in inventory ──
       const existingVehicle = await prisma.vehicle.findUnique({ where: { vin: info.vin } });
       if (existingVehicle) {
