@@ -106,9 +106,9 @@ RULES & PATTERNS:
    - AUCTION INVOICE (e.g., ADESA, Copart, Manheim): The "SELLER" is the entity we acquired the car from -> Map this to \`purchasedFrom\` and \`usedVehicleSourceAddress\` fields. The "BUYER" is the dealership acquiring the vehicle -> Do NOT put the dealership in \`disposedTo\`. Set all \`disposed\` fields to null. Ignore "Buying Representative" or bidder details.
    - RETAIL BILL OF SALE (Consumer Sale): The "BUYER" or "Purchaser" is the customer -> Map this to \`disposedTo\` and \`disposedAddress\` fields. The "SELLER" is the dealership -> Do NOT put the dealership in \`purchasedFrom\`. Set all acquisition fields to null.
 2. PRICE EXTRACTION:
-   - For Acquisitions: `purchasePrice` is the FINAL TOTAL amount paid (e.g., 'Total Price', 'Amount Due').
-   - For Retail Sales: `disposedPrice` is the FINAL TOTAL SELLING PRICE to the customer (Look for 'Total' at the bottom of the Costs section, including Doc Fees, e.g., 5500).
-3. DEALERSHIP RULE: Our dealership is "Broadway Used Auto Sales" (or similar). NEVER put our dealership in `purchasedFrom` for acquisitions. NEVER put our dealership in `disposedTo` for retail sales.
+   - For Acquisitions: 'purchasePrice' is the FINAL TOTAL amount paid (e.g., 'Total Price', 'Amount Due').
+   - For Retail Sales: 'disposedPrice' is the FINAL TOTAL SELLING PRICE to the customer (Look for 'Total' at the bottom of the Costs section, including Doc Fees, e.g., 5500).
+3. DEALERSHIP RULE: Our dealership is "Broadway Used Auto Sales" (or similar). NEVER put our dealership in 'purchasedFrom' for acquisitions. NEVER put our dealership in 'disposedTo' for retail sales.
 4. ADDRESS EXTRACTION:
    - Separate the street address, city, state, and zip code accurately into their respective fields.
 4. TITLE NUMBER: Extract from 'Title Number' or 'Title State/Number'. If it looks like 'MA/BN1234', return only 'BN1234'.
@@ -278,9 +278,9 @@ RULES & PATTERNS:
    - AUCTION INVOICE (e.g., ADESA, Copart, Manheim): The "SELLER" is the entity we acquired the car from -> Map this to \`purchasedFrom\` and \`usedVehicleSourceAddress\` fields. The "BUYER" is the dealership acquiring the vehicle -> Do NOT put the dealership in \`disposedTo\`. Set all \`disposed\` fields to null. Ignore "Buying Representative" or bidder details.
    - RETAIL BILL OF SALE (Consumer Sale): The "BUYER" or "Purchaser" is the customer -> Map this to \`disposedTo\` and \`disposedAddress\` fields. The "SELLER" is the dealership -> Do NOT put the dealership in \`purchasedFrom\`. Set all acquisition fields to null.
 2. PRICE EXTRACTION:
-   - For Acquisitions: `purchasePrice` is the FINAL TOTAL amount paid (Look for 'Total Price', 'Amount Due', or 'Balance').
-   - For Retail Sales: `disposedPrice` is the FINAL TOTAL SELLING PRICE to the customer (Look for 'Total' at the bottom of the Costs section, including Doc Fees, e.g., 5500).
-3. DEALERSHIP RULE: Our dealership is "Broadway Used Auto Sales" (or similar). NEVER put our dealership in `purchasedFrom` for acquisitions. NEVER put our dealership in `disposedTo` for retail sales.
+   - For Acquisitions: 'purchasePrice' is the FINAL TOTAL amount paid (Look for 'Total Price', 'Amount Due', or 'Balance').
+   - For Retail Sales: 'disposedPrice' is the FINAL TOTAL SELLING PRICE to the customer (Look for 'Total' at the bottom of the Costs section, including Doc Fees, e.g., 5500).
+3. DEALERSHIP RULE: Our dealership is "Broadway Used Auto Sales" (or similar). NEVER put our dealership in 'purchasedFrom' for acquisitions. NEVER put our dealership in 'disposedTo' for retail sales.
 4. ADDRESS EXTRACTION:
    - Separate the street address, city, state, and zip code accurately into their respective fields. Include Apartment or Suite numbers if present.
 4. TITLE NUMBER: Extract from 'Title Number' or 'Title State/Number'. If it looks like 'MA/BN1234', return only 'BN1234'.
