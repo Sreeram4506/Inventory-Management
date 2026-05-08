@@ -112,6 +112,11 @@ RULES & PATTERNS:
    - Separate the street address, city, state, and zip code accurately into their respective fields.
 4. TITLE NUMBER: Extract from 'Title Number' or 'Title State/Number'. If it looks like 'MA/BN1234', return only 'BN1234'.
 5. VIN EXTRACTION: Must be exactly 17 characters.
+6. AUCTION SPECIFIC (CMAA):
+   - SELLER BOX (Top Left): This is the 'purchasedFrom'.
+   - BUYER BOX (Bottom Left): This is the dealership. Do NOT set 'disposedTo' if this is the dealership.
+   - TOTAL (Bottom Right): This is the 'purchasePrice'.
+   - ODOMETER: Extract from the 'Odometer Disclosure Statement' section.
 
 ${extraInstructions ? `EXTRA INSTRUCTIONS:\n${extraInstructions}\n\n` : ''}Document text:
 ${text}`;
@@ -273,6 +278,11 @@ RULES & PATTERNS:
    - Separate the street address, city, state, and zip code accurately into their respective fields. Include Apartment or Suite numbers if present.
 4. TITLE NUMBER: Extract from 'Title Number' or 'Title State/Number'. If it looks like 'MA/BN1234', return only 'BN1234'.
 5. VIN EXTRACTION: Must be exactly 17 characters.
+6. AUCTION SPECIFIC (CMAA):
+   - SELLER BOX (Top Left): Contains the 'purchasedFrom' name and address.
+   - BUYER BOX (Bottom Left): Contains the dealership name. If the buyer is a dealership (like 'Broadway Used Auto Sales'), this is an ACQUISITION. Set 'purchasedFrom' to the SELLER name and set all 'disposed' fields to null.
+   - TOTAL (Bottom Right): Look for the 'TOTAL' line with a dollar amount (e.g., 4,195.00). This is the 'purchasePrice'.
+   - ODOMETER: Look for the 'ODOMETER DISCLOSURE STATEMENT' and extract the number (e.g., 111223).
 
 ${extraInstructions ? `EXTRA INSTRUCTIONS:\n${extraInstructions}` : ''}`;
 
@@ -330,7 +340,8 @@ function clean(d) {
   const vin = s(d.vin).toUpperCase()
     .replace(/[^A-Z0-9]/g, '')
     .replace(/^(VIN|SERIAL|NUMBER|ID|VEHICLEID|IDENTIFICATION|STOCK|LOT|NO)+/, '')
-    .replace(/[IOQ]/g, '')
+    .replace(/I/g, '1')
+    .replace(/[OQ]/g, '0')
     .slice(0, 17);
   const dt = v => {
     if (!v) return null;
