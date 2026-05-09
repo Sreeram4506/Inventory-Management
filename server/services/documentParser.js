@@ -67,10 +67,10 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
 // ═══════════════════════════════════════════════════════════════
 function buildAcquisitionPrompt(textOrEmpty) {
   const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
-  return `You are extracting data from a VEHICLE ACQUISITION document (auction invoice, wholesale bill of sale, or dealer purchase).
-This document records a vehicle WE PURCHASED. Our dealership is "Broadway Used Auto Sales" (or variants like "Auto Sales on Broadway").
+  return `You are extracting data from a VEHICLE ACQUISITION document.
+Our dealership (the BUYER) is "Broadway Used Auto Sales" (or "Broadway Used Auto Sales Inc").
 
-Return ONLY a raw JSON object with these fields. Set any field you cannot find to null.
+Return ONLY a raw JSON object. Set unknown fields to null.
 
 {
   "vin": "exact 17-char VIN",
@@ -79,9 +79,7 @@ Return ONLY a raw JSON object with these fields. Set any field you cannot find t
   "year": 2014,
   "color": "color",
   "mileage": 131575,
-  "titleNumber": "title number only, no state prefix",
-  "stockNumber": "stock number if present",
-  "purchasedFrom": "SELLER name (the entity we bought from, NOT Broadway)",
+  "purchasedFrom": "SELLER name (NOT Broadway)",
   "purchasePrice": 6340,
   "purchaseDate": "YYYY-MM-DD",
   "usedVehicleSourceAddress": "SELLER street address",
@@ -90,59 +88,47 @@ Return ONLY a raw JSON object with these fields. Set any field you cannot find t
   "usedVehicleSourceZipCode": "SELLER zip"
 }
 
-CRITICAL RULES:
-1. The SELLER is the entity that sold the vehicle TO us. Extract their name and address.
-2. Broadway Used Auto Sales is the BUYER (us). NEVER put Broadway in "purchasedFrom".
-3. "purchasePrice" = the TOTAL amount (look for "TOTAL", "Net Due", "Amount Due", "Total Price"). Include all fees.
-4. For ADESA docs: SELLER is in the "SELLER:" box. Price is "Total" or "Net Due" in the VEHICLE PURCHASE section.
-5. For CMAA docs: SELLER is in the left box (labeled S/E/L/L/E/R). Price is "TOTAL" on the right side.
-6. For CarMax: SELLER is at the bottom right (e.g., "CarMax - Westborough"). Price is "TOTAL" in the pricing box.
-7. "titleNumber": If format is "MA/BN355731", return only "BN355731".
-8. VIN must be exactly 17 characters. Read carefully character by character.
-9. "mileage": Extract from odometer reading in the Odometer Disclosure Statement section.
-10. Set ALL "disposed" fields to null — this is an acquisition, not a sale.${docText}`;
+CASE STUDIES FOR ACCURACY:
+1. **ADESA BOSTON INVOICE**:
+   - VIN: Located in the middle "VEHICLE INFORMATION" box. (Example: "JTDKN3DU9B1362964"). Do NOT misread as barcodes or other numbers.
+   - SELLER: Top-middle box labeled "SELLER:". (Example: "BERNARDI TOYOTA-SCION").
+   - BUYER: Top-right box. If it says "BROADWAY", ignore it for the "purchasedFrom" field.
+   - PRICE: Use "Net Due" (e.g., 5785.00). DO NOT join digits across columns.
+2. **CARMAX WHOLESALE**:
+   - VIN: At the top left under Year/Make/Model.
+   - SELLER: Bottom right text block (e.g., "CarMax - Norwood").
+   - PRICE: "TOTAL" in the bottom grey box.
+3. **GENERAL ROLE RULE**: "purchasedFrom" must ALWAYS be the vendor/auction/dealer we bought from. It is NEVER Broadway.${docText}`;
 }
 
 function buildSalePrompt(textOrEmpty) {
   const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
-  return `You are extracting data from a VEHICLE SALE document (retail bill of sale or purchase contract).
-This document records a vehicle WE SOLD to a customer. Our dealership is "Broadway Used Auto Sales" (or variants like "Auto Sales on Broadway").
+  return `You are extracting data from a VEHICLE SALE document.
+Our dealership (the SELLER) is "Broadway Used Auto Sales".
 
-Return ONLY a raw JSON object with these fields. Set any field you cannot find to null.
+Return ONLY a raw JSON object.
 
 {
   "vin": "exact 17-char VIN",
   "make": "manufacturer",
   "model": "model name",
   "year": 2014,
-  "color": "color",
-  "titleNumber": "title number only, no state prefix",
-  "disposedTo": "PURCHASER/BUYER full name (the customer, NOT Broadway)",
+  "disposedTo": "PURCHASER name (the customer, NOT Broadway)",
   "disposedAddress": "PURCHASER street address",
   "disposedCity": "PURCHASER city",
   "disposedState": "XX",
   "disposedZip": "PURCHASER zip code",
   "disposedDate": "YYYY-MM-DD",
-  "disposedPrice": 5500,
-  "disposedOdometer": 136623,
-  "disposedDlNumber": "PURCHASER driver license number",
-  "disposedDlState": "XX"
+  "disposedPrice": 12030,
+  "disposedOdometer": 119629
 }
 
-CRITICAL RULES:
-1. The PURCHASER/BUYER is the customer who bought from us. Extract their full name, address, and DL info.
-2. Broadway Used Auto Sales is the SELLER (us). NEVER put Broadway in "disposedTo".
-3. "disposedTo" = the "Print Name(s) of Purchaser(s)" or "Purchaser's Printed Name" field.
-4. "disposedAddress" = the customer's street address (e.g., "55 David Ter Apt 08").
-5. "disposedPrice" = the TOTAL from the "COSTS AND DISCOUNTS" section (includes Selling Price + Doc Fee + other fees).
-6. "disposedOdometer" = the odometer reading from the boxes in the Odometer Disclosure Statement.
-7. "disposedDlNumber" = the DL Number field next to the purchaser name.
-8. "disposedDlState" = the DL State field (usually "MA").
-9. "disposedDate" = the "Date of Sale" field.
-10. For Motor Vehicle Purchase Contract: "disposedTo" is the "Purchaser(s) Name(s) and Address(es)" at top right. "disposedPrice" is "Total Contract Price" (line 25).
-11. "titleNumber": If format is "MA/BN355731", return only "BN355731".
-12. VIN must be exactly 17 characters.
-13. Set ALL "purchasedFrom" and "usedVehicleSource" fields to null — this is a sale, not an acquisition.${docText}`;
+CASE STUDIES FOR ACCURACY:
+1. **MOTOR VEHICLE PURCHASE CONTRACT**:
+   - PURCHASER: Look for "Print Name(s) of Purchaser(s)" (Example: "Thomas Digianvittorio").
+   - PRICE: Use the "Total" (bottom of the COSTS AND DISCOUNTS section). (Example: 12030.00).
+   - ODOMETER: Look for the hand-written or typed digits in the "Odometer Disclosure" boxes.
+2. **GENERAL ROLE RULE**: "disposedTo" is ALWAYS the customer. It is NEVER Broadway.${docText}`;
 }
 
 function buildAutoPrompt(textOrEmpty) {
