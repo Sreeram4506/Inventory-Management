@@ -319,8 +319,23 @@ async function visionExtract(fileBuffer, mimetype, purpose = "") {
 function clean(d) {
   if (!d) return {};
   const s = v => String(v || '').trim();
-  const n = v => { const x = parseFloat(String(v || '0').replace(/[^0-9.]/g, '')); return Number.isFinite(x) ? x : 0; };
-  const i = v => { const x = parseInt(String(v || '0').replace(/\D/g, ''), 10); return Number.isFinite(x) ? x : 0; };
+  const n = v => {
+    if (typeof v === 'number') return v;
+    const cleanStr = String(v || '0').replace(/[$,]/g, '').trim();
+    const matches = cleanStr.match(/-?\d+(\.\d+)?/g);
+    if (!matches) return 0;
+    const priceMatch = matches.find(m => m.includes('.'));
+    const x = parseFloat(priceMatch || matches[matches.length - 1]);
+    return Number.isFinite(x) ? x : 0;
+  };
+  const i = v => {
+    if (typeof v === 'number') return v;
+    const cleanStr = String(v || '0').replace(/[,]/g, '').trim();
+    const matches = cleanStr.match(/\d+/g);
+    if (!matches) return 0;
+    const x = parseInt(matches[matches.length - 1], 10);
+    return Number.isFinite(x) ? x : 0;
+  };
   const vin = s(d.vin).toUpperCase()
     .replace(/[^A-Z0-9]/g, '')
     .replace(/^(VIN|SERIAL|NUMBER|ID|VEHICLEID|IDENTIFICATION|STOCK|LOT|NO)+/, '')
