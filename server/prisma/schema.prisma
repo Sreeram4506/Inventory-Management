@@ -7,22 +7,51 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Dealership {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  slug        String   @unique
+  address     String?
+  phone       String?
+  email       String?
+  logoBase64  String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  // Relations
+  users               User[]
+  vehicles            Vehicle[]
+  sales               Sale[]
+  purchases           Purchase[]
+  repairs             Repair[]
+  customerNotes       CustomerNote[]
+  advertisingExpenses AdvertisingExpense[]
+  businessExpenses    BusinessExpense[]
+  documents           DocumentRegistry[]
+}
+
 model User {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  email     String   @unique
+  email     String
   password  String
   name      String
   role      String   @default("STAFF") // ADMIN, MANAGER, STAFF
   createdAt DateTime @default(now())
   
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
   // Relations for tracking activity
   vehiclesAdded Vehicle[]
   salesMade     Sale[]
+
+  @@unique([email, dealershipId])
 }
 
 model Vehicle {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  vin               String   @unique
+  vin               String
   make              String
   model             String
   year              Int
@@ -35,6 +64,10 @@ model Vehicle {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
   // Relations
   purchase          Purchase?
   repairs           Repair[]
@@ -46,8 +79,10 @@ model Vehicle {
   customerNotes     CustomerNote[]
 
   // Indexes for common query patterns
+  @@unique([vin, dealershipId])
   @@index([status])           // Dashboard filters by status
   @@index([createdAt])        // Sorted listing by creation date
+  @@index([dealershipId])
 }
 
 model CustomerNote {
@@ -60,7 +95,12 @@ model CustomerNote {
   note         String
   createdAt    DateTime @default(now())
 
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
   @@index([vehicleId])        // Lookup notes by vehicle
+  @@index([dealershipId])
 }
 
 
@@ -84,6 +124,12 @@ model Purchase {
   documentBase64    String?
   sourceDocumentBase64 String?
   createdAt         DateTime @default(now())
+
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId])
 }
 
 model Repair {
@@ -97,7 +143,12 @@ model Repair {
   repairDate      DateTime @default(now())
   createdAt       DateTime @default(now())
 
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
   @@index([vehicleId])        // Lookup repairs by vehicle
+  @@index([dealershipId])
 }
 
 model Sale {
@@ -125,6 +176,10 @@ model Sale {
   createdById    String?  @db.ObjectId
   createdBy      User?    @relation(fields: [createdById], references: [id])
 
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
   // Document archiving
   billOfSaleBase64 String?
   hasBillOfSale    Boolean  @default(false)
@@ -133,6 +188,7 @@ model Sale {
 
   @@index([saleDate])         // Dashboard sorted by sale date
   @@index([createdById])      // Team analytics queries
+  @@index([dealershipId])
 }
 
 model AdvertisingExpense {
@@ -144,6 +200,12 @@ model AdvertisingExpense {
   amountSpent     Float
   linkedVehicleId String?   @db.ObjectId
   createdAt       DateTime  @default(now())
+
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId])
 }
 
 model BusinessExpense {
@@ -153,6 +215,12 @@ model BusinessExpense {
   date     DateTime
   notes    String?
   createdAt DateTime @default(now())
+
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
+  @@index([dealershipId])
 }
 
 model DocumentRegistry {
@@ -187,7 +255,12 @@ model DocumentRegistry {
   disposedDlNumber  String?
   disposedDlState   String?
 
+  // Multi-tenancy
+  dealershipId String     @db.ObjectId
+  dealership   Dealership @relation(fields: [dealershipId], references: [id])
+
   createdAt         DateTime @default(now())
 
   @@index([vin])              // VIN lookup for document searches
+  @@index([dealershipId])
 }

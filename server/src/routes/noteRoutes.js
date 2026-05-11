@@ -5,11 +5,11 @@ import { authenticateToken } from '../middlewares/authMiddleware.js';
 const router = express.Router();
 
 // Get all notes for a vehicle
-router.get('/vehicle/:vehicleId', authenticateToken, async (req, res, next) => {
+router.get('/vehicle/:vehicleId', async (req, res, next) => {
   const { vehicleId } = req.params;
   try {
     const notes = await prisma.customerNote.findMany({
-      where: { vehicleId },
+      where: { vehicleId, dealershipId: req.dealershipId },
       orderBy: { createdAt: 'desc' }
     });
     res.json(notes);
@@ -19,7 +19,7 @@ router.get('/vehicle/:vehicleId', authenticateToken, async (req, res, next) => {
 });
 
 // Add a new note
-router.post('/', authenticateToken, async (req, res, next) => {
+router.post('/', async (req, res, next) => {
   const { vehicleId, customerName, phone, email, note } = req.body;
   try {
     const customerNote = await prisma.customerNote.create({
@@ -28,7 +28,8 @@ router.post('/', authenticateToken, async (req, res, next) => {
         customerName,
         phone,
         email,
-        note
+        note,
+        dealershipId: req.dealershipId
       }
     });
     res.status(201).json(customerNote);
@@ -38,11 +39,11 @@ router.post('/', authenticateToken, async (req, res, next) => {
 });
 
 // Delete a note
-router.delete('/:id', authenticateToken, async (req, res, next) => {
+router.delete('/:id', async (req, res, next) => {
   const { id } = req.params;
   try {
-    await prisma.customerNote.delete({
-      where: { id }
+    await prisma.customerNote.deleteMany({
+      where: { id, dealershipId: req.dealershipId }
     });
     res.status(204).send();
   } catch (err) {

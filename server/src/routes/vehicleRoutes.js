@@ -97,10 +97,10 @@ router.get('/:id/document', async (req, res, next) => {
   }
 });
 
-router.get('/:id/data', authenticateToken, async (req, res, next) => {
+router.get('/:id/data', async (req, res, next) => {
   try {
-    const vehicle = await prisma.vehicle.findUnique({
-      where: { id: req.params.id },
+    const vehicle = await prisma.vehicle.findFirst({
+      where: { id: req.params.id, dealershipId: req.dealershipId },
       include: { purchase: true, sale: true }
     });
     
@@ -114,7 +114,11 @@ router.get('/:id/data', authenticateToken, async (req, res, next) => {
     // Fallback: If data missing in purchase record, look in DocumentRegistry by VIN
     if ((!documentBase64 || !sourceDocumentBase64) && vehicle.vin) {
       const registryEntry = await prisma.documentRegistry.findFirst({
-        where: { vin: vehicle.vin, documentType: 'Used Vehicle Record' },
+        where: { 
+          vin: vehicle.vin, 
+          documentType: 'Used Vehicle Record',
+          dealershipId: req.dealershipId
+        },
         select: { documentBase64: true, sourceDocumentBase64: true },
         orderBy: { createdAt: 'desc' }
       });
@@ -135,15 +139,17 @@ router.get('/:id/data', authenticateToken, async (req, res, next) => {
   }
 });
 
-router.get('/', authenticateToken, async (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
-    const cachedData = vehicleCache.get('vehicle-list');
+    const cacheKey = `vehicle-list:${req.dealershipId}`;
+    const cachedData = vehicleCache.get(cacheKey);
     if (cachedData) {
       console.log('[Cache] Returning cached vehicle list');
       return res.json(cachedData);
     }
 
     const vehicles = await prisma.vehicle.findMany({
+      where: { dealershipId: req.dealershipId },
       orderBy: { createdAt: 'desc' },
       include: { 
         purchase: {
@@ -176,7 +182,6 @@ router.get('/', authenticateToken, async (req, res, next) => {
             profit: true,
             hasBillOfSale: true,
             paymentMethod: true,
-            // billOfSaleBase64 EXCLUDED for performance
           }
         } 
       }
@@ -187,7 +192,10 @@ router.get('/', authenticateToken, async (req, res, next) => {
     // Fetch VINs that have entries in DocumentRegistry for fallbacks
     const allVins = vehicles.map(v => v.vin).filter(Boolean);
     const registryEntries = await prisma.documentRegistry.findMany({
-      where: { vin: { in: allVins } },
+      where: { 
+        vin: { in: allVins },
+        dealershipId: req.dealershipId
+      },
       select: { vin: true, documentType: true }
     });
     
@@ -251,14 +259,14 @@ router.get('/', authenticateToken, async (req, res, next) => {
       };
     });
 
-    vehicleCache.set('vehicle-list', enrichedVehicles);
+    vehicleCache.set(cacheKey, enrichedVehicles);
     res.json(enrichedVehicles);
   } catch (err) {
     next(err);
   }
 });
 
-router.post('/', authenticateToken, validate(vehicleSchema), async (req, res, next) => {
+router.post('/', validate(vehicleSchema), async (req, res, next) => {
   const { 
     vin, make, model, year, mileage, color, purchaseDate,
     purchasedFrom, purchasePrice, paymentMethod, transportCost, buyerFee,
@@ -266,14 +274,14 @@ router.post('/', authenticateToken, validate(vehicleSchema), async (req, res, ne
   } = req.body;
 
   try {
-    // Check if vehicle with this VIN already exists
-    const existingVehicle = await prisma.vehicle.findUnique({
-      where: { vin }
+    // Check if vehicle with this VIN already exists in THIS dealership
+    const existingVehicle = await prisma.vehicle.findFirst({
+      where: { vin, dealershipId: req.dealershipId }
     });
 
     if (existingVehicle) {
       return res.status(409).json({ 
-        message: `Vehicle with VIN '${vin}' already exists in inventory.`,
+        message: `Vehicle with VIN '${vin}' already exists in your inventory.`,
         existingId: existingVehicle.id
       });
     }
@@ -292,6 +300,7 @@ router.post('/', authenticateToken, validate(vehicleSchema), async (req, res, ne
         purchaseDate: new Date(purchaseDate),
         status: 'Available',
         createdById: req.user.id,
+        dealershipId: req.dealershipId,
         purchase: {
           create: {
             sellerName: purchasedFrom,
@@ -304,7 +313,8 @@ router.post('/', authenticateToken, validate(vehicleSchema), async (req, res, ne
             purchaseDate: new Date(purchaseDate),
             paymentMethod,
             documentBase64,
-            sourceDocumentBase64
+            sourceDocumentBase64,
+            dealershipId: req.dealershipId
           }
         },
         ...(repairCost > 0 && {
@@ -314,7 +324,8 @@ router.post('/', authenticateToken, validate(vehicleSchema), async (req, res, ne
               partsCost: repairCost,
               laborCost: 0,
               description: 'Initial repairs added during vehicle entry',
-              repairDate: new Date(purchaseDate)
+              repairDate: new Date(purchaseDate),
+              dealershipId: req.dealershipId
             }
           }
         })
@@ -322,14 +333,15 @@ router.post('/', authenticateToken, validate(vehicleSchema), async (req, res, ne
       include: { purchase: true, repairs: true }
     });
     
-    vehicleCache.delete('vehicle-list'); // Invalidate cache
+    const cacheKey = `vehicle-list:${req.dealershipId}`;
+    vehicleCache.delete(cacheKey); // Invalidate cache
     res.status(201).json(vehicle);
   } catch (err) {
     next(err);
   }
 });
 
-router.patch('/:id', authenticateToken, async (req, res, next) => {
+router.patch('/:id', async (req, res, next) => {
   try {
     const { 
       vin, make, model, year, mileage, color, status, purchaseDate,
@@ -344,15 +356,17 @@ router.patch('/:id', authenticateToken, async (req, res, next) => {
     const updatedVehicle = await prisma.$transaction(async (tx) => {
       // Check for VIN conflicts if VIN is being updated
       if (vin) {
-        const existing = await tx.vehicle.findUnique({ where: { vin } });
+        const existing = await tx.vehicle.findFirst({ 
+          where: { vin, dealershipId: req.dealershipId } 
+        });
         if (existing && existing.id !== vehicleId) {
           throw new Error('VIN_CONFLICT');
         }
       }
 
       // Update Vehicle details
-      const v = await tx.vehicle.update({
-        where: { id: vehicleId },
+      await tx.vehicle.updateMany({
+        where: { id: vehicleId, dealershipId: req.dealershipId },
         data: {
           ...(vin !== undefined && { vin }),
           ...(make !== undefined && { make }),
@@ -363,7 +377,11 @@ router.patch('/:id', authenticateToken, async (req, res, next) => {
           ...(status !== undefined && { status }),
           ...(titleNumber !== undefined && { titleNumber: titleNumber || null }),
           ...(purchaseDate && { purchaseDate: new Date(purchaseDate) }),
-        },
+        }
+      });
+      
+      const v = await tx.vehicle.findUnique({
+        where: { id: vehicleId },
         include: { purchase: true }
       });
 
@@ -411,7 +429,11 @@ router.patch('/:id', authenticateToken, async (req, res, next) => {
         let registryEntry = null;
         if (updatedVehicle.vin) {
           registryEntry = await prisma.documentRegistry.findFirst({
-            where: { vin: updatedVehicle.vin, documentType: 'Used Vehicle Record' },
+            where: { 
+              vin: updatedVehicle.vin, 
+              documentType: 'Used Vehicle Record',
+              dealershipId: req.dealershipId
+            },
             orderBy: { createdAt: 'desc' }
           });
         }
@@ -493,7 +515,8 @@ router.patch('/:id', authenticateToken, async (req, res, next) => {
       // but the user might notice the old PDF.
     }
     
-    vehicleCache.delete('vehicle-list'); // Invalidate cache
+    const cacheKey = `vehicle-list:${req.dealershipId}`;
+    vehicleCache.delete(cacheKey); // Invalidate cache
     res.json(updatedVehicle);
   } catch (err) {
     if (err.message === 'VIN_CONFLICT') {
@@ -503,18 +526,28 @@ router.patch('/:id', authenticateToken, async (req, res, next) => {
   }
 });
 
-router.delete('/:id', authenticateToken, authorizeAdmin, async (req, res, next) => {
+router.delete('/:id', authorizeAdmin, async (req, res, next) => {
   try {
+    // Check ownership
+    const vehicle = await prisma.vehicle.findFirst({
+      where: { id: req.params.id, dealershipId: req.dealershipId }
+    });
+    
+    if (!vehicle) {
+      return res.status(404).json({ message: 'Vehicle not found' });
+    }
+
     // Delete associated records in order, including customer notes
     await prisma.$transaction([
-      prisma.customerNote.deleteMany({ where: { vehicleId: req.params.id } }),
-      prisma.sale.deleteMany({ where: { vehicleId: req.params.id } }),
-      prisma.purchase.deleteMany({ where: { vehicleId: req.params.id } }),
-      prisma.repair.deleteMany({ where: { vehicleId: req.params.id } }),
-      prisma.vehicle.delete({ where: { id: req.params.id } })
+      prisma.customerNote.deleteMany({ where: { vehicleId: req.params.id, dealershipId: req.dealershipId } }),
+      prisma.sale.deleteMany({ where: { vehicleId: req.params.id, dealershipId: req.dealershipId } }),
+      prisma.purchase.deleteMany({ where: { vehicleId: req.params.id, dealershipId: req.dealershipId } }),
+      prisma.repair.deleteMany({ where: { vehicleId: req.params.id, dealershipId: req.dealershipId } }),
+      prisma.vehicle.deleteMany({ where: { id: req.params.id, dealershipId: req.dealershipId } })
     ]);
     
-    vehicleCache.delete('vehicle-list'); // Invalidate cache
+    const cacheKey = `vehicle-list:${req.dealershipId}`;
+    vehicleCache.delete(cacheKey); // Invalidate cache
     res.json({ message: 'Vehicle deleted successfully' });
   } catch (err) {
     next(err);

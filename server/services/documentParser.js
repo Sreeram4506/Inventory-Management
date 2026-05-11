@@ -79,26 +79,27 @@ Return ONLY a raw JSON object. Set unknown fields to null.
   "year": 2014,
   "color": "color",
   "mileage": 131575,
-  "purchasedFrom": "SELLER name (NOT Broadway)",
+  "titleNumber": "exact title number if present",
+  "purchasedFrom": "AUCTION name (e.g. ADESA Boston, Manheim - NOT the individual seller)",
   "purchasePrice": 6340,
   "purchaseDate": "YYYY-MM-DD",
-  "usedVehicleSourceAddress": "SELLER street address",
-  "usedVehicleSourceCity": "SELLER city",
+  "usedVehicleSourceAddress": "AUCTION street address",
+  "usedVehicleSourceCity": "AUCTION city",
   "usedVehicleSourceState": "XX",
-  "usedVehicleSourceZipCode": "SELLER zip"
+  "usedVehicleSourceZipCode": "AUCTION zip"
 }
 
 CASE STUDIES FOR ACCURACY:
 1. **ADESA BOSTON INVOICE**:
-   - VIN: Located in the middle "VEHICLE INFORMATION" box. (Example: "JTDKN3DU9B1362964"). Do NOT misread as barcodes or other numbers.
-   - SELLER: Top-middle box labeled "SELLER:". (Example: "BERNARDI TOYOTA-SCION").
-   - BUYER: Top-right box. If it says "BROADWAY", ignore it for the "purchasedFrom" field.
-   - PRICE: Use "Net Due" (e.g., 5785.00). DO NOT join digits across columns.
+   - VIN: Located in the middle "VEHICLE INFORMATION" box.
+   - PURCHASED FROM: Use "ADESA BOSTON" (usually in the header), NOT the name in the "SELLER:" box.
+   - ADDRESS: Use the ADESA BOSTON address (usually at the top or bottom of the page).
+   - PRICE: Use "Net Due" (e.g., 5785.00).
 2. **CARMAX WHOLESALE**:
    - VIN: At the top left under Year/Make/Model.
-   - SELLER: Bottom right text block (e.g., "CarMax - Norwood").
+   - PURCHASED FROM: "CarMax - [Location]" (e.g., CarMax - Norwood).
    - PRICE: "TOTAL" in the bottom grey box.
-3. **GENERAL ROLE RULE**: "purchasedFrom" must ALWAYS be the vendor/auction/dealer we bought from. It is NEVER Broadway.${docText}`;
+3. **GENERAL ROLE RULE**: "purchasedFrom" should be the AUCTION/FACILITY where the vehicle was acquired. If it's a direct purchase, use the seller. Never Broadway.${docText}`;
 }
 
 function buildSalePrompt(textOrEmpty) {
@@ -113,6 +114,7 @@ Return ONLY a raw JSON object.
   "make": "manufacturer",
   "model": "model name",
   "year": 2014,
+  "titleNumber": "exact title number if present",
   "disposedTo": "PURCHASER name (the customer, NOT Broadway)",
   "disposedAddress": "PURCHASER street address",
   "disposedCity": "PURCHASER city",
@@ -135,13 +137,13 @@ function buildAutoPrompt(textOrEmpty) {
   const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
   return `Extract all vehicle information from this document. Return ONLY a raw JSON object.
 Determine if this is an ACQUISITION (we bought) or a SALE (we sold). Our dealership is "Broadway Used Auto Sales".
-If Broadway is the BUYER → this is an acquisition. Extract the SELLER info into purchasedFrom/usedVehicleSource fields.
+If Broadway is the BUYER → this is an acquisition. Extract the AUCTION/FACILITY info into purchasedFrom/usedVehicleSource fields.
 If Broadway is the SELLER → this is a sale. Extract the PURCHASER info into disposed fields.
 
 {
   "vin": "17-char VIN", "make": "", "model": "", "year": 0, "color": "", "mileage": 0,
   "titleNumber": "", "stockNumber": "",
-  "purchasedFrom": "SELLER name if acquisition", "purchasePrice": 0, "purchaseDate": "YYYY-MM-DD",
+  "purchasedFrom": "AUCTION name if acquisition", "purchasePrice": 0, "purchaseDate": "YYYY-MM-DD",
   "usedVehicleSourceAddress": "", "usedVehicleSourceCity": "", "usedVehicleSourceState": "", "usedVehicleSourceZipCode": "",
   "disposedTo": "BUYER name if sale", "disposedAddress": "", "disposedCity": "", "disposedState": "", "disposedZip": "",
   "disposedDate": "YYYY-MM-DD", "disposedPrice": 0, "disposedOdometer": 0, "disposedDlNumber": "", "disposedDlState": ""
@@ -310,7 +312,8 @@ function clean(d) {
     const cleanStr = String(v || '0').replace(/[$,]/g, '').trim();
     const matches = cleanStr.match(/-?\d+(\.\d+)?/g);
     if (!matches) return 0;
-    const priceMatch = matches.find(m => m.includes('.'));
+    // Prioritize the LAST match with a decimal, as it's usually the 'Total'
+    const priceMatch = [...matches].reverse().find(m => m.includes('.'));
     const x = parseFloat(priceMatch || matches[matches.length - 1]);
     return Number.isFinite(x) ? x : 0;
   };

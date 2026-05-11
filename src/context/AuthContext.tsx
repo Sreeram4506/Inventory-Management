@@ -6,6 +6,10 @@ interface User {
   email: string;
   name: string;
   role: 'ADMIN' | 'MANAGER' | 'STAFF';
+  dealership?: {
+    id: string;
+    name: string;
+  };
 }
 
 interface AuthContextType {

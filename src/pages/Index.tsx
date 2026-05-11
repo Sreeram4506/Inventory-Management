@@ -4,7 +4,8 @@ import { useDashboard } from '@/hooks/useDashboard';
 import { useAuth } from '@/context/auth-hooks';
 import { Car, ShoppingCart, DollarSign, TrendingUp, Package, Megaphone, Users } from 'lucide-react';
 import QueryErrorState from '@/components/QueryErrorState';
-import { lazy, Suspense, useState, useMemo } from 'react';
+import { lazy, Suspense, useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import RevenueReportDialog from '@/components/RevenueReportDialog';
 
 // Lazy load charts — recharts is ~200KB and only shown for non-staff users
@@ -16,8 +17,19 @@ export default function Dashboard() {
   const { data, isLoading, isError } = useDashboard();
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const { user } = useAuth();
+  const navigate = useNavigate();
+  
   const isAdmin = user?.role === 'ADMIN';
   const isStaff = user?.role === 'STAFF';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
+  useEffect(() => {
+    if (isSuperAdmin) {
+      navigate('/super-admin', { replace: true });
+    }
+  }, [isSuperAdmin, navigate]);
+
+  if (isSuperAdmin) return null;
 
   // Map data with fallbacks
   const vehicles = data?.vehicles || [];
@@ -26,8 +38,7 @@ export default function Dashboard() {
   const expenses = data?.expenses || [];
   const team = data?.team || [];
 
-  // Memoize all derived computations — these were recalculating on every render
-  // (e.g., when the report modal opens/closes), but only depend on the data arrays
+  // Memoize all derived computations
   const inventoryStatusData = useMemo(() => [
     { name: 'Available', value: vehicles.filter(v => v.status === 'Available').length },
     { name: 'Reserved', value: vehicles.filter(v => v.status === 'Reserved').length },
@@ -47,7 +58,6 @@ export default function Dashboard() {
     inventoryValue: vehicles.filter(v => v.status !== 'Sold').reduce((sum, v) => sum + (v.totalPurchaseCost || 0) + (v.repairCost || 0), 0),
   }), [sales, ads, expenses, vehicles]);
   
-  // Recent sales for AreaChart
   const salesHistory = useMemo(() => sales.slice(0, 7).reverse().map(s => ({
     date: new Date(s.saleDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
     revenue: s.salePrice,

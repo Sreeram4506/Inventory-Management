@@ -8,11 +8,11 @@ const dashboardCache = new Cache(120000); // 2 minutes — dashboard data change
 
 const router = express.Router();
 
-router.get('/summary', authenticateToken, async (req, res, next) => {
+router.get('/summary', async (req, res, next) => {
   try {
     const isAdmin = req.user.role === 'ADMIN';
     const isStaff = req.user.role === 'STAFF';
-    const cacheKey = `dashboard-${req.user.role}`; // Role-specific cache key
+    const cacheKey = `dashboard-${req.user.role}-${req.dealershipId}`; // Tenant-specific cache key
 
     // Check cache first — avoids 5 parallel DB queries on rapid dashboard visits
     const cached = dashboardCache.get(cacheKey);
@@ -23,6 +23,7 @@ router.get('/summary', authenticateToken, async (req, res, next) => {
     // Fetch everything in parallel - EXCLUDING heavy base64 strings
     const [vehicles, sales, advertising, expenses, team] = await Promise.all([
       prisma.vehicle.findMany({
+        where: { dealershipId: req.dealershipId },
         include: { 
           purchase: {
             select: {
@@ -30,7 +31,6 @@ router.get('/summary', authenticateToken, async (req, res, next) => {
               totalPurchaseCost: true,
               purchasePrice: true,
               purchaseDate: true,
-              // base64 strings EXCLUDED
             }
           },
           repairs: true,
@@ -40,12 +40,12 @@ router.get('/summary', authenticateToken, async (req, res, next) => {
               salePrice: true,
               profit: true,
               saleDate: true,
-              // base64 strings EXCLUDED
             }
           } 
         }
       }),
       prisma.sale.findMany({
+        where: { dealershipId: req.dealershipId },
         select: {
           id: true,
           salePrice: true,
@@ -58,9 +58,14 @@ router.get('/summary', authenticateToken, async (req, res, next) => {
         },
         orderBy: { saleDate: 'desc' }
       }),
-      isAdmin ? prisma.advertisingExpense.findMany() : Promise.resolve([]),
-      isAdmin ? prisma.businessExpense.findMany({ orderBy: { date: 'desc' }, take: 20 }) : Promise.resolve([]),
+      isAdmin ? prisma.advertisingExpense.findMany({ where: { dealershipId: req.dealershipId } }) : Promise.resolve([]),
+      isAdmin ? prisma.businessExpense.findMany({ 
+        where: { dealershipId: req.dealershipId }, 
+        orderBy: { date: 'desc' }, 
+        take: 20 
+      }) : Promise.resolve([]),
       isAdmin ? prisma.user.findMany({
+        where: { dealershipId: req.dealershipId },
         select: {
           id: true,
           name: true,

@@ -4,7 +4,7 @@ import { authenticateToken } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
-router.post('/', authenticateToken, async (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
     const { message, history } = req.body;
     
@@ -27,19 +27,26 @@ router.post('/', authenticateToken, async (req, res, next) => {
       expenseSumResult
     ] = await Promise.all([
       prisma.vehicle.findMany({
-        where: { status: 'Available' },
+        where: { status: 'Available', dealershipId: req.dealershipId },
         include: { purchase: true, repairs: true },
         orderBy: { purchaseDate: 'asc' } // Oldest first
       }),
-      prisma.vehicle.count({ where: { status: 'Sold' } }),
+      prisma.vehicle.count({ where: { status: 'Sold', dealershipId: req.dealershipId } }),
       prisma.sale.findMany({
+        where: { dealershipId: req.dealershipId },
         select: { salePrice: true, profit: true, saleDate: true, vehicle: { select: { make: true, model: true, year: true } } },
         orderBy: { saleDate: 'desc' },
         take: 10
       }),
-      prisma.advertisingExpense.count(),
-      prisma.advertisingExpense.aggregate({ _sum: { amountSpent: true } }),
-      prisma.businessExpense.aggregate({ _sum: { amount: true } })
+      prisma.advertisingExpense.count({ where: { dealershipId: req.dealershipId } }),
+      prisma.advertisingExpense.aggregate({ 
+        where: { dealershipId: req.dealershipId },
+        _sum: { amountSpent: true } 
+      }),
+      prisma.businessExpense.aggregate({ 
+        where: { dealershipId: req.dealershipId },
+        _sum: { amount: true } 
+      })
     ]);
 
     const totalInventoryCost = availableVehicles.reduce((sum, v) => sum + (v.purchase?.totalPurchaseCost || 0) + v.repairs.reduce((rSum, r) => rSum + r.partsCost + r.laborCost, 0), 0);

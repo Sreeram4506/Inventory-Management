@@ -4,7 +4,7 @@ import { authenticateToken } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
-router.post('/', authenticateToken, async (req, res, next) => {
+router.post('/', async (req, res, next) => {
   const { vehicleId, repairShop, partsCost, laborCost, description, repairDate } = req.body;
   try {
     const repair = await prisma.repair.create({
@@ -14,7 +14,8 @@ router.post('/', authenticateToken, async (req, res, next) => {
         partsCost: parseFloat(partsCost),
         laborCost: parseFloat(laborCost),
         description,
-        repairDate: new Date(repairDate || Date.now())
+        repairDate: new Date(repairDate || Date.now()),
+        dealershipId: req.dealershipId
       }
     });
     res.status(201).json(repair);

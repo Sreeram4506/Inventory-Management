@@ -15,14 +15,44 @@ router.post('/login', async (req, res, next) => {
   }
 
   try {
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findFirst({ 
+      where: { email },
+      include: { dealership: true }
+    });
+    
     if (!user) return res.status(401).json({ message: 'Invalid credentials' });
 
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) return res.status(401).json({ message: 'Invalid credentials' });
 
-    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+    // Block login if dealership is suspended (Super Admin always has access)
+    if (user.role !== 'SUPER_ADMIN' && user.dealership && !user.dealership.isActive) {
+      return res.status(403).json({ 
+        message: 'Your dealership account has been suspended. Please contact the platform administrator for support.' 
+      });
+    }
+
+    const token = jwt.sign(
+      { 
+        id: user.id, 
+        email: user.email, 
+        role: user.role,
+        dealershipId: user.dealershipId 
+      }, 
+      JWT_SECRET, 
+      { expiresIn: '24h' }
+    );
+    
+    res.json({ 
+      token, 
+      user: { 
+        id: user.id, 
+        name: user.name, 
+        email: user.email, 
+        role: user.role,
+        dealership: user.dealership
+      } 
+    });
   } catch (err) {
     next(err);
   }
@@ -30,9 +60,23 @@ router.post('/login', async (req, res, next) => {
 
 router.get('/me', authenticateToken, async (req, res, next) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    const user = await prisma.user.findUnique({ 
+      where: { id: req.user.id },
+      include: { dealership: true }
+    });
     if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
+    
+    // Revoke access if dealership is suspended
+    if (user.role !== 'SUPER_ADMIN' && user.dealership && !user.dealership.isActive) {
+      return res.status(403).json({ message: 'Account suspended' });
+    }
+    res.json({ 
+      id: user.id, 
+      name: user.name, 
+      email: user.email, 
+      role: user.role,
+      dealership: user.dealership
+    });
   } catch (err) {
     next(err);
   }

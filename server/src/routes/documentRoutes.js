@@ -32,13 +32,17 @@ function parseCurrency(value) {
 /**
  * Fuzzy VIN matching to handle OCR errors (5/S, 0/O, 1/I, etc)
  */
-async function findFuzzyRegistryEntry(vin, type) {
+async function findFuzzyRegistryEntry(vin, type, req) {
   if (!vin) return null;
   const upperVin = vin.toUpperCase();
 
   // 1. Exact match first
   let entry = await prisma.documentRegistry.findFirst({
-    where: { vin: upperVin, documentType: type },
+    where: { 
+      vin: upperVin, 
+      documentType: type,
+      dealershipId: req.dealershipId
+    },
     orderBy: { createdAt: 'desc' }
   });
   if (entry) return entry;
@@ -55,7 +59,11 @@ async function findFuzzyRegistryEntry(vin, type) {
       const altVinStr = altVin.join('');
       
       entry = await prisma.documentRegistry.findFirst({
-        where: { vin: altVinStr, documentType: type },
+        where: { 
+          vin: altVinStr, 
+          documentType: type,
+          dealershipId: req.dealershipId
+        },
         orderBy: { createdAt: 'desc' }
       });
       if (entry) {
@@ -71,7 +79,8 @@ async function findFuzzyRegistryEntry(vin, type) {
     entry = await prisma.documentRegistry.findFirst({
       where: { 
         vin: { endsWith: vis },
-        documentType: type 
+        documentType: type,
+        dealershipId: req.dealershipId 
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -87,7 +96,7 @@ async function findFuzzyRegistryEntry(vin, type) {
 // ═══════════════════════════════════════════════════════════════
 // ROUTE: /scan-document — Quick scan, no inventory action
 // ═══════════════════════════════════════════════════════════════
-router.post('/scan-document', authenticateToken, upload.single('file'), async (req, res, next) => {
+router.post('/scan-document', upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ status: 'error', message: 'No file uploaded' });
     const info = await extractVehicleInfo(req.file.buffer, req.file.mimetype);
@@ -104,7 +113,6 @@ router.post('/scan-document', authenticateToken, upload.single('file'), async (r
 // ═══════════════════════════════════════════════════════════════
 router.post(
   '/generate-used-vehicle-form',
-  authenticateToken,
   upload.fields([
     { name: 'sourceFile', maxCount: 1 },
     { name: 'templateFile', maxCount: 1 },
@@ -156,7 +164,9 @@ router.post(
       }
 
       // ── Check for duplicate in inventory ──
-      const existingVehicle = await prisma.vehicle.findUnique({ where: { vin: info.vin } });
+      const existingVehicle = await prisma.vehicle.findFirst({ 
+        where: { vin: info.vin, dealershipId: req.dealershipId } 
+      });
       if (existingVehicle) {
         return res.status(409).json({ 
           status: 'error', 
@@ -182,14 +192,15 @@ router.post(
           documentBase64: pdfBase64Str,
           sourceFileName: sourceFile.originalname || null,
           sourceDocumentBase64: sourceFile.buffer.toString('base64'),
+          dealershipId: req.dealershipId,
           createdAt: new Date() // Refresh timestamp to move to top
         };
 
-        const existingLog = await findFuzzyRegistryEntry(info.vin, 'Used Vehicle Record');
+        const existingLog = await findFuzzyRegistryEntry(info.vin, 'Used Vehicle Record', req);
 
         if (existingLog) {
-          await prisma.documentRegistry.update({
-            where: { id: existingLog.id },
+          await prisma.documentRegistry.updateMany({
+            where: { id: existingLog.id, dealershipId: req.dealershipId },
             data: { ...docData, vin: info.vin } // Prefer the new (likely corrected) VIN
           });
           
@@ -198,6 +209,7 @@ router.post(
             where: {
               vin: { in: [info.vin, existingLog.vin] },
               documentType: 'Used Vehicle Record',
+              dealershipId: req.dealershipId,
               id: { not: existingLog.id }
             }
           });
@@ -233,6 +245,7 @@ router.post(
             purchaseDate: info.purchaseDate ? new Date(info.purchaseDate) : new Date(),
             titleNumber: info.titleNumber || null,
             status: 'Available', // USER_FORM → status = AVAILABLE
+            dealershipId: req.dealershipId,
             purchase: {
               create: {
                 sellerName: info.purchasedFrom || 'Auction',
@@ -248,7 +261,8 @@ router.post(
                 purchaseDate: info.purchaseDate ? new Date(info.purchaseDate) : new Date(),
                 paymentMethod: 'Bank Transfer',
                 documentBase64: pdfBase64Str,
-                sourceDocumentBase64: sourceFile.buffer.toString('base64')
+                sourceDocumentBase64: sourceFile.buffer.toString('base64'),
+                dealershipId: req.dealershipId
               }
             },
             ...(repairCost > 0 && {
@@ -258,14 +272,16 @@ router.post(
                   partsCost: repairCost,
                   laborCost: 0,
                   description: 'Initial repairs added during document scan',
-                  repairDate: info.purchaseDate ? new Date(info.purchaseDate) : new Date()
+                  repairDate: info.purchaseDate ? new Date(info.purchaseDate) : new Date(),
+                  dealershipId: req.dealershipId
                 }
               }
             })
           }
         });
         vehicleId = vehicle.id;
-        vehicleCache.delete('vehicle-list'); // Invalidate cache
+        const cacheKey = `vehicle-list:${req.dealershipId}`;
+        vehicleCache.delete(cacheKey); // Invalidate cache
       }
 
       const fileName = buildUsedVehiclePdfFileName(info);
@@ -282,7 +298,9 @@ router.post(
     } catch (err) {
       if (err.message && err.message.includes('already exists in inventory')) {
          const vin = info?.vin;
-         const existing = await prisma.vehicle.findUnique({ where: { vin } });
+         const existing = await prisma.vehicle.findFirst({ 
+           where: { vin, dealershipId: req.dealershipId } 
+         });
          return res.status(409).json({ 
            status: 'error',
            message: err.message, 
@@ -302,7 +320,7 @@ import { vehicleCache, salesCache } from '../utils/cache.js';
 // VIN Match: EXACT match in inventory required
 // Action: AVAILABLE → SOLD, move to SALES
 // ═══════════════════════════════════════════════════════════════
-router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), async (req, res, next) => {
+router.post('/upload-bill-of-sale', upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) {
       return res.status(400).json({ status: 'error', message: 'No file uploaded' });
@@ -324,8 +342,8 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
     const customerName = billOfSaleInfo.disposedTo || req.body.customerName || 'Unknown Customer';
 
     // ── Step 3: VIN match in inventory ──
-    let vehicle = await prisma.vehicle.findUnique({
-      where: { vin: extractedVin },
+    let vehicle = await prisma.vehicle.findFirst({
+      where: { vin: extractedVin, dealershipId: req.dealershipId },
       include: { 
         purchase: true,
         repairs: true,
@@ -336,7 +354,7 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
     if (!vehicle) {
       console.log(`[BillOfSale] Exact match fail for ${extractedVin}. Trying fuzzy match...`);
       const allVehicles = await prisma.vehicle.findMany({
-        where: { status: 'Available' },
+        where: { status: 'Available', dealershipId: req.dealershipId },
         include: { purchase: true, repairs: true, sale: true }
       });
       
@@ -363,7 +381,7 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
 
     // ── Step 4: Update vehicle status: AVAILABLE → SOLD ──
     await prisma.vehicle.update({
-      where: { id: vehicle.id },
+      where: { id: vehicle.id, dealershipId: req.dealershipId },
       data: { status: 'Sold' }
     });
     console.log(`[BillOfSale] Vehicle status updated: Available → Sold`);
@@ -392,13 +410,14 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
           paymentMethod: 'Cash',
           profit,
           billOfSaleBase64: req.file.buffer.toString('base64'),
-          hasBillOfSale: true
+          hasBillOfSale: true,
+          dealershipId: req.dealershipId
         }
       });
       console.log(`[BillOfSale] Sale record CREATED: price=${salePrice}, profit=${profit}`);
     } else {
       await prisma.sale.update({
-        where: { id: vehicle.sale.id },
+        where: { id: vehicle.sale.id, dealershipId: req.dealershipId },
         data: {
           customerName: customerName !== 'Unknown Customer' ? customerName : vehicle.sale.customerName,
           address: billOfSaleInfo.disposedAddress ? [
@@ -419,7 +438,7 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
     }
 
     // ── Step 6: Update Registry entry with disposition data ──
-    const existingEntry = await findFuzzyRegistryEntry(extractedVin, 'Used Vehicle Record');
+    const existingEntry = await findFuzzyRegistryEntry(extractedVin, 'Used Vehicle Record', req);
 
     let filledPdf;
     if (existingEntry || vehicle) {
@@ -462,8 +481,8 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
       filledPdf = await fillUsedVehiclePdf(templateBuffer, mergedInfo, 'image/jpeg');
 
       if (existingEntry) {
-        await prisma.documentRegistry.update({
-          where: { id: existingEntry.id },
+        await prisma.documentRegistry.updateMany({
+          where: { id: existingEntry.id, dealershipId: req.dealershipId },
           data: {
             disposedTo: String(customerName || ''),
             disposedAddress: String(billOfSaleInfo.disposedAddress || ''),
@@ -484,6 +503,7 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
           where: {
             vin: { in: [extractedVin, existingEntry.vin] },
             documentType: 'Used Vehicle Record',
+            dealershipId: req.dealershipId,
             id: { not: existingEntry.id }
           }
         });
@@ -509,14 +529,15 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
             disposedDlState: String(billOfSaleInfo.disposedDlState || ''),
             sourceFileName: req.file.originalname,
             sourceDocumentBase64: req.file.buffer.toString('base64'),
+            dealershipId: req.dealershipId
           }
         });
         console.log(`[BillOfSale] New Registry entry CREATED with disposition data`);
       }
       // Also update the Purchase record's documentBase64 if the vehicle exists
       if (vehicle && vehicle.purchase) {
-        await prisma.purchase.update({
-          where: { id: vehicle.purchase.id },
+        await prisma.purchase.updateMany({
+          where: { id: vehicle.purchase.id, dealershipId: req.dealershipId },
           data: { documentBase64: filledPdf }
         });
         console.log(`[BillOfSale] Purchase record UPDATED with new Generated Record for vehicle: ${vehicle.id}`);
@@ -524,8 +545,10 @@ router.post('/upload-bill-of-sale', authenticateToken, upload.single('file'), as
     }
 
     // ── Step 7: Invalidate caches ──
-    vehicleCache.delete('vehicle-list');
-    salesCache.delete('sales-list');
+    const vCacheKey = `vehicle-list:${req.dealershipId}`;
+    const sCacheKey = `sales-list:${req.dealershipId}`;
+    vehicleCache.delete(vCacheKey);
+    salesCache.delete(sCacheKey);
 
     // ── Step 8: Return strict JSON response ──
     const fileName = `UsedVehicleRecord_${extractedVin}.pdf`;

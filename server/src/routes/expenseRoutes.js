@@ -7,52 +7,69 @@ import { expenseCache } from '../utils/cache.js';
 const router = express.Router();
 
 // Only Admin can manage/view business expenses
-router.use(authenticateToken, authorizeAdmin);
+router.use(authorizeAdmin);
 
 router.get('/', async (req, res, next) => {
   try {
-    const cached = expenseCache.get('expense-list');
+    const cacheKey = `expense-list:${req.dealershipId}`;
+    const cached = expenseCache.get(cacheKey);
     if (cached) return res.json(cached);
 
-    const expenses = await prisma.businessExpense.findMany({ orderBy: { date: 'desc' } });
-    expenseCache.set('expense-list', expenses);
+    const expenses = await prisma.businessExpense.findMany({ 
+      where: { dealershipId: req.dealershipId },
+      orderBy: { date: 'desc' } 
+    });
+    expenseCache.set(cacheKey, expenses);
     res.json(expenses);
   } catch (err) {
     next(err);
   }
 });
 
-router.post('/', authenticateToken, validate(expenseSchema), async (req, res, next) => {
+router.post('/', validate(expenseSchema), async (req, res, next) => {
   try {
     const expense = await prisma.businessExpense.create({
-      data: { ...req.body, date: new Date(req.body.date) }
+      data: { 
+        ...req.body, 
+        date: new Date(req.body.date),
+        dealershipId: req.dealershipId
+      }
     });
-    expenseCache.delete('expense-list');
+    const cacheKey = `expense-list:${req.dealershipId}`;
+    expenseCache.delete(cacheKey);
     res.status(201).json(expense);
   } catch (err) {
     next(err);
   }
 });
 
-router.patch('/:id', authenticateToken, validate(expenseSchema), async (req, res, next) => {
+router.patch('/:id', validate(expenseSchema), async (req, res, next) => {
   try {
-    const expense = await prisma.businessExpense.update({
-      where: { id: req.params.id },
+    const result = await prisma.businessExpense.updateMany({
+      where: { id: req.params.id, dealershipId: req.dealershipId },
       data: { ...req.body, date: new Date(req.body.date) }
     });
-    expenseCache.delete('expense-list');
+
+    if (result.count === 0) {
+      return res.status(404).json({ message: 'Expense not found' });
+    }
+
+    const expense = await prisma.businessExpense.findUnique({ where: { id: req.params.id } });
+    const cacheKey = `expense-list:${req.dealershipId}`;
+    expenseCache.delete(cacheKey);
     res.json(expense);
   } catch (err) {
     next(err);
   }
 });
 
-router.delete('/:id', authenticateToken, async (req, res, next) => {
+router.delete('/:id', async (req, res, next) => {
   try {
-    await prisma.businessExpense.delete({
-      where: { id: req.params.id }
+    await prisma.businessExpense.deleteMany({
+      where: { id: req.params.id, dealershipId: req.dealershipId }
     });
-    expenseCache.delete('expense-list');
+    const cacheKey = `expense-list:${req.dealershipId}`;
+    expenseCache.delete(cacheKey);
     res.json({ message: 'Expense deleted successfully' });
   } catch (err) {
     next(err);

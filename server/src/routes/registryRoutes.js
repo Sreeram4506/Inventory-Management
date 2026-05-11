@@ -9,9 +9,10 @@ import { readFile } from 'fs/promises';
 const router = express.Router();
 const defaultUsedVehicleTemplatePath = new URL('../../used-vechile-report.jpeg', import.meta.url);
 
-router.get('/', authenticateToken, async (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
     const allLogs = await prisma.documentRegistry.findMany({
+      where: { dealershipId: req.dealershipId },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -59,11 +60,11 @@ router.get('/', authenticateToken, async (req, res, next) => {
   }
 });
 
-router.get('/:id/data', authenticateToken, async (req, res, next) => {
+router.get('/:id/data', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const log = await prisma.documentRegistry.findUnique({
-      where: { id },
+    const log = await prisma.documentRegistry.findFirst({
+      where: { id, dealershipId: req.dealershipId },
       select: { documentBase64: true, sourceDocumentBase64: true, vin: true }
     });
     
@@ -74,8 +75,8 @@ router.get('/:id/data', authenticateToken, async (req, res, next) => {
     // Also try to find a Bill of Sale associated with this VIN
     let billOfSaleBase64 = null;
     if (log.vin) {
-      const vehicle = await prisma.vehicle.findUnique({
-        where: { vin: log.vin },
+      const vehicle = await prisma.vehicle.findFirst({
+        where: { vin: log.vin, dealershipId: req.dealershipId },
         include: { sale: true }
       });
       if (vehicle?.sale?.hasBillOfSale) {
@@ -93,14 +94,14 @@ router.get('/:id/data', authenticateToken, async (req, res, next) => {
   }
 });
 
-router.patch('/:id', authenticateToken, async (req, res, next) => {
+router.patch('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
     const updates = req.body;
 
-    // 1. Get current log to ensure it exists
-    const currentLog = await prisma.documentRegistry.findUnique({
-      where: { id }
+    // 1. Get current log to ensure it exists and belongs to THIS dealership
+    const currentLog = await prisma.documentRegistry.findFirst({
+      where: { id, dealershipId: req.dealershipId }
     });
 
     if (!currentLog) {
@@ -120,13 +121,19 @@ router.patch('/:id', authenticateToken, async (req, res, next) => {
     );
 
     // 4. Save back to DB
-    const log = await prisma.documentRegistry.update({
-      where: { id },
+    const updateResult = await prisma.documentRegistry.updateMany({
+      where: { id, dealershipId: req.dealershipId },
       data: {
         ...updates,
         documentBase64: filledPdf
       }
     });
+
+    if (updateResult.count === 0) {
+      return res.status(404).json({ message: 'Document log not found' });
+    }
+
+    const log = await prisma.documentRegistry.findUnique({ where: { id } });
 
     res.json(log);
   } catch (err) {
@@ -137,27 +144,11 @@ router.patch('/:id', authenticateToken, async (req, res, next) => {
 
 router.get('/:id/download', async (req, res, next) => {
   try {
-    let token = null;
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.split(' ')[1];
-    } else if (req.query.token) {
-      token = req.query.token;
-    }
-
-    if (!token) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
-
-    try {
-      jwt.verify(token, process.env.JWT_SECRET);
-    } catch (e) {
-      return res.status(401).json({ message: 'Invalid token' });
-    }
-
-    const log = await prisma.documentRegistry.findUnique({
-      where: { id: req.params.id },
-      select: { documentBase64: true, sourceDocumentBase64: true, sourceFileName: true, documentType: true }
+    // Authentication already handled by global app middleware
+    
+    const log = await prisma.documentRegistry.findFirst({
+      where: { id: req.params.id, dealershipId: req.dealershipId },
+      select: { documentBase64: true, sourceDocumentBase64: true, sourceFileName: true, documentType: true, vin: true }
     });
     
     if (!log) {
@@ -173,8 +164,8 @@ router.get('/:id/download', async (req, res, next) => {
       prefix = 'Source_';
     } else if (docType === 'sale') {
       if (log.vin) {
-        const vehicle = await prisma.vehicle.findUnique({
-          where: { vin: log.vin },
+        const vehicle = await prisma.vehicle.findFirst({
+          where: { vin: log.vin, dealershipId: req.dealershipId },
           include: { sale: true }
         });
         base64 = vehicle?.sale?.billOfSaleBase64;
@@ -223,10 +214,10 @@ router.get('/:id/download', async (req, res, next) => {
   }
 });
 
-router.delete('/:id', authenticateToken, async (req, res, next) => {
+router.delete('/:id', async (req, res, next) => {
   try {
-    await prisma.documentRegistry.delete({
-      where: { id: req.params.id }
+    await prisma.documentRegistry.deleteMany({
+      where: { id: req.params.id, dealershipId: req.dealershipId }
     });
     res.json({ message: 'Document log deleted successfully' });
   } catch (err) {

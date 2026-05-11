@@ -23,6 +23,9 @@ const Registry = lazy(() => import("./pages/Registry"));
 const TeamAnalytics = lazy(() => import("./pages/TeamAnalytics"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const Settings = lazy(() => import("./pages/Settings"));
+const SuperAdmin = lazy(() => import("./pages/SuperAdmin"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Preload manager — memoized to prevent re-renders from parent
@@ -76,6 +79,7 @@ export default function App() {
               <PreloadManager />
               <Routes>
                 <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
                 
                 <Route path="/" element={
                   <ProtectedRoute>
@@ -125,6 +129,16 @@ export default function App() {
                 <Route path="/team-analytics" element={
                   <ProtectedRoute roles={['ADMIN']}>
                     <TeamAnalytics />
+                  </ProtectedRoute>
+                } />
+                <Route path="/settings" element={
+                  <ProtectedRoute roles={['ADMIN']}>
+                    <Settings />
+                  </ProtectedRoute>
+                } />
+                <Route path="/super-admin" element={
+                  <ProtectedRoute roles={['SUPER_ADMIN']}>
+                    <SuperAdmin />
                   </ProtectedRoute>
                 } />
                 

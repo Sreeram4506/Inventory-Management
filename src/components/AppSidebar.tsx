@@ -2,7 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Car, ShoppingCart, 
   Receipt, ChevronLeft, ChevronRight,
-  LogOut, User as UserIcon, BarChart3, FileCheck2, FileArchive, Users
+  LogOut, User as UserIcon, BarChart3, FileCheck2, FileArchive, Users, Settings, ShieldCheck
 } from 'lucide-react';
 import { useState, memo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
@@ -10,13 +10,15 @@ import { useAuth } from '@/context/auth-hooks';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/inventory', icon: Car, label: 'Inventory' },
+  { to: '/inventory', icon: Car, label: 'Inventory', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/sales', icon: ShoppingCart, label: 'Sales', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/expenses', icon: Receipt, label: 'Expenses', roles: ['ADMIN'] },
-  { to: '/used-vehicle-forms', icon: FileCheck2, label: 'Used Forms' },
+  { to: '/used-vehicle-forms', icon: FileCheck2, label: 'Used Forms', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/registry', icon: FileArchive, label: 'Registry', roles: ['ADMIN', 'MANAGER'] },
   { to: '/reports', icon: BarChart3, label: 'Reports', roles: ['ADMIN', 'MANAGER'] },
   { to: '/team-analytics', icon: Users, label: 'Team', roles: ['ADMIN'] },
+  { to: '/settings', icon: Settings, label: 'Settings', roles: ['ADMIN'] },
+  { to: '/super-admin', icon: ShieldCheck, label: 'Platform Admin', roles: ['SUPER_ADMIN'] },
 ] as const;
 
 // Memoized to prevent re-renders when page content changes but sidebar state hasn't
@@ -47,7 +49,9 @@ const AppSidebar = memo(function AppSidebar() {
         </div>
         {!collapsed && (
           <div className="overflow-hidden">
-            <h1 className="text-sm font-bold text-sidebar-accent-foreground truncate">AutoProfitHub</h1>
+            <h1 className="text-sm font-bold text-sidebar-accent-foreground truncate">
+              {user?.dealership?.name || 'AutoProfitHub'}
+            </h1>
           </div>
         )}
       </div>

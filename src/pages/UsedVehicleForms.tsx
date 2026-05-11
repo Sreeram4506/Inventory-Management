@@ -30,21 +30,44 @@ export default function UsedVehicleForms() {
     });
   };
 
+  const downloadPdf = (base64: string, fileName: string) => {
+    try {
+      let cleanBase64 = base64;
+      if (cleanBase64.includes('base64,')) {
+        cleanBase64 = cleanBase64.split('base64,')[1];
+      }
+      cleanBase64 = cleanBase64.replace(/[^A-Za-z0-9+/=]/g, '');
+
+      const byteCharacters = atob(cleanBase64);
+      const byteArrays = [];
+      
+      for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+        const slice = byteCharacters.slice(offset, offset + 512);
+        const byteNumbers = new Array(slice.length);
+        for (let i = 0; i < slice.length; i++) {
+          byteNumbers[i] = slice.charCodeAt(i);
+        }
+        byteArrays.push(new Uint8Array(byteNumbers));
+      }
+      
+      const blob = new Blob(byteArrays, { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+    } catch (err) {
+      console.error('Download failed:', err);
+      toast.error('Failed to download PDF.');
+    }
+  };
+
   const handleDownloadLast = () => {
     if (!lastGeneratedPdf) return;
-    
-    const binary = window.atob(lastGeneratedPdf.base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    const blob = new Blob([bytes], { type: 'application/pdf' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = lastGeneratedPdf.name;
-    link.click();
-    window.URL.revokeObjectURL(url);
+    downloadPdf(lastGeneratedPdf.base64, lastGeneratedPdf.name);
   };
 
   const recentLogs = useMemo(() => {
@@ -164,16 +187,7 @@ export default function UsedVehicleForms() {
                           title="Download PDF"
                           onClick={(e) => {
                             e.stopPropagation();
-                            const binary = window.atob(log.documentBase64 || '');
-                            const bytes = new Uint8Array(binary.length);
-                            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                            const blob = new Blob([bytes], { type: 'application/pdf' });
-                            const url = window.URL.createObjectURL(blob);
-                            const link = document.createElement('a');
-                            link.href = url;
-                            link.download = `UsedVehicleRecord_${log.vin}.pdf`;
-                            link.click();
-                            window.URL.revokeObjectURL(url);
+                            downloadPdf(log.documentBase64 || '', `UsedVehicleRecord_${log.vin}.pdf`);
                           }}
                         >
                           <Download className="w-4 h-4" />

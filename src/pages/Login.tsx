@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/auth-hooks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -92,6 +93,12 @@ const Login = () => {
             >
               {isLoading ? 'Authenticating...' : 'Secure Sign In'}
             </Button>
+            <div className="text-center text-sm text-muted-foreground mt-2">
+              Don't have a dealership yet?{' '}
+              <Link to="/register" className="text-profit hover:underline font-bold">
+                Get Started
+              </Link>
+            </div>
           </CardFooter>
         </form>
       </Card>

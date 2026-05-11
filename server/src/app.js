@@ -7,12 +7,14 @@ import compression from 'compression';
 import { notFound, errorHandler } from './middlewares/errorMiddleware.js';
 
 import authRoutes from './routes/authRoutes.js';
+import dealershipRoutes from './routes/dealershipRoutes.js';
 import vehicleRoutes from './routes/vehicleRoutes.js';
 import saleRoutes from './routes/saleRoutes.js';
 import repairRoutes from './routes/repairRoutes.js';
 import expenseRoutes from './routes/expenseRoutes.js';
 import advertisingRoutes from './routes/advertisingRoutes.js';
 import documentRoutes from './routes/documentRoutes.js';
+import superAdminRoutes from './routes/superAdminRoutes.js';
 import registryRoutes from './routes/registryRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import teamRoutes from './routes/teamRoutes.js';
@@ -86,20 +88,28 @@ app.get('/', (req, res) => {
   res.json({ message: 'Auto Profit Hub API is running' });
 });
 
+import { authenticateToken } from './middlewares/authMiddleware.js';
+import { injectTenant } from './middlewares/tenantMiddleware.js';
+
 // Mount routers
 app.use('/api/auth', authRoutes);
-app.use('/api/vehicles', vehicleRoutes);
-app.use('/api/sales', saleRoutes);
-app.use('/api/repairs', repairRoutes);
-app.use('/api/expenses', expenseRoutes);
-app.use('/api/advertising', advertisingRoutes);
-app.use('/api/registry', registryRoutes);
-app.use('/api/chat', chatRoutes);
-app.use('/api/team', teamRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/notes', noteRoutes);
+app.use('/api/dealerships', dealershipRoutes);
 
-app.use('/api', documentRoutes);
+// Protected Business Routes (Auto-inject dealership context)
+app.use('/api/vehicles', authenticateToken, injectTenant, vehicleRoutes);
+app.use('/api/sales', authenticateToken, injectTenant, saleRoutes);
+app.use('/api/repairs', authenticateToken, injectTenant, repairRoutes);
+app.use('/api/expenses', authenticateToken, injectTenant, expenseRoutes);
+app.use('/api/advertising', authenticateToken, injectTenant, advertisingRoutes);
+app.use('/api/registry', authenticateToken, injectTenant, registryRoutes);
+app.use('/api/chat', authenticateToken, injectTenant, chatRoutes);
+app.use('/api/team', authenticateToken, injectTenant, teamRoutes);
+app.use('/api/dashboard', authenticateToken, injectTenant, dashboardRoutes);
+app.use('/api/notes', authenticateToken, injectTenant, noteRoutes);
+app.use('/api/super-admin', superAdminRoutes);
+
+// Document routes also need protection and tenant context
+app.use('/api', authenticateToken, injectTenant, documentRoutes);
 
 // Custom error handling middleware
 app.use(notFound);

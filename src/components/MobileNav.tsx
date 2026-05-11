@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Car, ShoppingCart, 
-  BarChart3, Menu, LogOut, X, FileArchive, FileText, Receipt, Users
+  BarChart3, Menu, LogOut, X, FileArchive, FileText, Receipt, Users, Settings, ShieldCheck
 } from 'lucide-react';
 import { useState, useCallback, memo } from 'react';
 import { cn } from '@/lib/utils';
@@ -10,20 +10,22 @@ import { Button } from './ui/button';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Home' },
-  { to: '/inventory', icon: Car, label: 'Cars' },
+  { to: '/inventory', icon: Car, label: 'Cars', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/sales', icon: ShoppingCart, label: 'Sales', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-  { to: '/used-vehicle-forms', icon: FileArchive, label: 'Forms' },
+  { to: '/used-vehicle-forms', icon: FileArchive, label: 'Forms', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
 ] as const;
 
 const drawerItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/inventory', icon: Car, label: 'Inventory' },
+  { to: '/inventory', icon: Car, label: 'Inventory', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/sales', icon: ShoppingCart, label: 'Sales', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/expenses', icon: Receipt, label: 'Expenses', roles: ['ADMIN'] },
-  { to: '/used-vehicle-forms', icon: FileText, label: 'Used Forms' },
+  { to: '/used-vehicle-forms', icon: FileText, label: 'Used Forms', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { to: '/registry', icon: FileArchive, label: 'Registry', roles: ['ADMIN', 'MANAGER'] },
   { to: '/reports', icon: BarChart3, label: 'Reports', roles: ['ADMIN', 'MANAGER'] },
   { to: '/team-analytics', icon: Users, label: 'Team', roles: ['ADMIN'] },
+  { to: '/settings', icon: Settings, label: 'Settings', roles: ['ADMIN'] },
+  { to: '/super-admin', icon: ShieldCheck, label: 'Platform Admin', roles: ['SUPER_ADMIN'] },
 ] as const;
 
 const MobileNav = memo(function MobileNav() {
@@ -50,7 +52,9 @@ const MobileNav = memo(function MobileNav() {
           <div className="w-7 h-7 rounded-md bg-sidebar-primary/90 flex items-center justify-center" aria-hidden="true">
             <Car className="w-3.5 h-3.5 text-sidebar-primary-foreground" />
           </div>
-          <h1 className="text-sm font-bold text-sidebar-accent-foreground tracking-tight">AutoProfitHub</h1>
+          <h1 className="text-sm font-bold text-sidebar-accent-foreground tracking-tight">
+            {user?.dealership?.name || 'AutoProfitHub'}
+          </h1>
         </div>
         <button 
           onClick={openDrawer}
@@ -83,7 +87,8 @@ const MobileNav = memo(function MobileNav() {
               <div className="bg-sidebar-accent/40 rounded-lg p-3 mb-3">
                 <p className="text-[10px] text-sidebar-muted uppercase tracking-wider font-semibold mb-0.5">Signed in as</p>
                 <p className="text-sm font-medium text-sidebar-accent-foreground">{user?.name}</p>
-                <p className="text-[10px] text-sidebar-primary font-semibold">{user?.role}</p>
+                <p className="text-[10px] text-sidebar-primary font-semibold uppercase">{user?.role}</p>
+                <p className="text-[10px] text-sidebar-muted font-medium mt-1 truncate">{user?.dealership?.name}</p>
               </div>
 
               {filteredDrawerItems.map((item) => {

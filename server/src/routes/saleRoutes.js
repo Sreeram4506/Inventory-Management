@@ -15,14 +15,16 @@ const defaultUsedVehicleTemplatePath = new URL('../../used-vechile-report.jpeg',
 const router = express.Router();
 
 // Allow all authenticated users, but we will mask data for STAFF
-router.use(authenticateToken);
+// router.use(authenticateToken); // Redundant, handled by app.js
 
 router.get('/', async (req, res, next) => {
   try {
-    const cachedData = salesCache.get('sales-list');
+    const cacheKey = `sales-list:${req.dealershipId}`;
+    const cachedData = salesCache.get(cacheKey);
     if (cachedData) return res.json(cachedData);
 
     const sales = await prisma.sale.findMany({
+      where: { dealershipId: req.dealershipId },
       select: {
         id: true,
         vehicleId: true,
@@ -66,7 +68,7 @@ router.get('/', async (req, res, next) => {
       return { ...s, hasBillOfSale };
     });
 
-    salesCache.set('sales-list', processedSales);
+    salesCache.set(cacheKey, processedSales);
     res.json(processedSales);
   } catch (err) {
     next(err);
@@ -78,8 +80,8 @@ router.post('/', upload.single('file'), validate(saleSchema), async (req, res, n
     const { vehicleId, saleDate, salePrice, customerName, phone, address, paymentMethod, ...loanDetails } = req.body;
     
     // Fetch vehicle with all costs for profit calculation
-    const vehicle = await prisma.vehicle.findUnique({
-      where: { id: vehicleId },
+    const vehicle = await prisma.vehicle.findFirst({
+      where: { id: vehicleId, dealershipId: req.dealershipId },
       include: { purchase: true, repairs: true }
     });
 
@@ -103,20 +105,21 @@ router.post('/', upload.single('file'), validate(saleSchema), async (req, res, n
           profit,
           vehicleId,
           createdById: req.user.id,
+          dealershipId: req.dealershipId,
           hasBillOfSale: !!req.file,
           billOfSaleBase64: req.file ? req.file.buffer.toString('base64') : undefined,
           ...loanDetails
         }
       });
       await tx.vehicle.update({
-        where: { id: vehicleId },
+        where: { id: vehicleId, dealershipId: req.dealershipId },
         data: { status: 'Sold' }
       });
 
       // ── Step 3: Regenerate Used Vehicle Record PDF with Disposition Data ──
       try {
-        const fullVehicle = await tx.vehicle.findUnique({
-          where: { id: vehicleId },
+        const fullVehicle = await tx.vehicle.findFirst({
+          where: { id: vehicleId, dealershipId: req.dealershipId },
           include: { purchase: true, sale: { where: { id: s.id } } }
         });
 
@@ -124,7 +127,11 @@ router.post('/', upload.single('file'), validate(saleSchema), async (req, res, n
           const templateBuffer = await readFile(defaultUsedVehicleTemplatePath);
           
           const registryEntry = await tx.documentRegistry.findFirst({
-            where: { vin: fullVehicle.vin, documentType: 'Used Vehicle Record' },
+            where: { 
+              vin: fullVehicle.vin, 
+              documentType: 'Used Vehicle Record',
+              dealershipId: req.dealershipId 
+            },
             orderBy: { createdAt: 'desc' }
           });
 
@@ -194,21 +201,23 @@ router.post('/', upload.single('file'), validate(saleSchema), async (req, res, n
       return s;
     });
 
-    salesCache.delete('sales-list');
-    vehicleCache.delete('vehicle-list'); // Invalidate inventory as well
+    const sCacheKey = `sales-list:${req.dealershipId}`;
+    const vCacheKey = `vehicle-list:${req.dealershipId}`;
+    salesCache.delete(sCacheKey);
+    vehicleCache.delete(vCacheKey); // Invalidate inventory as well
     res.status(201).json(sale);
   } catch (err) {
     next(err);
   }
 });
 
-router.patch('/:id', authenticateToken, authorizeManagerOrAdmin, async (req, res, next) => {
+router.patch('/:id', authorizeManagerOrAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { salePrice, saleDate, customerName, phone, address, paymentMethod } = req.body;
 
-    const existingSale = await prisma.sale.findUnique({
-      where: { id },
+    const existingSale = await prisma.sale.findFirst({
+      where: { id, dealershipId: req.dealershipId },
       include: { 
         vehicle: {
           include: { purchase: true, repairs: true }
@@ -226,8 +235,8 @@ router.patch('/:id', authenticateToken, authorizeManagerOrAdmin, async (req, res
       profit = Number(salePrice) - totalPurchaseCost - totalRepairCost;
     }
 
-    const updatedSale = await prisma.sale.update({
-      where: { id },
+    const updateResult = await prisma.sale.updateMany({
+      where: { id, dealershipId: req.dealershipId },
       data: {
         salePrice: salePrice !== undefined ? Number(salePrice) : undefined,
         saleDate: saleDate ? new Date(saleDate) : undefined,
@@ -239,20 +248,29 @@ router.patch('/:id', authenticateToken, authorizeManagerOrAdmin, async (req, res
       }
     });
 
-    salesCache.delete('sales-list');
-    vehicleCache.delete('vehicle-list');
+    if (updateResult.count === 0) return res.status(404).json({ message: 'Sale not found' });
+    const updatedSale = await prisma.sale.findUnique({ where: { id } });
+
+    const sCacheKey = `sales-list:${req.dealershipId}`;
+    const vCacheKey = `vehicle-list:${req.dealershipId}`;
+    salesCache.delete(sCacheKey);
+    vehicleCache.delete(vCacheKey);
 
     // ── Step 4: Regenerate Used Vehicle Record PDF ──
     try {
-      const fullVehicle = await prisma.vehicle.findUnique({
-        where: { id: updatedSale.vehicleId },
+      const fullVehicle = await prisma.vehicle.findFirst({
+        where: { id: updatedSale.vehicleId, dealershipId: req.dealershipId },
         include: { purchase: true, sale: true }
       });
 
       if (fullVehicle && fullVehicle.purchase) {
         const templateBuffer = await readFile(defaultUsedVehicleTemplatePath);
         const registryEntry = await prisma.documentRegistry.findFirst({
-          where: { vin: fullVehicle.vin, documentType: 'Used Vehicle Record' },
+          where: { 
+            vin: fullVehicle.vin, 
+            documentType: 'Used Vehicle Record',
+            dealershipId: req.dealershipId
+          },
           orderBy: { createdAt: 'desc' }
         });
 
@@ -325,12 +343,12 @@ router.patch('/:id', authenticateToken, authorizeManagerOrAdmin, async (req, res
   }
 });
 
-router.delete('/:id', authenticateToken, authorizeManagerOrAdmin, async (req, res, next) => {
+router.delete('/:id', authorizeManagerOrAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const sale = await prisma.sale.findUnique({
-      where: { id },
+    const sale = await prisma.sale.findFirst({
+      where: { id, dealershipId: req.dealershipId },
       select: { vehicleId: true }
     });
 
@@ -340,25 +358,29 @@ router.delete('/:id', authenticateToken, authorizeManagerOrAdmin, async (req, re
 
     await prisma.$transaction([
       // 1. Delete the sale record
-      prisma.sale.delete({ where: { id } }),
+      prisma.sale.deleteMany({ where: { id, dealershipId: req.dealershipId } }),
       // 2. Move vehicle back to Available
-      prisma.vehicle.update({
-        where: { id: sale.vehicleId },
+      prisma.vehicle.updateMany({
+        where: { id: sale.vehicleId, dealershipId: req.dealershipId },
         data: { status: 'Available' }
       })
     ]);
 
     // ── Step 3: Regenerate Used Vehicle Record (Clear Disposition) ──
     try {
-      const fullVehicle = await prisma.vehicle.findUnique({
-        where: { id: sale.vehicleId },
+      const fullVehicle = await prisma.vehicle.findFirst({
+        where: { id: sale.vehicleId, dealershipId: req.dealershipId },
         include: { purchase: true }
       });
 
       if (fullVehicle && fullVehicle.purchase) {
         const templateBuffer = await readFile(defaultUsedVehicleTemplatePath);
         const registryEntry = await prisma.documentRegistry.findFirst({
-          where: { vin: fullVehicle.vin, documentType: 'Used Vehicle Record' },
+          where: { 
+            vin: fullVehicle.vin, 
+            documentType: 'Used Vehicle Record',
+            dealershipId: req.dealershipId
+          },
           orderBy: { createdAt: 'desc' }
         });
 
@@ -418,8 +440,10 @@ router.delete('/:id', authenticateToken, authorizeManagerOrAdmin, async (req, re
     }
 
     // 3. Clear caches
-    salesCache.delete('sales-list');
-    vehicleCache.delete('vehicle-list');
+    const sCacheKey = `sales-list:${req.dealershipId}`;
+    const vCacheKey = `vehicle-list:${req.dealershipId}`;
+    salesCache.delete(sCacheKey);
+    vehicleCache.delete(vCacheKey);
 
     res.json({ message: 'Sale deleted and vehicle reverted to Available status.' });
   } catch (err) {
