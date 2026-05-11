@@ -183,11 +183,10 @@ const SuperAdmin = () => {
 
         <TabsContent value="analytics" className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {[
               { label: 'Active Dealerships', value: stats?.dealershipsCount || 0, icon: Building2, color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
               { label: 'Platform Users', value: stats?.usersCount || 0, icon: Users, color: 'text-indigo-400', bg: 'bg-indigo-400/10' },
-              { label: 'Total Inventory', value: stats?.vehiclesCount || 0, icon: Car, color: 'text-amber-400', bg: 'bg-amber-400/10' },
             ].map((stat, i) => (
               <Card key={i} className="bg-[#111115] border-white/5 shadow-2xl shadow-black/50 group overflow-hidden">
                 <CardContent className="pt-6 relative">
