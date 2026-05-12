@@ -211,6 +211,7 @@ export default function UsedVehicleForms() {
                               disposedPrice: Number(log.disposedPrice) || 0,
                               disposedDate: log.disposedDate || '',
                               disposedOdometer: Number(log.disposedOdometer) || 0,
+                              titleNumber: log.titleNumber || '',
                             } as any);
                             setLastGeneratedPdf({ 
                               base64: log.documentBase64 || '', 
@@ -308,6 +309,10 @@ export default function UsedVehicleForms() {
                       <div className="rounded-xl border border-border/60 bg-card/50 p-2">
                         <p className="text-[10px] uppercase text-muted-foreground">Color</p>
                         <p className="text-xs font-medium text-muted-foreground mt-1">{extractedInfo.color || '—'}</p>
+                      </div>
+                      <div className="rounded-xl border border-border/60 bg-card/50 p-2">
+                        <p className="text-[10px] uppercase text-muted-foreground">Title #</p>
+                        <p className="text-xs font-medium text-muted-foreground mt-1 truncate" title={extractedInfo.titleNumber}>{extractedInfo.titleNumber || '—'}</p>
                       </div>
                     </div>
                   </div>

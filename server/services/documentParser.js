@@ -92,11 +92,13 @@ Return ONLY a raw JSON object. Set unknown fields to null.
 CASE STUDIES FOR ACCURACY:
 1. **ADESA BOSTON INVOICE**:
    - VIN: Located in the middle "VEHICLE INFORMATION" box.
+   - TITLE NUMBER: Often found near the VIN or in a "Title Information" section.
    - PURCHASED FROM: Use "ADESA BOSTON" (usually in the header), NOT the name in the "SELLER:" box.
    - ADDRESS: Use the ADESA BOSTON address (usually at the top or bottom of the page).
    - PRICE: Use "Net Due" (e.g., 5785.00).
 2. **CARMAX WHOLESALE**:
    - VIN: At the top left under Year/Make/Model.
+   - TITLE NUMBER: Check for "Title #" or "Document #" fields.
    - PURCHASED FROM: "CarMax - [Location]" (e.g., CarMax - Norwood).
    - PRICE: "TOTAL" in the bottom grey box.
 3. **GENERAL ROLE RULE**: "purchasedFrom" should be the AUCTION/FACILITY where the vehicle was acquired. If it's a direct purchase, use the seller. Never Broadway.${docText}`;
@@ -128,6 +130,7 @@ Return ONLY a raw JSON object.
 CASE STUDIES FOR ACCURACY:
 1. **MOTOR VEHICLE PURCHASE CONTRACT**:
    - PURCHASER: Look for "Print Name(s) of Purchaser(s)" (Example: "Thomas Digianvittorio").
+   - TITLE NUMBER: Check for "Title Number" or "Certificate of Title" fields.
    - PRICE: Use the "Total" (bottom of the COSTS AND DISCOUNTS section). (Example: 12030.00).
    - ODOMETER: Look for the hand-written or typed digits in the "Odometer Disclosure" boxes.
 2. **GENERAL ROLE RULE**: "disposedTo" is ALWAYS the customer. It is NEVER Broadway.${docText}`;
@@ -347,7 +350,12 @@ function clean(d) {
     year: i(d.year) || null,
     color: s(d.color) || null,
     mileage: i(d.mileage),
-    titleNumber: s(d.titleNumber) || null,
+    titleNumber: (() => {
+      const raw = s(d.titleNumber);
+      if (!raw || raw === 'null' || raw === 'undefined') return null;
+      // Many OCRs add "TITLE:" or "NO:" prefix, remove it
+      return raw.replace(/^(TITLE|NO|NUMBER|CERTIFICATE|DOC|DOCUMENT)[:\s#-]*/i, '').trim().toUpperCase() || null;
+    })(),
     stockNumber: s(d.stockNumber) || null,
     purchasedFrom: s(d.purchasedFrom) || null,
     purchasePrice: n(d.purchasePrice),

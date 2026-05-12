@@ -318,6 +318,7 @@ export default function Inventory() {
                       <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Vehicle</th>
                       <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">VIN</th>
                       <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Year</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Title #</th>
                       {!isStaff && (
                         <>
                           <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Purchase</th>
@@ -342,6 +343,7 @@ export default function Inventory() {
                         </td>
                         <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{vehicle.vin.slice(-8)}</td>
                         <td className="px-4 py-3 text-sm text-foreground">{vehicle.year}</td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground font-medium">{vehicle.titleNumber || '—'}</td>
                         {!isStaff && (
                           <>
                             <td className="px-4 py-3 text-sm font-medium text-foreground tabular-nums">${vehicle.purchasePrice.toLocaleString()}</td>
