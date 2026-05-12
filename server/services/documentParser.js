@@ -79,7 +79,8 @@ Return ONLY a raw JSON object. Set unknown fields to null.
   "year": 2014,
   "color": "color",
   "mileage": 131575,
-  "titleNumber": "exact title number if present",
+  "titleNumber": "exact title number (e.g. CJ469594, T1234567, 123456789)",
+  "stockNumber": "exact stock number if present",
   "purchasedFrom": "AUCTION name (e.g. ADESA Boston, Manheim - NOT the individual seller)",
   "purchasePrice": 6340,
   "purchaseDate": "YYYY-MM-DD",
@@ -89,19 +90,31 @@ Return ONLY a raw JSON object. Set unknown fields to null.
   "usedVehicleSourceZipCode": "AUCTION zip"
 }
 
+TITLE NUMBER GUIDELINES:
+- Look for: "Title No", "Cert of Title", "Document #", "Title #", "T-Number", "T-No", "Certificate of Title Number".
+- It is often located near the VIN or Odometer sections.
+- For ADESA documents, it is under "Title State/Number" (e.g. MA/CJ469594 -> extract "CJ469594").
+- For CARMAX documents, it might be labeled as "Document #" or "Title #".
+
 CASE STUDIES FOR ACCURACY:
-1. **ADESA BOSTON INVOICE**:
-   - VIN: Located in the middle "VEHICLE INFORMATION" box.
-   - TITLE NUMBER: Mandatory. Usually labeled "Title #" or "Doc #". Look for an 8-10 digit number.
-   - PURCHASED FROM: Use "ADESA BOSTON" (usually in the header), NOT the name in the "SELLER:" box.
-   - ADDRESS: Use the ADESA BOSTON address (usually at the top or bottom of the page.
-   - PRICE: Use "Net Due" (e.g., 5785.00).
-2. **CARMAX WHOLESALE**:
-   - VIN: At the top left under Year/Make/Model.
-   - TITLE NUMBER: Check for "Title #" or "Document #" fields. Look for alphanumeric strings.
-   - PURCHASED FROM: "CarMax - [Location]" (e.g., CarMax - Norwood).
+1. **ADESA (BOSTON/CONCORD/ETC) BILL OF SALE**:
+   - VIN: Located in the "VEHICLE INFORMATION" box (e.g. KNAFK4A...).
+   - VEHICLE DETAILS: The line below the VIN contains "Year Make Model, Color, Trim" (e.g. "2016 KIA FORTE, Red, LX").
+   - MAKE/MODEL: Extract "KIA" as Make and "FORTE" as Model from that line.
+   - TITLE NUMBER: Labeled "Title State/Number" (e.g. MA/CJ469594).
+   - PURCHASED FROM: Use the facility name in the top left header (e.g. "ADESA Concord").
+   - PRICE: Use "Purchase Price" (e.g. 1,900.00).
+2. **USED VEHICLE RECORD (System Form)**:
+   - VIN: Often in individual boxes labeled "Vehicle Ident. No.". Combine them.
+   - STOCK NO: Top right corner.
+   - YEAR: "Mfrs. Model Year".
+   - COLOR: "Color".
+   - SOURCE: "Obtained From (Source)".
+   - ODOMETER: "Odometer In".
+3. **CARMAX WHOLESALE**:
+   - VIN: Top left under Year/Make/Model.
    - PRICE: "TOTAL" in the bottom grey box.
-3. **GENERAL ROLE RULE**: "purchasedFrom" should be the AUCTION/FACILITY where the vehicle was acquired. If it's a direct purchase, use the seller. Never Broadway.${docText}`;
+4. **GENERAL ROLE RULE**: "purchasedFrom" is the AUCTION/FACILITY. If Broadway is BUYER, use the Seller/Auction name. Never Broadway.${docText}`;
 }
 
 function buildSalePrompt(textOrEmpty) {
@@ -116,7 +129,8 @@ Return ONLY a raw JSON object.
   "make": "manufacturer",
   "model": "model name",
   "year": 2014,
-  "titleNumber": "exact title number if present",
+  "titleNumber": "exact title number",
+  "stockNumber": "exact stock number if present",
   "disposedTo": "PURCHASER name (the customer, NOT Broadway)",
   "disposedAddress": "PURCHASER street address",
   "disposedCity": "PURCHASER city",
@@ -127,13 +141,24 @@ Return ONLY a raw JSON object.
   "disposedOdometer": 119629
 }
 
+TITLE NUMBER GUIDELINES:
+- Title Number is MANDATORY for sales documents.
+- Look for labels: "Title No", "Certificate of Title", "T-Number", "Document #", "Title #".
+- If multiple numbers are present, look for the one explicitly linked to the title certificate.
+
+IMPORTANT: If the document shows Broadway Used Auto Sales is the BUYER, this is actually an ACQUISITION. In that case, extract the SELLER name into "disposedTo" (as a fallback) but ideally return empty for disposition fields and set VIN.
+
 CASE STUDIES FOR ACCURACY:
-1. **MOTOR VEHICLE PURCHASE CONTRACT**:
+1. **MOTOR VEHICLE PURCHASE CONTRACT / BILL OF SALE**:
    - PURCHASER: Look for "Print Name(s) of Purchaser(s)" (Example: "Thomas Digianvittorio").
    - TITLE NUMBER: Mandatory. Check for "Title Number", "Certificate of Title", or "T-Number".
-   - PRICE: Use the "Total" (bottom of the COSTS AND DISCOUNTS section). (Example: 12030.00).
+   - PRICE: Use the "Total" at the bottom of the "COSTS AND DISCOUNTS" section (e.g. 26900). **Ignore** any "Selling Price" in the top section if it contradicts the "Total" in the bottom table.
    - ODOMETER: Look for the hand-written or typed digits in the "Odometer Disclosure" boxes.
-2. **GENERAL ROLE RULE**: "disposedTo" is ALWAYS the customer. It is NEVER Broadway.${docText}`;
+2. **USED VEHICLE RECORD (System Form)**:
+   - VIN: Combine characters from individual boxes.
+   - PURCHASER: "Transferred To".
+   - PRICE: "Price" or "Transaction Price".
+3. **GENERAL ROLE RULE**: "disposedTo" is ALWAYS the customer. It is NEVER Broadway. If you see "Broadway" as the Buyer, set "disposedTo" to null.${docText}`;
 }
 
 function buildAutoPrompt(textOrEmpty) {
@@ -145,12 +170,16 @@ If Broadway is the SELLER → this is a sale. Extract the PURCHASER info into di
 
 {
   "vin": "17-char VIN", "make": "", "model": "", "year": 0, "color": "", "mileage": 0,
-  "titleNumber": "", "stockNumber": "",
+  "titleNumber": "CRITICAL: exact title number", "stockNumber": "",
   "purchasedFrom": "AUCTION name if acquisition", "purchasePrice": 0, "purchaseDate": "YYYY-MM-DD",
   "usedVehicleSourceAddress": "", "usedVehicleSourceCity": "", "usedVehicleSourceState": "", "usedVehicleSourceZipCode": "",
   "disposedTo": "BUYER name if sale", "disposedAddress": "", "disposedCity": "", "disposedState": "", "disposedZip": "",
   "disposedDate": "YYYY-MM-DD", "disposedPrice": 0, "disposedOdometer": 0, "disposedDlNumber": "", "disposedDlState": ""
-}${docText}`;
+}
+
+NOTE: The Title Number is a top priority. Look for labels like "Title No", "Cert of Title", "Document #", "Title #", "T-Number". If it is prefixed by a state (e.g. MA/123456), extract the alphanumeric part after the slash.
+
+NOTE: Vehicle details are often consolidated into one line (e.g., "2016 KIA FORTE, Red, LX"). Extract the individual components accordingly.${docText}`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -179,7 +208,7 @@ async function textExtract(text, purpose = "") {
         messages: [
           { 
             role: "system", 
-            content: "You are a precise document data extractor. Your primary goal is to extract the VIN and TITLE NUMBER. The Title Number is CRITICAL. It is often labeled as 'Title No', 'Cert of Title', 'Document #', or 'Title #'. If you see a sequence of 8-12 alphanumeric characters near the top or near the VIN that isn't the VIN, it is likely the Title Number. Output ONLY valid JSON." 
+            content: "You are a precise document data extractor. Your primary goal is to extract the VIN, TITLE NUMBER, and VEHICLE DETAILS (Year, Make, Model). The Title Number is CRITICAL. It is often labeled as 'Title No', 'Cert of Title', 'Document #', 'Title #', 'T-Number', or 'T-No'. If you see a state prefix like 'MA/12345', extract '12345'. Output ONLY valid JSON." 
           },
           { role: "user", content: prompt }
         ],
@@ -312,7 +341,11 @@ async function visionExtract(fileBuffer, mimetype, purpose = "") {
 // ═══════════════════════════════════════════════════════════════
 function clean(d) {
   if (!d) return {};
-  const s = v => String(v || '').trim();
+  const s = v => {
+    const str = String(v || '').trim();
+    if (/^(null|undefined|none|n\/a|unknown|unknow|pending|unknown unknown|unknow unknow)$/i.test(str)) return null;
+    return str;
+  };
   const n = v => {
     if (typeof v === 'number') return v;
     const cleanStr = String(v || '0').replace(/[$,]/g, '').trim();
@@ -356,8 +389,14 @@ function clean(d) {
     titleNumber: (() => {
       const raw = s(d.titleNumber);
       if (!raw || /^(null|undefined|none|n\/a|unknown|pending)$/i.test(raw)) return null;
-      // Many OCRs add "TITLE:" or "NO:" prefix, remove it
-      const cleaned = raw.replace(/^(TITLE|NO|NUMBER|CERTIFICATE|DOC|DOCUMENT|REF)[:\s#-]*/i, '').trim().toUpperCase();
+      
+      // Remove common prefixes and state codes (e.g., "MA/", "TITLE NO:", "CERTIFICATE:")
+      const cleaned = raw.toUpperCase()
+        .replace(/^[A-Z]{2}\//, '') // Remove state code prefix like "MA/"
+        .replace(/^(TITLE|CERTIFICATE|CERT|DOCUMENT|DOC|T-NO|T-NUMBER|T-NUM|REF|NO|NUMBER|NUM|#)[:\s#.-]*/gi, '')
+        .replace(/^(NO|NUMBER|NUM|#)[:\s#.-]*/gi, '') // double pass for "TITLE NO:"
+        .trim();
+        
       return cleaned || null;
     })(),
     stockNumber: s(d.stockNumber) || null,

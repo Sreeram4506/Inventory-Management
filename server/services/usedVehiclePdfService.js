@@ -72,7 +72,7 @@ export async function fillUsedVehiclePdf(templateBuffer, vehicleInfo, templateMi
   drawField(page, fieldMap.disposedZip, vehicleInfo.disposedZip || '', courier, debug);
   drawField(page, fieldMap.disposedOdometer, vehicleInfo.disposedOdometer ? String(vehicleInfo.disposedOdometer) : '', courier, debug);
   drawField(page, fieldMap.disposedDate, formatUsedVehicleDate(vehicleInfo.disposedDate), courier, debug);
-  drawField(page, fieldMap.disposedPrice, vehicleInfo.disposedPrice ? `$${vehicleInfo.disposedPrice.toLocaleString()}` : '', courier, debug);
+  // drawField(page, fieldMap.disposedPrice, vehicleInfo.disposedPrice ? `$${vehicleInfo.disposedPrice.toLocaleString()}` : '', courier, debug);
   
   // ── DL & Signature ──
   drawField(page, fieldMap.disposedDl, vehicleInfo.disposedDlNumber || '', courier, debug);

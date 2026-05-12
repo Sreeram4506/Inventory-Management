@@ -270,7 +270,7 @@ router.post('/', validate(vehicleSchema), async (req, res, next) => {
   const { 
     vin, make, model, year, mileage, color, purchaseDate,
     purchasedFrom, purchasePrice, paymentMethod, transportCost, buyerFee,
-    inspectionCost, registrationCost, repairCost, documentBase64, sourceDocumentBase64
+    inspectionCost, registrationCost, repairCost, titleNumber, documentBase64, sourceDocumentBase64
   } = req.body;
 
   try {
@@ -297,6 +297,7 @@ router.post('/', validate(vehicleSchema), async (req, res, next) => {
         year,
         mileage,
         color,
+        titleNumber: titleNumber || null,
         purchaseDate: new Date(purchaseDate),
         status: 'Available',
         createdById: req.user.id,
