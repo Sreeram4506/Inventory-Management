@@ -92,13 +92,13 @@ Return ONLY a raw JSON object. Set unknown fields to null.
 CASE STUDIES FOR ACCURACY:
 1. **ADESA BOSTON INVOICE**:
    - VIN: Located in the middle "VEHICLE INFORMATION" box.
-   - TITLE NUMBER: Often found near the VIN or in a "Title Information" section.
+   - TITLE NUMBER: Mandatory. Usually labeled "Title #" or "Doc #". Look for an 8-10 digit number.
    - PURCHASED FROM: Use "ADESA BOSTON" (usually in the header), NOT the name in the "SELLER:" box.
-   - ADDRESS: Use the ADESA BOSTON address (usually at the top or bottom of the page).
+   - ADDRESS: Use the ADESA BOSTON address (usually at the top or bottom of the page.
    - PRICE: Use "Net Due" (e.g., 5785.00).
 2. **CARMAX WHOLESALE**:
    - VIN: At the top left under Year/Make/Model.
-   - TITLE NUMBER: Check for "Title #" or "Document #" fields.
+   - TITLE NUMBER: Check for "Title #" or "Document #" fields. Look for alphanumeric strings.
    - PURCHASED FROM: "CarMax - [Location]" (e.g., CarMax - Norwood).
    - PRICE: "TOTAL" in the bottom grey box.
 3. **GENERAL ROLE RULE**: "purchasedFrom" should be the AUCTION/FACILITY where the vehicle was acquired. If it's a direct purchase, use the seller. Never Broadway.${docText}`;
@@ -130,7 +130,7 @@ Return ONLY a raw JSON object.
 CASE STUDIES FOR ACCURACY:
 1. **MOTOR VEHICLE PURCHASE CONTRACT**:
    - PURCHASER: Look for "Print Name(s) of Purchaser(s)" (Example: "Thomas Digianvittorio").
-   - TITLE NUMBER: Check for "Title Number" or "Certificate of Title" fields.
+   - TITLE NUMBER: Mandatory. Check for "Title Number", "Certificate of Title", or "T-Number".
    - PRICE: Use the "Total" (bottom of the COSTS AND DISCOUNTS section). (Example: 12030.00).
    - ODOMETER: Look for the hand-written or typed digits in the "Odometer Disclosure" boxes.
 2. **GENERAL ROLE RULE**: "disposedTo" is ALWAYS the customer. It is NEVER Broadway.${docText}`;
@@ -175,9 +175,12 @@ async function textExtract(text, purpose = "") {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "meta/llama-3.1-8b-instruct",
+        model: "meta/llama-3.1-70b-instruct",
         messages: [
-          { role: "system", content: "You are a document data extractor. Output ONLY valid JSON. No markdown, no explanation, no extra text." },
+          { 
+            role: "system", 
+            content: "You are a precise document data extractor. Your primary goal is to extract the VIN and TITLE NUMBER. The Title Number is CRITICAL. It is often labeled as 'Title No', 'Cert of Title', 'Document #', or 'Title #'. If you see a sequence of 8-12 alphanumeric characters near the top or near the VIN that isn't the VIN, it is likely the Title Number. Output ONLY valid JSON." 
+          },
           { role: "user", content: prompt }
         ],
         temperature: 0,
@@ -352,9 +355,10 @@ function clean(d) {
     mileage: i(d.mileage),
     titleNumber: (() => {
       const raw = s(d.titleNumber);
-      if (!raw || raw === 'null' || raw === 'undefined') return null;
+      if (!raw || /^(null|undefined|none|n\/a|unknown|pending)$/i.test(raw)) return null;
       // Many OCRs add "TITLE:" or "NO:" prefix, remove it
-      return raw.replace(/^(TITLE|NO|NUMBER|CERTIFICATE|DOC|DOCUMENT)[:\s#-]*/i, '').trim().toUpperCase() || null;
+      const cleaned = raw.replace(/^(TITLE|NO|NUMBER|CERTIFICATE|DOC|DOCUMENT|REF)[:\s#-]*/i, '').trim().toUpperCase();
+      return cleaned || null;
     })(),
     stockNumber: s(d.stockNumber) || null,
     purchasedFrom: s(d.purchasedFrom) || null,
