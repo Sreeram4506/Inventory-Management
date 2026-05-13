@@ -41,14 +41,10 @@ export default function BillOfSaleUploader({
 
     let successCount = 0;
 
-    for (let i = 0; i < files.length; i++) {
-      const currentFile = files[i];
-      setProgress({ current: i + 1, total: files.length });
-
+    const processFile = async (currentFile: File) => {
       const formData = new FormData();
       formData.append('file', currentFile);
       
-      // Only apply manual fallback if processing a single file
       if (files.length === 1) {
         if (vin) formData.append('vin', vin.trim().toUpperCase());
         if (customerName) formData.append('customerName', customerName.trim());
@@ -85,7 +81,15 @@ export default function BillOfSaleUploader({
       } catch (error: any) {
         console.error(error);
         toast.error(`Failed ${currentFile.name}: ${error.message}`);
+      } finally {
+        setProgress(prev => ({ ...prev, current: prev.current + 1 }));
       }
+    };
+
+    const batchSize = 2;
+    for (let i = 0; i < files.length; i += batchSize) {
+      const batch = files.slice(i, i + batchSize);
+      await Promise.all(batch.map(file => processFile(file)));
     }
 
     if (successCount > 0) {

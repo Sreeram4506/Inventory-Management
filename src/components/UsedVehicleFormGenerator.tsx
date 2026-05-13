@@ -38,10 +38,7 @@ export default function UsedVehicleFormGenerator({
     let successCount = 0;
     let failCount = 0;
 
-    for (let i = 0; i < sourceFiles.length; i++) {
-      const file = sourceFiles[i];
-      setProgress({ current: i + 1, total: sourceFiles.length });
-
+    const processFile = async (file: File) => {
       const formData = new FormData();
       formData.append('sourceFile', file);
       formData.append('pushToInventory', String(pushToInventory));
@@ -68,8 +65,6 @@ export default function UsedVehicleFormGenerator({
           fileName: data.fileName 
         });
 
-        // For bulk, maybe we don't want to trigger 20 downloads automatically, 
-        // but for now we'll keep it consistent.
         if (sourceFiles.length === 1) {
           downloadPdf(data.pdfBase64, data.fileName);
         }
@@ -79,7 +74,16 @@ export default function UsedVehicleFormGenerator({
         console.error(error);
         failCount++;
         toast.error(`Failed ${file.name}: ${error.message}`);
+      } finally {
+        setProgress(prev => ({ ...prev, current: prev.current + 1 }));
       }
+    };
+
+    // Parallel processing with batch size of 2 for better speed
+    const batchSize = 2;
+    for (let i = 0; i < sourceFiles.length; i += batchSize) {
+      const batch = sourceFiles.slice(i, i + batchSize);
+      await Promise.all(batch.map(file => processFile(file)));
     }
 
     if (successCount > 0) {

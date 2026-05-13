@@ -91,10 +91,11 @@ Return ONLY a raw JSON object. Set unknown fields to null.
 }
 
 TITLE NUMBER GUIDELINES:
-- Look for: "Title No", "Cert of Title", "Document #", "Title #", "T-Number", "T-No", "Certificate of Title Number".
+- Look for: "Title No", "Cert of Title", "Document #", "Title #", "T-Number", "T-No", "Certificate of Title Number", "Title Number", "Document ID", "Doc ID", "Certificate #".
 - It is often located near the VIN or Odometer sections.
 - For ADESA documents, it is under "Title State/Number" (e.g. MA/CJ469594 -> extract "CJ469594").
 - For CARMAX documents, it might be labeled as "Document #" or "Title #".
+- If it's a state-prefixed number (e.g. MA/12345678), ALWAYS extract ONLY the alphanumeric part after the slash.
 
 CASE STUDIES FOR ACCURACY:
 1. **ADESA (BOSTON/CONCORD/ETC) BILL OF SALE**:
@@ -143,7 +144,7 @@ Return ONLY a raw JSON object.
 
 TITLE NUMBER GUIDELINES:
 - Title Number is MANDATORY for sales documents.
-- Look for labels: "Title No", "Certificate of Title", "T-Number", "Document #", "Title #".
+- Look for labels: "Title No", "Certificate of Title", "T-Number", "Document #", "Title #", "Title Number", "Document ID", "Doc ID", "Certificate #".
 - If multiple numbers are present, look for the one explicitly linked to the title certificate.
 
 IMPORTANT: If the document shows Broadway Used Auto Sales is the BUYER, this is actually an ACQUISITION. In that case, extract the SELLER name into "disposedTo" (as a fallback) but ideally return empty for disposition fields and set VIN.
@@ -177,7 +178,7 @@ If Broadway is the SELLER → this is a sale. Extract the PURCHASER info into di
   "disposedDate": "YYYY-MM-DD", "disposedPrice": 0, "disposedOdometer": 0, "disposedDlNumber": "", "disposedDlState": ""
 }
 
-NOTE: The Title Number is a top priority. Look for labels like "Title No", "Cert of Title", "Document #", "Title #", "T-Number". If it is prefixed by a state (e.g. MA/123456), extract the alphanumeric part after the slash.
+NOTE: The Title Number is a top priority. Look for labels like "Title No", "Cert of Title", "Document #", "Title #", "T-Number", "T-No", "Title Number", "Document ID", "Doc ID", "Certificate #". If it is prefixed by a state (e.g. MA/123456), extract the alphanumeric part after the slash.
 
 NOTE: Vehicle details are often consolidated into one line (e.g., "2016 KIA FORTE, Red, LX"). Extract the individual components accordingly.${docText}`;
 }
@@ -204,11 +205,11 @@ async function textExtract(text, purpose = "") {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "meta/llama-3.1-70b-instruct",
+        model: "meta/llama-3.1-8b-instruct",
         messages: [
           { 
             role: "system", 
-            content: "You are a precise document data extractor. Your primary goal is to extract the VIN, TITLE NUMBER, and VEHICLE DETAILS (Year, Make, Model). The Title Number is CRITICAL. It is often labeled as 'Title No', 'Cert of Title', 'Document #', 'Title #', 'T-Number', or 'T-No'. If you see a state prefix like 'MA/12345', extract '12345'. Output ONLY valid JSON." 
+            content: "You are a precise document data extractor. Your primary goal is to extract the VIN, TITLE NUMBER, and VEHICLE DETAILS (Year, Make, Model). The Title Number is CRITICAL and must be extracted if present. Look for labels like 'Title No', 'Cert of Title', 'Document #', 'Title #', 'T-Number', 'T-No', 'Certificate of Title', 'Document ID', 'Doc ID', or 'Certificate #'. If a state prefix is present (e.g., 'MA/12345'), extract ONLY the alphanumeric number part ('12345'). Output ONLY valid JSON." 
           },
           { role: "user", content: prompt }
         ],
@@ -255,11 +256,11 @@ async function visionExtract(fileBuffer, mimetype, purpose = "") {
       const txt = tc.items.map(i => ('str' in i ? i.str : '')).join(' ').trim();
       if (txt.length > 40) return null; // has native text, skip vision
 
-      const vp = page.getViewport({ scale: 2.0 });
+      const vp = page.getViewport({ scale: 1.5 });
       const cf = createCanvasFactory();
       const { canvas, context } = cf.create(Math.ceil(vp.width), Math.ceil(vp.height));
       await page.render({ canvasContext: context, viewport: vp, canvasFactory: cf }).promise;
-      base64Image = canvas.toBuffer('image/jpeg', { quality: 0.85 }).toString('base64');
+      base64Image = canvas.toBuffer('image/jpeg', { quality: 0.7 }).toString('base64');
       imgMime = 'image/jpeg';
       cf.destroy({ canvas, context });
     } catch (e) {
@@ -282,7 +283,6 @@ async function visionExtract(fileBuffer, mimetype, purpose = "") {
   if (!base64Image) return null;
 
   try {
-    // Use the same purpose-based prompts, but without document text (image is the source)
     let prompt;
     if (purpose === 'acquisition') {
       prompt = buildAcquisitionPrompt('');
@@ -300,7 +300,7 @@ async function visionExtract(fileBuffer, mimetype, purpose = "") {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "meta/llama-3.2-90b-vision-instruct",
+        model: "meta/llama-3.2-11b-vision-instruct",
         messages: [{
           role: "user",
           content: [
@@ -393,8 +393,9 @@ function clean(d) {
       // Remove common prefixes and state codes (e.g., "MA/", "TITLE NO:", "CERTIFICATE:")
       const cleaned = raw.toUpperCase()
         .replace(/^[A-Z]{2}\//, '') // Remove state code prefix like "MA/"
-        .replace(/^(TITLE|CERTIFICATE|CERT|DOCUMENT|DOC|T-NO|T-NUMBER|T-NUM|REF|NO|NUMBER|NUM|#)[:\s#.-]*/gi, '')
-        .replace(/^(NO|NUMBER|NUM|#)[:\s#.-]*/gi, '') // double pass for "TITLE NO:"
+        .replace(/^(TITLE|CERTIFICATE|CERT|DOCUMENT|DOC|T-NO|T-NUMBER|T-NUM|REF|NO|NUMBER|NUM|#|DOC ID|DOCUMENT ID)[:\s#.-]*/gi, '')
+        .replace(/^(TITLE|CERTIFICATE|CERT|DOCUMENT|DOC|T-NO|T-NUMBER|T-NUM|REF|NO|NUMBER|NUM|#|DOC ID|DOCUMENT ID)[:\s#.-]*/gi, '') // double pass for "TITLE NO:"
+        .replace(/^(NO|NUMBER|NUM|#)[:\s#.-]*/gi, '') // triple pass for nested things
         .trim();
         
       return cleaned || null;
@@ -451,8 +452,6 @@ async function ocrImage(fileBuffer) {
     await worker.terminate();
   }
 }
-
-
 
 async function resizeImageIfNeeded(fileBuffer) {
   try {
