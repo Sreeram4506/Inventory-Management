@@ -52,12 +52,20 @@ export default function UsedVehicleFormGenerator({
           body: formData,
         });
 
+        let data;
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || 'Failed to generate form');
+          
+          // If it's a 409 conflict but registry was added/updated, we treat it as a success for the record generation
+          if (response.status === 409 && errorData.registryAdded) {
+            data = errorData;
+            toast.info(`${file.name}: Logged to registry (Vehicle already in inventory)`);
+          } else {
+            throw new Error(errorData.message || 'Failed to generate form');
+          }
+        } else {
+          data = (await response.json()) as GenerateUsedVehicleResponse & { inventoryAdded?: boolean };
         }
-
-        const data = (await response.json()) as GenerateUsedVehicleResponse & { inventoryAdded?: boolean };
         
         onScanComplete({ 
           info: data.info, 
@@ -79,8 +87,8 @@ export default function UsedVehicleFormGenerator({
       }
     };
 
-    // Parallel processing with batch size of 2 for better speed
-    const batchSize = 2;
+    // Sequential processing (batch size 1) for maximum reliability
+    const batchSize = 1;
     for (let i = 0; i < sourceFiles.length; i += batchSize) {
       const batch = sourceFiles.slice(i, i + batchSize);
       await Promise.all(batch.map(file => processFile(file)));

@@ -15,6 +15,15 @@ const ocrLangPath = path.dirname(
   require.resolve('@tesseract.js-data/eng/4.0.0/eng.traineddata.gz')
 );
 
+let tesseractWorker = null;
+
+async function getTesseractWorker() {
+  if (!tesseractWorker) {
+    tesseractWorker = await createWorker('eng', 1, { langPath: ocrLangPath, gzip: true });
+  }
+  return tesseractWorker;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // SINGLE ENTRY POINT — Extract everything from any document
 // purpose: "acquisition" | "sale" | "" (unknown)
@@ -24,13 +33,22 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
 
   // For images — go straight to Vision AI
   if (mimetype.startsWith('image/')) {
-    const visionResult = await visionExtract(fileBuffer, mimetype, purpose);
-    if (visionResult) return visionResult;
+    try {
+      const visionResult = await visionExtract(fileBuffer, mimetype, purpose);
+      if (visionResult && visionResult.vin) return visionResult;
+    } catch (err) {
+      console.warn(`[Parser] Vision AI failed, falling back to OCR: ${err.message}`);
+    }
+    
     // Fallback: OCR the image then send text to LLM
     const ocrText = await ocrImage(fileBuffer);
     if (hasNvidiaKey && ocrText.length > 30) {
-      const textResult = await textExtract(ocrText, purpose);
-      if (textResult) return textResult;
+      try {
+        const textResult = await textExtract(ocrText, purpose);
+        if (textResult) return textResult;
+      } catch (err) {
+        console.warn(`[Parser] Text LLM failed after OCR: ${err.message}`);
+      }
     }
     return {};
   }
@@ -42,13 +60,21 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
 
     // If PDF has native text, use text LLM
     if (combinedText.replace(/\s/g, '').length > 30 && hasNvidiaKey) {
-      const textResult = await textExtract(combinedText, purpose);
-      if (textResult) return textResult;
+      try {
+        const textResult = await textExtract(combinedText, purpose);
+        if (textResult && textResult.vin) return textResult;
+      } catch (err) {
+        console.warn(`[Parser] Text LLM failed on native PDF text: ${err.message}`);
+      }
     }
 
-    // Scanned PDF — render to image, use vision
-    const visionResult = await visionExtract(fileBuffer, mimetype, purpose);
-    if (visionResult) return visionResult;
+    // Scanned PDF or text extraction failed — render to image, use vision
+    try {
+      const visionResult = await visionExtract(fileBuffer, mimetype, purpose);
+      if (visionResult) return visionResult;
+    } catch (err) {
+      console.warn(`[Parser] Vision AI failed on PDF render: ${err.message}`);
+    }
 
     return {};
   }
@@ -56,8 +82,12 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
   // Word docs and other text
   const text = await extractText(fileBuffer, mimetype);
   if (hasNvidiaKey && text.length > 30) {
-    const textResult = await textExtract(text, purpose);
-    if (textResult) return textResult;
+    try {
+      const textResult = await textExtract(text, purpose);
+      if (textResult) return textResult;
+    } catch (err) {
+      console.warn(`[Parser] Text LLM failed on Word/Other: ${err.message}`);
+    }
   }
   return {};
 }
@@ -444,12 +474,13 @@ export async function extractText(fileBuffer, mimetype) {
 }
 
 async function ocrImage(fileBuffer) {
-  const worker = await createWorker('eng', 1, { langPath: ocrLangPath, gzip: true });
+  const worker = await getTesseractWorker();
   try {
     const { data: { text } } = await worker.recognize(fileBuffer);
     return text;
-  } finally {
-    await worker.terminate();
+  } catch (err) {
+    console.error('[OCR] Failed:', err.message);
+    return '';
   }
 }
 

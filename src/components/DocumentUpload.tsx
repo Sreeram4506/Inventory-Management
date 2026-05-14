@@ -65,6 +65,16 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        if (response.status === 409 && errorData.registryAdded) {
+          // It's in inventory already, but we successfully logged it to registry
+          toast.info(`${file.name}: Logged to registry (Already in inventory)`);
+          onScanComplete(
+            errorData.info, 
+            errorData.pdfBase64 ? { base64: errorData.pdfBase64, fileName: errorData.fileName } : undefined,
+            sourceBase64
+          );
+          return;
+        }
         if (response.status === 409) {
           toast.error(`VIN conflict for ${file.name}`, {
             description: errorData.message || 'Vehicle already exists in inventory',

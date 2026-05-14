@@ -163,18 +163,6 @@ router.post(
         });
       }
 
-      // ── Check for duplicate in inventory ──
-      const existingVehicle = await prisma.vehicle.findFirst({ 
-        where: { vin: info.vin, dealershipId: req.dealershipId } 
-      });
-      if (existingVehicle) {
-        return res.status(409).json({ 
-          status: 'error', 
-          message: `Vehicle with VIN ${info.vin} already exists in inventory.`,
-          existingId: existingVehicle.id
-        });
-      }
-
       // ── Save/Update in Document Registry ──
       try {
         const docData = {
@@ -227,6 +215,22 @@ router.post(
 
       // ── Push to Inventory with status = "Available" ──
       if (isPushToInventory) {
+        // Check for duplicate ONLY when pushing to inventory
+        const existingVehicle = await prisma.vehicle.findFirst({ 
+          where: { vin: info.vin, dealershipId: req.dealershipId } 
+        });
+        
+        if (existingVehicle) {
+          return res.status(409).json({ 
+            status: 'error', 
+            message: `Vehicle with VIN ${info.vin} already exists in inventory.`,
+            existingId: existingVehicle.id,
+            info, // Return info anyway so UI can see it
+            pdfBase64: pdfBase64Str,
+            registryAdded: !!registryId
+          });
+        }
+
         const purchasePrice = parseCurrency(info.purchasePrice);
         const transportCost = parseCurrency(info.transportCost);
         const repairCost = parseCurrency(info.repairCost);
