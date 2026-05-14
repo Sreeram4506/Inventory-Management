@@ -30,10 +30,13 @@ export default function DocumentUpload({ onScanComplete, onViewExisting, token }
     if (files.length === 1) {
       await handleSingleFile(files[0]);
     } else {
-      // Pass the whole list back to a new bulk handler if provided
+      // Process files sequentially with cooldown for API rate limiting
       toast.info(`Preparing to process ${files.length} documents...`);
-      for (const file of files) {
-        await handleSingleFile(file);
+      for (let i = 0; i < files.length; i++) {
+        await handleSingleFile(files[i]);
+        if (i < files.length - 1) {
+          await new Promise(r => setTimeout(r, 1000));
+        }
       }
     }
   };

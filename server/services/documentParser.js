@@ -24,6 +24,28 @@ async function getTesseractWorker() {
   return tesseractWorker;
 }
 
+// Fetch with timeout + 1 automatic retry for transient NVIDIA API failures
+async function fetchWithTimeout(url, options, timeoutMs = 25000, retries = 1) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timer);
+      return res;
+    } catch (err) {
+      clearTimeout(timer);
+      if (attempt < retries) {
+        const isTimeout = err.name === 'AbortError';
+        console.warn(`[API] ${isTimeout ? 'Timeout' : 'Error'} on attempt ${attempt + 1}, retrying in 2s...`);
+        await new Promise(r => setTimeout(r, 2000));
+      } else {
+        throw err;
+      }
+    }
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // SINGLE ENTRY POINT — Extract everything from any document
 // purpose: "acquisition" | "sale" | "" (unknown)
@@ -99,6 +121,7 @@ function buildAcquisitionPrompt(textOrEmpty) {
   const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
   return `You are extracting data from a VEHICLE ACQUISITION document.
 Our dealership (the BUYER) is "Broadway Used Auto Sales" (or "Broadway Used Auto Sales Inc").
+Dealership Address: 2125 REVERE BEACH PKWY, EVERETT, MA 02149.
 
 Return ONLY a raw JSON object. Set unknown fields to null.
 
@@ -109,9 +132,9 @@ Return ONLY a raw JSON object. Set unknown fields to null.
   "year": 2014,
   "color": "color",
   "mileage": 131575,
-  "titleNumber": "exact title number (e.g. CJ469594, T1234567, 123456789)",
+  "titleNumber": "exact title number",
   "stockNumber": "exact stock number if present",
-  "purchasedFrom": "AUCTION name (e.g. ADESA Boston, Manheim - NOT the individual seller)",
+  "purchasedFrom": "AUCTION name (e.g. ADESA Boston, Manheim)",
   "purchasePrice": 6340,
   "purchaseDate": "YYYY-MM-DD",
   "usedVehicleSourceAddress": "AUCTION street address",
@@ -120,38 +143,21 @@ Return ONLY a raw JSON object. Set unknown fields to null.
   "usedVehicleSourceZipCode": "AUCTION zip"
 }
 
-TITLE NUMBER GUIDELINES:
-- Look for: "Title No", "Cert of Title", "Document #", "Title #", "T-Number", "T-No", "Certificate of Title Number", "Title Number", "Document ID", "Doc ID", "Certificate #".
-- It is often located near the VIN or Odometer sections.
-- For ADESA documents, it is under "Title State/Number" (e.g. MA/CJ469594 -> extract "CJ469594").
-- For CARMAX documents, it might be labeled as "Document #" or "Title #".
-- If it's a state-prefixed number (e.g. MA/12345678), ALWAYS extract ONLY the alphanumeric part after the slash.
+IMPORTANT: "usedVehicleSourceAddress" MUST be the address of the AUCTION/SELLER. NEVER use Broadway Used Auto Sales' address (2125 REVERE BEACH PKWY). If only Broadway's address is visible, set source address fields to null.
 
-CASE STUDIES FOR ACCURACY:
-1. **ADESA (BOSTON/CONCORD/ETC) BILL OF SALE**:
-   - VIN: Located in the "VEHICLE INFORMATION" box (e.g. KNAFK4A...).
-   - VEHICLE DETAILS: The line below the VIN contains "Year Make Model, Color, Trim" (e.g. "2016 KIA FORTE, Red, LX").
-   - MAKE/MODEL: Extract "KIA" as Make and "FORTE" as Model from that line.
-   - TITLE NUMBER: Labeled "Title State/Number" (e.g. MA/CJ469594).
-   - PURCHASED FROM: Use the facility name in the top left header (e.g. "ADESA Concord").
-   - PRICE: Use "Purchase Price" (e.g. 1,900.00).
-2. **USED VEHICLE RECORD (System Form)**:
-   - VIN: Often in individual boxes labeled "Vehicle Ident. No.". Combine them.
-   - STOCK NO: Top right corner.
-   - YEAR: "Mfrs. Model Year".
-   - COLOR: "Color".
-   - SOURCE: "Obtained From (Source)".
-   - ODOMETER: "Odometer In".
-3. **CARMAX WHOLESALE**:
-   - VIN: Top left under Year/Make/Model.
-   - PRICE: "TOTAL" in the bottom grey box.
-4. **GENERAL ROLE RULE**: "purchasedFrom" is the AUCTION/FACILITY. If Broadway is BUYER, use the Seller/Auction name. Never Broadway.${docText}`;
+CASE STUDIES:
+1. **ADESA BILL OF SALE**:
+   - PURCHASED FROM: Facility name in header (e.g. "ADESA Concord").
+   - SOURCE ADDRESS: Usually directly below the facility name in the top left.
+2. **CARMAX WHOLESALE**:
+   - SOURCE ADDRESS: Top left under the CarMax logo.${docText}`;
 }
 
 function buildSalePrompt(textOrEmpty) {
   const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
   return `You are extracting data from a VEHICLE SALE document.
 Our dealership (the SELLER) is "Broadway Used Auto Sales".
+Dealership Address: 2125 REVERE BEACH PKWY, EVERETT, MA 02149.
 
 Return ONLY a raw JSON object.
 
@@ -162,7 +168,7 @@ Return ONLY a raw JSON object.
   "year": 2014,
   "titleNumber": "exact title number",
   "stockNumber": "exact stock number if present",
-  "disposedTo": "PURCHASER name (the customer, NOT Broadway)",
+  "disposedTo": "PURCHASER name (the customer)",
   "disposedAddress": "PURCHASER street address",
   "disposedCity": "PURCHASER city",
   "disposedState": "XX",
@@ -172,45 +178,25 @@ Return ONLY a raw JSON object.
   "disposedOdometer": 119629
 }
 
-TITLE NUMBER GUIDELINES:
-- Title Number is MANDATORY for sales documents.
-- Look for labels: "Title No", "Certificate of Title", "T-Number", "Document #", "Title #", "Title Number", "Document ID", "Doc ID", "Certificate #".
-- If multiple numbers are present, look for the one explicitly linked to the title certificate.
-
-IMPORTANT: If the document shows Broadway Used Auto Sales is the BUYER, this is actually an ACQUISITION. In that case, extract the SELLER name into "disposedTo" (as a fallback) but ideally return empty for disposition fields and set VIN.
-
-CASE STUDIES FOR ACCURACY:
-1. **MOTOR VEHICLE PURCHASE CONTRACT / BILL OF SALE**:
-   - PURCHASER: Look for "Print Name(s) of Purchaser(s)" (Example: "Thomas Digianvittorio").
-   - TITLE NUMBER: Mandatory. Check for "Title Number", "Certificate of Title", or "T-Number".
-   - PRICE: Use the "Total" at the bottom of the "COSTS AND DISCOUNTS" section (e.g. 26900). **Ignore** any "Selling Price" in the top section if it contradicts the "Total" in the bottom table.
-   - ODOMETER: Look for the hand-written or typed digits in the "Odometer Disclosure" boxes.
-2. **USED VEHICLE RECORD (System Form)**:
-   - VIN: Combine characters from individual boxes.
-   - PURCHASER: "Transferred To".
-   - PRICE: "Price" or "Transaction Price".
-3. **GENERAL ROLE RULE**: "disposedTo" is ALWAYS the customer. It is NEVER Broadway. If you see "Broadway" as the Buyer, set "disposedTo" to null.${docText}`;
+IMPORTANT: "disposedAddress" MUST be the address of the BUYER/CUSTOMER. NEVER use Broadway's address (2125 REVERE BEACH PKWY). If only Broadway's address is visible, set disposed address fields to null.${docText}`;
 }
 
 function buildAutoPrompt(textOrEmpty) {
   const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
   return `Extract all vehicle information from this document. Return ONLY a raw JSON object.
-Determine if this is an ACQUISITION (we bought) or a SALE (we sold). Our dealership is "Broadway Used Auto Sales".
-If Broadway is the BUYER → this is an acquisition. Extract the AUCTION/FACILITY info into purchasedFrom/usedVehicleSource fields.
-If Broadway is the SELLER → this is a sale. Extract the PURCHASER info into disposed fields.
+Determine if this is an ACQUISITION (we bought) or a SALE (we sold). 
+Our dealership is "Broadway Used Auto Sales" (2125 REVERE BEACH PKWY, EVERETT, MA 02149).
 
 {
   "vin": "17-char VIN", "make": "", "model": "", "year": 0, "color": "", "mileage": 0,
-  "titleNumber": "CRITICAL: exact title number", "stockNumber": "",
+  "titleNumber": "exact title number", "stockNumber": "",
   "purchasedFrom": "AUCTION name if acquisition", "purchasePrice": 0, "purchaseDate": "YYYY-MM-DD",
-  "usedVehicleSourceAddress": "", "usedVehicleSourceCity": "", "usedVehicleSourceState": "", "usedVehicleSourceZipCode": "",
-  "disposedTo": "BUYER name if sale", "disposedAddress": "", "disposedCity": "", "disposedState": "", "disposedZip": "",
-  "disposedDate": "YYYY-MM-DD", "disposedPrice": 0, "disposedOdometer": 0, "disposedDlNumber": "", "disposedDlState": ""
+  "usedVehicleSourceAddress": "AUCTION street address", "usedVehicleSourceCity": "", "usedVehicleSourceState": "", "usedVehicleSourceZipCode": "",
+  "disposedTo": "BUYER name if sale", "disposedAddress": "BUYER street address", "disposedCity": "", "disposedState": "", "disposedZip": "",
+  "disposedDate": "YYYY-MM-DD", "disposedPrice": 0, "disposedOdometer": 0
 }
 
-NOTE: The Title Number is a top priority. Look for labels like "Title No", "Cert of Title", "Document #", "Title #", "T-Number", "T-No", "Title Number", "Document ID", "Doc ID", "Certificate #". If it is prefixed by a state (e.g. MA/123456), extract the alphanumeric part after the slash.
-
-NOTE: Vehicle details are often consolidated into one line (e.g., "2016 KIA FORTE, Red, LX"). Extract the individual components accordingly.${docText}`;
+IMPORTANT: Split the address into separate Street, City, State, and Zip fields. NEVER extract Broadway Used Auto Sales' address (2125 REVERE BEACH PKWY) into the source or disposed address fields.${docText}`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -228,7 +214,7 @@ async function textExtract(text, purpose = "") {
     }
 
     console.log(`[Parser:Text] Sending ${text.length} chars to LLM (purpose=${purpose || 'auto'})...`);
-    const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+    const response = await fetchWithTimeout("https://integrate.api.nvidia.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${nvidiaApiKey}`,
@@ -239,7 +225,7 @@ async function textExtract(text, purpose = "") {
         messages: [
           { 
             role: "system", 
-            content: "You are a precise document data extractor. Your primary goal is to extract the VIN, TITLE NUMBER, and VEHICLE DETAILS (Year, Make, Model). The Title Number is CRITICAL and must be extracted if present. Look for labels like 'Title No', 'Cert of Title', 'Document #', 'Title #', 'T-Number', 'T-No', 'Certificate of Title', 'Document ID', 'Doc ID', or 'Certificate #'. If a state prefix is present (e.g., 'MA/12345'), extract ONLY the alphanumeric number part ('12345'). Output ONLY valid JSON." 
+            content: "You are a precise document data extractor. Extract VIN, TITLE NUMBER, VEHICLE DETAILS, and ADDRESS fields. Split addresses into street, city, state (2-letter code), zip. Output ONLY valid JSON." 
           },
           { role: "user", content: prompt }
         ],
@@ -323,7 +309,7 @@ async function visionExtract(fileBuffer, mimetype, purpose = "") {
     }
 
     console.log(`[Parser:Vision] Sending image to Vision AI (purpose=${purpose || 'auto'})...`);
-    const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+    const response = await fetchWithTimeout("https://integrate.api.nvidia.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${nvidiaApiKey}`,
@@ -342,7 +328,7 @@ async function visionExtract(fileBuffer, mimetype, purpose = "") {
         temperature: 0,
         stream: false
       })
-    });
+    }, 30000);
 
     const data = await response.json();
     if (data.error) {
@@ -369,11 +355,26 @@ async function visionExtract(fileBuffer, mimetype, purpose = "") {
 // ═══════════════════════════════════════════════════════════════
 // CLEAN — Normalize all extracted data
 // ═══════════════════════════════════════════════════════════════
+const STATE_MAP = {
+  'ALABAMA': 'AL', 'ALASKA': 'AK', 'ARIZONA': 'AZ', 'ARKANSAS': 'AR', 'CALIFORNIA': 'CA',
+  'COLORADO': 'CO', 'CONNECTICUT': 'CT', 'DELAWARE': 'DE', 'FLORIDA': 'FL', 'GEORGIA': 'GA',
+  'HAWAII': 'HI', 'IDAHO': 'ID', 'ILLINOIS': 'IL', 'INDIANA': 'IN', 'IOWA': 'IA',
+  'KANSAS': 'KS', 'KENTUCKY': 'KY', 'LOUISIANA': 'LA', 'MAINE': 'ME', 'MARYLAND': 'MD',
+  'MASSACHUSETTS': 'MA', 'MICHIGAN': 'MI', 'MINNESOTA': 'MN', 'MISSISSIPPI': 'MS', 'MISSOURI': 'MO',
+  'MONTANA': 'MT', 'NEBRASKA': 'NE', 'NEVADA': 'NV', 'NEW HAMPSHIRE': 'NH', 'NEW JERSEY': 'NJ',
+  'NEW MEXICO': 'NM', 'NEW YORK': 'NY', 'NORTH CAROLINA': 'NC', 'NORTH DAKOTA': 'ND', 'OHIO': 'OH',
+  'OKLAHOMA': 'OK', 'OREGON': 'OR', 'PENNSYLVANIA': 'PA', 'RHODE ISLAND': 'RI', 'SOUTH CAROLINA': 'SC',
+  'SOUTH DAKOTA': 'SD', 'TENNESSEE': 'TN', 'TEXAS': 'TX', 'UTAH': 'UT', 'VERMONT': 'VT',
+  'VIRGINIA': 'VA', 'WASHINGTON': 'WA', 'WEST VIRGINIA': 'WV', 'WISCONSIN': 'WI', 'WYOMING': 'WY'
+};
+
 function clean(d) {
   if (!d) return {};
+  // s() returns empty string for junk values, NEVER null — safe for chaining
   const s = v => {
     const str = String(v || '').trim();
-    if (/^(null|undefined|none|n\/a|unknown|unknow|pending|unknown unknown|unknow unknow)$/i.test(str)) return null;
+    if (!str) return '';
+    if (/^(null|undefined|none|n\/a|unknown|unknow|pending|unknown unknown|unknow unknow|0|-)$/i.test(str)) return '';
     return str;
   };
   const n = v => {
@@ -381,7 +382,6 @@ function clean(d) {
     const cleanStr = String(v || '0').replace(/[$,]/g, '').trim();
     const matches = cleanStr.match(/-?\d+(\.\d+)?/g);
     if (!matches) return 0;
-    // Prioritize the LAST match with a decimal, as it's usually the 'Total'
     const priceMatch = [...matches].reverse().find(m => m.includes('.'));
     const x = parseFloat(priceMatch || matches[matches.length - 1]);
     return Number.isFinite(x) ? x : 0;
@@ -394,7 +394,17 @@ function clean(d) {
     const x = parseInt(matches[matches.length - 1], 10);
     return Number.isFinite(x) ? x : 0;
   };
-  const vin = s(d.vin).toUpperCase()
+  const st = v => {
+    const raw = String(v || '').trim().toUpperCase();
+    if (!raw) return null;
+    if (STATE_MAP[raw]) return STATE_MAP[raw];
+    if (raw.length === 2 && /^[A-Z]{2}$/.test(raw)) return raw;
+    const match = raw.match(/\b([A-Z]{2})\b/);
+    if (match) return match[1];
+    return raw.slice(0, 2) || null;
+  };
+
+  const vin = (s(d.vin) || '').toUpperCase()
     .replace(/[^A-Z0-9]/g, '')
     .replace(/^(VIN|SERIAL|NUMBER|ID|VEHICLEID|IDENTIFICATION|STOCK|LOT|NO)+/, '')
     .replace(/I/g, '1')
@@ -408,6 +418,39 @@ function clean(d) {
     const dd = new Date(t);
     return isNaN(dd.getTime()) ? null : dd.toISOString();
   };
+
+  // Helper to split address if AI combined them
+  const splitAddr = (addr, city, state, zip) => {
+    if (addr && (!city || !state)) {
+      const parts = addr.split(',');
+      if (parts.length >= 2) {
+        const lastPart = parts[parts.length - 1].trim();
+        const cityPart = parts[parts.length - 2].trim();
+        const stateZipMatch = lastPart.match(/^([A-Z]{2})\s*(\d{5})?$/i);
+        return {
+          a: parts.slice(0, -2).join(',').trim() || addr,
+          c: city || cityPart,
+          s: state || (stateZipMatch ? stateZipMatch[1] : null),
+          z: zip || (stateZipMatch ? stateZipMatch[2] : null)
+        };
+      }
+    }
+    return { a: addr, c: city, s: state, z: zip };
+  };
+
+  const acq = splitAddr(
+    s(d.usedVehicleSourceAddress),
+    s(d.usedVehicleSourceCity),
+    s(d.usedVehicleSourceState),
+    s(d.usedVehicleSourceZipCode)
+  );
+
+  const disp = splitAddr(
+    s(d.disposedAddress),
+    s(d.disposedCity),
+    s(d.disposedState),
+    s(d.disposedZip)
+  );
 
   return {
     vin,
@@ -434,20 +477,20 @@ function clean(d) {
     purchasedFrom: s(d.purchasedFrom) || null,
     purchasePrice: n(d.purchasePrice),
     purchaseDate: dt(d.purchaseDate),
-    usedVehicleSourceAddress: s(d.usedVehicleSourceAddress) || null,
-    usedVehicleSourceCity: s(d.usedVehicleSourceCity) || null,
-    usedVehicleSourceState: s(d.usedVehicleSourceState).toUpperCase().slice(0, 2) || null,
-    usedVehicleSourceZipCode: s(d.usedVehicleSourceZipCode) || null,
+    usedVehicleSourceAddress: acq.a || null,
+    usedVehicleSourceCity: acq.c || null,
+    usedVehicleSourceState: st(acq.s),
+    usedVehicleSourceZipCode: s(acq.z) || null,
     disposedTo: s(d.disposedTo) || null,
-    disposedAddress: s(d.disposedAddress) || null,
-    disposedCity: s(d.disposedCity) || null,
-    disposedState: s(d.disposedState).toUpperCase().slice(0, 2) || null,
-    disposedZip: s(d.disposedZip) || null,
+    disposedAddress: disp.a || null,
+    disposedCity: disp.c || null,
+    disposedState: st(disp.s),
+    disposedZip: s(disp.z) || null,
     disposedDate: dt(d.disposedDate),
     disposedPrice: n(d.disposedPrice),
     disposedOdometer: i(d.disposedOdometer),
     disposedDlNumber: s(d.disposedDlNumber) || null,
-    disposedDlState: s(d.disposedDlState).toUpperCase().slice(0, 2) || null,
+    disposedDlState: st(d.disposedDlState),
     transportCost: n(d.transportCost),
     repairCost: n(d.repairCost),
     inspectionCost: n(d.inspectionCost),

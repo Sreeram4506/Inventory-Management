@@ -87,11 +87,13 @@ export default function UsedVehicleFormGenerator({
       }
     };
 
-    // Sequential processing (batch size 1) for maximum reliability
-    const batchSize = 1;
-    for (let i = 0; i < sourceFiles.length; i += batchSize) {
-      const batch = sourceFiles.slice(i, i + batchSize);
-      await Promise.all(batch.map(file => processFile(file)));
+    // Sequential processing with cooldown between files for API rate limit safety
+    for (let i = 0; i < sourceFiles.length; i++) {
+      await processFile(sourceFiles[i]);
+      // Wait 1s between files to avoid NVIDIA API rate limiting
+      if (i < sourceFiles.length - 1) {
+        await new Promise(r => setTimeout(r, 1000));
+      }
     }
 
     if (successCount > 0) {
