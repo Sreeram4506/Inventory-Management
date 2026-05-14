@@ -137,9 +137,10 @@ function drawVin(page, vin, font, debug = false) {
   const fontSize = scaleFontSize(page, 10);
 
   const sanitizedVin = (vin || '').toUpperCase()
-    .replace(/^VIN[:\s-]*/, '') // Only strip exact "VIN:" prefix
+    .replace(/^VIN[:\s-]*/, '') 
     .replace(/[^A-Z0-9]/g, '')
-    .replace(/[IOQ]/g, '')
+    .replace(/I/g, '1')
+    .replace(/[OQ]/g, '0')
     .slice(0, 17);
 
   [...sanitizedVin].forEach((character, index) => {

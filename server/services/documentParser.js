@@ -132,7 +132,7 @@ Return ONLY a raw JSON object. Set unknown fields to null.
   "year": 2014,
   "color": "color",
   "mileage": 131575,
-  "titleNumber": "exact title number",
+  "titleNumber": null,
   "stockNumber": "exact stock number if present",
   "purchasedFrom": "AUCTION name (e.g. ADESA Boston, Manheim)",
   "purchasePrice": 6340,
@@ -142,6 +142,12 @@ Return ONLY a raw JSON object. Set unknown fields to null.
   "usedVehicleSourceState": "XX",
   "usedVehicleSourceZipCode": "AUCTION zip"
 }
+
+TITLE NUMBER RULES:
+- "titleNumber" is the Certificate of Title number. It is typically labeled "Title No", "Title #", "Cert of Title", or "Certificate #".
+- Return ONLY the alphanumeric number itself (e.g. "AB123456"). Do NOT include the label.
+- If the document does NOT contain a title number, you MUST return null. Do NOT guess or fabricate.
+- The VIN is NOT the title number. The stock/lot number is NOT the title number.
 
 IMPORTANT: "usedVehicleSourceAddress" MUST be the address of the AUCTION/SELLER. NEVER use Broadway Used Auto Sales' address (2125 REVERE BEACH PKWY). If only Broadway's address is visible, set source address fields to null.
 
@@ -166,7 +172,7 @@ Return ONLY a raw JSON object.
   "make": "manufacturer",
   "model": "model name",
   "year": 2014,
-  "titleNumber": "exact title number",
+  "titleNumber": null,
   "stockNumber": "exact stock number if present",
   "disposedTo": "PURCHASER name (the customer)",
   "disposedAddress": "PURCHASER street address",
@@ -177,6 +183,12 @@ Return ONLY a raw JSON object.
   "disposedPrice": 12030,
   "disposedOdometer": 119629
 }
+
+TITLE NUMBER RULES:
+- "titleNumber" is the Certificate of Title number. Look for labels like "Title No", "Title #", "Cert of Title", or "Certificate #".
+- Return ONLY the alphanumeric number itself. Do NOT include the label.
+- If the document does NOT contain a title number, you MUST return null. Do NOT guess or fabricate.
+- The VIN is NOT the title number. The stock/lot number is NOT the title number.
 
 IMPORTANT: "disposedAddress" MUST be the address of the BUYER/CUSTOMER. NEVER use Broadway's address (2125 REVERE BEACH PKWY). If only Broadway's address is visible, set disposed address fields to null.${docText}`;
 }
@@ -189,12 +201,14 @@ Our dealership is "Broadway Used Auto Sales" (2125 REVERE BEACH PKWY, EVERETT, M
 
 {
   "vin": "17-char VIN", "make": "", "model": "", "year": 0, "color": "", "mileage": 0,
-  "titleNumber": "exact title number", "stockNumber": "",
+  "titleNumber": null, "stockNumber": "",
   "purchasedFrom": "AUCTION name if acquisition", "purchasePrice": 0, "purchaseDate": "YYYY-MM-DD",
   "usedVehicleSourceAddress": "AUCTION street address", "usedVehicleSourceCity": "", "usedVehicleSourceState": "", "usedVehicleSourceZipCode": "",
   "disposedTo": "BUYER name if sale", "disposedAddress": "BUYER street address", "disposedCity": "", "disposedState": "", "disposedZip": "",
   "disposedDate": "YYYY-MM-DD", "disposedPrice": 0, "disposedOdometer": 0
 }
+
+TITLE NUMBER: Only extract if explicitly labeled ("Title No", "Title #", "Certificate #"). Return just the number, NOT the label. If not present, return null. VIN and stock numbers are NOT title numbers.
 
 IMPORTANT: Split the address into separate Street, City, State, and Zip fields. NEVER extract Broadway Used Auto Sales' address (2125 REVERE BEACH PKWY) into the source or disposed address fields.${docText}`;
 }
@@ -421,17 +435,36 @@ function clean(d) {
 
   // Helper to split address if AI combined them
   const splitAddr = (addr, city, state, zip) => {
-    if (addr && (!city || !state)) {
-      const parts = addr.split(',');
+    const rawAddr = String(addr || '').trim();
+    if (rawAddr && (!city || !state)) {
+      // 1. Try splitting by comma
+      const parts = rawAddr.split(',');
       if (parts.length >= 2) {
         const lastPart = parts[parts.length - 1].trim();
         const cityPart = parts[parts.length - 2].trim();
         const stateZipMatch = lastPart.match(/^([A-Z]{2})\s*(\d{5})?$/i);
+        if (stateZipMatch || /^[A-Z]{2}$/i.test(lastPart)) {
+          return {
+            a: parts.slice(0, -2).join(',').trim() || rawAddr,
+            c: city || cityPart,
+            s: state || (stateZipMatch ? stateZipMatch[1] : lastPart),
+            z: zip || (stateZipMatch ? stateZipMatch[2] : null)
+          };
+        }
+      }
+      
+      // 2. Try regex fallback for "City ST 12345" or "City, ST 12345"
+      const geoMatch = rawAddr.match(/([^,]+)\s+([A-Z]{2})\s+(\d{5})?$/i);
+      if (geoMatch) {
+        const fullPrefix = rawAddr.substring(0, geoMatch.index).trim();
+        const streetParts = fullPrefix.split(/\s+/);
+        // Usually the last word before the City is the street name, but City might be 2 words.
+        // This is tricky, but let's try to assume the match captured City ST Zip.
         return {
-          a: parts.slice(0, -2).join(',').trim() || addr,
-          c: city || cityPart,
-          s: state || (stateZipMatch ? stateZipMatch[1] : null),
-          z: zip || (stateZipMatch ? stateZipMatch[2] : null)
+          a: city ? rawAddr : (fullPrefix || rawAddr),
+          c: city || geoMatch[1].trim(),
+          s: state || geoMatch[2],
+          z: zip || geoMatch[3] || null
         };
       }
     }
@@ -461,17 +494,25 @@ function clean(d) {
     mileage: i(d.mileage),
     titleNumber: (() => {
       const raw = s(d.titleNumber);
-      if (!raw || /^(null|undefined|none|n\/a|unknown|pending)$/i.test(raw)) return null;
+      if (!raw) return null;
       
-      // Remove common prefixes and state codes (e.g., "MA/", "TITLE NO:", "CERTIFICATE:")
-      const cleaned = raw.toUpperCase()
-        .replace(/^[A-Z]{2}\//, '') // Remove state code prefix like "MA/"
-        .replace(/^(TITLE|CERTIFICATE|CERT|DOCUMENT|DOC|T-NO|T-NUMBER|T-NUM|REF|NO|NUMBER|NUM|#|DOC ID|DOCUMENT ID)[:\s#.-]*/gi, '')
-        .replace(/^(TITLE|CERTIFICATE|CERT|DOCUMENT|DOC|T-NO|T-NUMBER|T-NUM|REF|NO|NUMBER|NUM|#|DOC ID|DOCUMENT ID)[:\s#.-]*/gi, '') // double pass for "TITLE NO:"
-        .replace(/^(NO|NUMBER|NUM|#)[:\s#.-]*/gi, '') // triple pass for nested things
+      // Strip only obvious label prefixes the AI might have included
+      let cleaned = raw.trim()
+        .replace(/^(title|cert(ificate)?|doc(ument)?)[\s.:##-]*(no|number|num|id|#)?[\s.:##-]*/i, '')
+        .replace(/^(no|number|num|#)[\s.:##-]*/i, '')
+        .replace(/^[A-Z]{2}\//, '')  // Remove state prefix like "MA/"
         .trim();
-        
-      return cleaned || null;
+      
+      if (!cleaned) return null;
+      
+      // Reject if the "title number" is actually the VIN (17 chars, all alphanum)
+      const vinCandidate = cleaned.replace(/[^A-Z0-9]/gi, '');
+      if (vinCandidate.length === 17 && vin && vinCandidate === vin) return null;
+      
+      // Reject if it's clearly not a title number (too short or just "0")
+      if (/^(0+|null|none|n\/a|unknown|pending|not available)$/i.test(cleaned)) return null;
+      
+      return cleaned;
     })(),
     stockNumber: s(d.stockNumber) || null,
     purchasedFrom: s(d.purchasedFrom) || null,
