@@ -314,15 +314,15 @@ LABEL MAPPING:
 - Make/Model: "Make/Manufacturer" → make. "Model" → model. "Body Type" is NOT model.
 - Mileage: "Odometer", "Miles", "Reading", "OVER 100,000", "EXEMPT" (means check title)
 - Price: "TOTAL", "Balance Due", "Total Amount", "Amount Paid". YOU MUST SCROLL TO THE BOTTOM. The price MUST be the final balance due (selling price + fees). Ignore subtotals.
-- Seller: "SELLER:", "CONSIGNOR:", "FACILITY:", "SELLING DEALER", or top-left entity
+- Source (Obtained From): ALWAYS prioritize the AUCTION/FACILITY name and address (e.g. ADESA, Manheim, CarMax, Central Mass Auto Auction) as the "purchasedFrom" and source address. Even if a separate "SELLER" or "CONSIGNOR" is listed, we want the FACILITY details.
 - Stock: "Stock #", "Lot #", "Unit ID", "Stock Number", "Inventory #"
 - Title: "Title #", "Title State/Number", "Certificate #", "Cert of Origin" — return just the number
 
 DOCUMENT-SPECIFIC:
-- ADESA: Seller name in "SELLER:" field or top-left header. Address under facility name.
+- ADESA: Use the AUCTION FACILITY name and address (usually at the top or labeled "FACILITY") as the source, not the individual seller.
 - CMAA: The price MUST be the one beside "TOTAL" or "TOTAL DUE", not "SALE PRICE". The Total is usually at the bottom-right of the table and includes buyer fees. Ignore the "Selling Price" column.
 - CarMax: SELLER address is at the ABSOLUTE BOTTOM-RIGHT (e.g. "170 Turnpike Rd"). Broadway's address is in the middle table — IGNORE the middle table for address extraction. The price MUST be the "TOTAL" at the bottom of the table, not "Selling Price".
-- Manheim: "TRANSACTION LOCATION" = auction name. Seller in "REMIT PAYMENT TO" or "DUE FROM OWNER" section. Strip " US" from addresses.
+- Manheim: Use the "TRANSACTION LOCATION" or "REMIT PAYMENT TO" as the auction name and source address. Strip " US" from addresses.
 
 NEVER use Broadway's address (100 BROADWAY / 2125 REVERE BEACH PKWY / NORWOOD, MA 02062) as the source address. If you see "BROADWAY USED AUTO SALES" in a table, the address beside it is the BUYER, not the seller.${docText}`;
 }
