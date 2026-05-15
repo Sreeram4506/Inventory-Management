@@ -319,6 +319,7 @@ LABEL MAPPING:
 - Title: "Title #", "Title State/Number", "Certificate #", "Cert of Origin" — return just the number
 
 DOCUMENT-SPECIFIC:
+- AMERICA'S AA (America's Auto Auction): Use "AMERICA'S AA BOSTON" and the North Billerica, MA address as the source. The TOTAL is at the absolute bottom of the price table on the right ($4,765.00 in the example). Title # is in the small box on the right (e.g. BJ713930).
 - ADESA: Use the AUCTION FACILITY name and address (usually at the top or labeled "FACILITY") as the source, not the individual seller.
 - CMAA: The price MUST be the one beside "TOTAL" or "TOTAL DUE", not "SALE PRICE". The Total is usually at the bottom-right of the table and includes buyer fees. Ignore the "Selling Price" column.
 - CarMax: SELLER address is at the ABSOLUTE BOTTOM-RIGHT (e.g. "170 Turnpike Rd"). Broadway's address is in the middle table — IGNORE the middle table for address extraction. The price MUST be the "TOTAL" at the bottom of the table, not "Selling Price".
@@ -618,11 +619,18 @@ function clean(d) {
 
     return numericMatches[numericMatches.length - 1];
   };
-  const i = v => {
+  const i = (v, isYear = false) => {
     if (typeof v === 'number') return v;
     const cleanStr = String(v || '0').replace(/[,]/g, '').trim();
     const matches = cleanStr.match(/\d+/g);
     if (!matches) return 0;
+    
+    if (isYear) {
+      // Find a 4-digit number between 1900 and 2030
+      const yearMatch = matches.find(m => m.length === 4 && parseInt(m, 10) > 1900 && parseInt(m, 10) < 2030);
+      if (yearMatch) return parseInt(yearMatch, 10);
+    }
+
     const x = parseInt(matches[matches.length - 1], 10);
     return Number.isFinite(x) ? x : 0;
   };
@@ -719,8 +727,8 @@ function clean(d) {
     make: (() => {
       const raw = s(d.make);
       if (!raw) return null;
-      // Strip "Make/Manufacturer" label noise and body types that leaked anywhere in the string
-      return raw.replace(/^make\/manufacturer:?\s*/i, '')
+      // Strip labels and body types
+      return raw.replace(/^(make|manufacturer|mfr)[\s.:##-]*/i, '')
         .replace(/\b(sedan|suv|coupe|truck|van|wagon|hatchback|convertible|sport\s*utility)\b/gi, '')
         .replace(/\s+/g, ' ')
         .trim() || null;
@@ -732,7 +740,7 @@ function clean(d) {
       const bodyTypes = /\b(sedan|suv|coupe|truck|van|wagon|hatchback|convertible|sport\s*utility\s*v?)\b/gi;
       return raw.replace(bodyTypes, '').replace(/\s+/g, ' ').trim() || raw;
     })(),
-    year: i(d.year) || null,
+    year: i(d.year, true) || null,
     color: s(d.color) || null,
     mileage: i(d.mileage || d.odometer || d.odometerReading),
     titleNumber: (() => {
