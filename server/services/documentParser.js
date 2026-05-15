@@ -62,33 +62,39 @@ function extractTotalFromText(text) {
   const lines = text.split(/\n/);
   let totalPrice = null;
   
-  // Strategy 1: Look for lines containing "TOTAL" with a dollar amount
+  // Strategy 1: Look for lines containing "TOTAL", "BALANCE", etc. with a dollar amount
   for (const line of lines) {
     const upper = line.toUpperCase().trim();
-    // Match "TOTAL" but NOT "SUBTOTAL" or "TOTAL DUE FROM"
-    if (/\bTOTAL\b/i.test(upper) && !/\bSUBTOTAL\b/i.test(upper) && !/\bTOTAL\s+DUE\s+FROM\b/i.test(upper)) {
+    // Broaden keywords to catch all types of totals
+    const isTotalLine = /\b(TOTAL|BALANCE|NET|AMOUNT)\b/i.test(upper) && 
+                       /\b(DUE|PAID|TOTAL)\b/i.test(upper) && 
+                       !/\b(SUBTOTAL|UNIT)\b/i.test(upper);
+
+    if (isTotalLine) {
       // Extract dollar amounts from this line
       const priceMatch = line.replace(/[$,]/g, '').match(/(\d+[,.]?\d*\.?\d*)/g);
       if (priceMatch) {
         const prices = priceMatch.map(p => parseFloat(p)).filter(p => p > 100 && Number.isFinite(p));
         if (prices.length > 0) {
-          // Take the last price on the TOTAL line (usually the rightmost column)
-          totalPrice = prices[prices.length - 1];
+          totalPrice = Math.max(...prices);
         }
       }
     }
   }
   
-  // Strategy 2: Regex for "TOTAL $X,XXX.XX" or "TOTAL D$ X,XXX.XX" patterns
-  if (!totalPrice) {
-    const totalRegex = /\bTOTAL\s*\$?\s*[\d,]+\.?\d*/gi;
-    const allMatches = text.match(totalRegex);
-    if (allMatches) {
-      for (const match of allMatches) {
-        const num = parseFloat(match.replace(/[^0-9.]/g, ''));
-        if (num > 100 && Number.isFinite(num)) {
-          totalPrice = num; // Keep updating — last TOTAL wins (bottom of document)
-        }
+  // Strategy 2: Look for the LARGEST numeric value in the whole document (excluding years/VINs)
+  // This is a safety net because Total is almost always the biggest number.
+  const allNumbers = text.replace(/[$,]/g, '').match(/(\d{3,}(\.\d{2})?)/g);
+  if (allNumbers) {
+    const validPrices = allNumbers
+      .map(n => parseFloat(n))
+      .filter(num => num > 100 && (num < 1900 || num > 2030) && Number.isFinite(num));
+    
+    if (validPrices.length > 0) {
+      const maxFound = Math.max(...validPrices);
+      // If we don't have a total price yet, or this is significantly different, consider it
+      if (!totalPrice || maxFound > totalPrice) {
+        totalPrice = maxFound;
       }
     }
   }
