@@ -60,7 +60,7 @@ export async function fillUsedVehiclePdf(templateBuffer, vehicleInfo, templateMi
 
   // ── Stock & Title No. ──
   const vin = vehicleInfo.vin || '';
-  const stockNoValue = vin.length >= 6 ? vin.slice(-6).toUpperCase() : vin.toUpperCase();
+  const stockNoValue = (vehicleInfo.stockNumber || (vin.length >= 6 ? vin.slice(-6) : vin)).toUpperCase();
   drawField(page, fieldMap.stockNo, stockNoValue, helvetica, debug);
   drawField(page, fieldMap.titleNo, vehicleInfo.titleNumber || '', helvetica, debug);
 

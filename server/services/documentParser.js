@@ -117,100 +117,134 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
 // ═══════════════════════════════════════════════════════════════
 // PROMPT BUILDERS — Separate focused prompts for acquisition vs sale
 // ═══════════════════════════════════════════════════════════════
+// ─── Shared system prompt for ALL AI calls (text + vision) ───
+const SYSTEM_PROMPT = `You are a UNIVERSAL vehicle document data extractor. You process diverse automotive documents including:
+- Auction Bills of Sale (ADESA, CMAA/Central Mass, Manheim, CarMax)
+- MA Title Transfer Forms ("FOR A MOTOR VEHICLE, MOBILE HOME...")
+- Motor Vehicle Purchase Contracts (Carsforsale.com format)
+- Dealer invoices and wholesale receipts
+
+Our dealership is "Broadway Used Auto Sales" (also "Broadway Used Auto Sales Inc", "Auto Sales On Broadway").
+Dealership addresses: 2125 REVERE BEACH PKWY, EVERETT, MA 02149 or 100 BROADWAY, NORWOOD, MA 02062.
+
+CRITICAL RULES:
+1. ROLE DETECTION: If Broadway appears as BUYER → this is an ACQUISITION. If Broadway appears as SELLER/DEALER → this is a SALE.
+2. ADDRESS FILTERING: NEVER return Broadway's own address as the source or disposed address. Return null instead.
+3. BODY TYPE vs MODEL: "Body Type" (Sedan, SUV, Hatchback, Coupe) is NOT the model. "Model" is the vehicle name (Corolla, Pilot, Focus, Wrangler).
+4. TITLE NUMBER: Only extract if explicitly labeled "Title No", "Title #", "Certificate of Title Number". If not present, return null. VIN is NOT a title number.
+5. Return ONLY valid JSON. No markdown, no explanation.`;
+
 function buildAcquisitionPrompt(textOrEmpty) {
   const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
-  return `You are extracting data from a VEHICLE ACQUISITION document.
-Our dealership (the BUYER) is "Broadway Used Auto Sales" (or "Broadway Used Auto Sales Inc").
-Dealership Address: 2125 REVERE BEACH PKWY, EVERETT, MA 02149.
+  return `Extract data from this VEHICLE ACQUISITION document. Broadway is the BUYER.
 
-Return ONLY a raw JSON object. Set unknown fields to null.
-
+Return ONLY this JSON (set unknown fields to null):
 {
   "vin": "exact 17-char VIN",
-  "make": "manufacturer",
-  "model": "model name",
+  "make": "manufacturer (Toyota, Ford, Honda, etc.)",
+  "model": "model name ONLY (Corolla, Camry, Pilot) — NOT body type",
   "year": 2014,
   "color": "color",
   "mileage": 131575,
   "titleNumber": null,
-  "stockNumber": "exact stock number if present",
-  "purchasedFrom": "AUCTION name (e.g. ADESA Boston, Manheim)",
+  "stockNumber": "stock or lot number",
+  "purchasedFrom": "SELLER/AUCTION name",
   "purchasePrice": 6340,
   "purchaseDate": "YYYY-MM-DD",
-  "usedVehicleSourceAddress": "AUCTION street address",
-  "usedVehicleSourceCity": "AUCTION city",
-  "usedVehicleSourceState": "XX",
-  "usedVehicleSourceZipCode": "AUCTION zip"
+  "usedVehicleSourceAddress": "SELLER street address",
+  "usedVehicleSourceCity": "SELLER city",
+  "usedVehicleSourceState": "XX (2-letter code)",
+  "usedVehicleSourceZipCode": "SELLER zip"
 }
 
-TITLE NUMBER RULES:
-- "titleNumber" is the Certificate of Title number. It is typically labeled "Title No", "Title #", "Cert of Title", or "Certificate #".
-- Return ONLY the alphanumeric number itself (e.g. "AB123456"). Do NOT include the label.
-- If the document does NOT contain a title number, you MUST return null. Do NOT guess or fabricate.
-- The VIN is NOT the title number. The stock/lot number is NOT the title number.
+LABEL MAPPING:
+- VIN: "VIN", "V.I.N. No.", "Vehicle Identification Number"
+- Make/Model: "Make/Manufacturer" → make. "Model" → model. "Body Type" is NOT model.
+- Mileage: "Odometer", "Miles", "Reading", "OVER 100,000" means mileage > 100000
+- Price: "Purchase Price", "Selling Price", "VEHICLE PURCHASE" amount
+- Seller: "SELLER:", "CONSIGNOR:", top-left entity name on auction docs
+- Title: "Title #", "Title State/Number", "Certificate #" — return just the number
 
-IMPORTANT: "usedVehicleSourceAddress" MUST be the address of the AUCTION/SELLER. NEVER use Broadway Used Auto Sales' address (2125 REVERE BEACH PKWY). If only Broadway's address is visible, set source address fields to null.
+DOCUMENT-SPECIFIC:
+- ADESA: Seller name in "SELLER:" field or top-left header. Address under facility name.
+- CMAA: Seller in top-left box. Buyer (Broadway) at bottom-left. Total = selling price + fees.
+- CarMax: Seller address at BOTTOM-RIGHT (e.g. "CarMax - Westborough, 170 Turnpike Rd..."). Broadway in middle.
+- Manheim: "TRANSACTION LOCATION" = auction name. Seller in "REMIT PAYMENT TO" or "DUE FROM OWNER" section. Strip " US" from addresses.
 
-CASE STUDIES:
-1. **ADESA BILL OF SALE**:
-   - PURCHASED FROM: Facility name in header (e.g. "ADESA Concord").
-   - SOURCE ADDRESS: Usually directly below the facility name in the top left.
-2. **CARMAX WHOLESALE**:
-   - SOURCE ADDRESS: Top left under the CarMax logo.${docText}`;
+NEVER use Broadway's address (100 BROADWAY / 2125 REVERE BEACH PKWY) as source address.${docText}`;
 }
 
 function buildSalePrompt(textOrEmpty) {
   const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
-  return `You are extracting data from a VEHICLE SALE document.
-Our dealership (the SELLER) is "Broadway Used Auto Sales".
-Dealership Address: 2125 REVERE BEACH PKWY, EVERETT, MA 02149.
+  return `Extract data from this VEHICLE SALE document. Broadway is the SELLER.
 
-Return ONLY a raw JSON object.
-
+Return ONLY this JSON (set unknown fields to null):
 {
   "vin": "exact 17-char VIN",
-  "make": "manufacturer",
-  "model": "model name",
+  "make": "manufacturer (Toyota, Ford, Honda, etc.)",
+  "model": "model name ONLY (Corolla, Camry, Pilot) — NOT body type",
   "year": 2014,
+  "color": "color",
   "titleNumber": null,
-  "stockNumber": "exact stock number if present",
-  "disposedTo": "PURCHASER name (the customer)",
+  "stockNumber": "stock number",
+  "disposedTo": "PURCHASER/BUYER name",
   "disposedAddress": "PURCHASER street address",
   "disposedCity": "PURCHASER city",
-  "disposedState": "XX",
+  "disposedState": "XX (2-letter code)",
   "disposedZip": "PURCHASER zip code",
   "disposedDate": "YYYY-MM-DD",
-  "disposedPrice": 12030,
-  "disposedOdometer": 119629
+  "disposedPrice": 7751,
+  "disposedOdometer": 119629,
+  "disposedDlNumber": "driver license number",
+  "disposedDlState": "XX"
 }
 
-TITLE NUMBER RULES:
-- "titleNumber" is the Certificate of Title number. Look for labels like "Title No", "Title #", "Cert of Title", or "Certificate #".
-- Return ONLY the alphanumeric number itself. Do NOT include the label.
-- If the document does NOT contain a title number, you MUST return null. Do NOT guess or fabricate.
-- The VIN is NOT the title number. The stock/lot number is NOT the title number.
+LABEL MAPPING:
+- VIN: "VIN", "Vehicle/Vessel Identification Number"
+- Make/Model: "Make/Manufacturer" → make. "Model" → model. "Body Type" (Sedan/SUV/Hatchback) is NOT model.
+- Purchaser: "Print Name(s) of Purchaser(s)", "Purchaser(s) Name(s)", "Buyer"
+- Address: "Address" row under purchaser. City/State/Zip in labeled columns. If state is missing, infer from zip.
+- Price: "Selling Price", "Vehicle Sales Price", the numeric value (e.g. 7751 means $7,751)
+- Date: "Date of Sale", field next to selling price
+- DL: "DL Number", "DL State" — the purchaser's driver license
+- Title: "Certificate of Title Number" — return just the alphanumeric code (e.g. "BK517792")
 
-IMPORTANT: "disposedAddress" MUST be the address of the BUYER/CUSTOMER. NEVER use Broadway's address (2125 REVERE BEACH PKWY). If only Broadway's address is visible, set disposed address fields to null.${docText}`;
+MA TITLE TRANSFER FORM SPECIFIC:
+- Layout: Year | Make/Manufacturer | Body Type | Model | Color
+- "Body Type" column contains Sedan/SUV/Hatchback — do NOT put this in model field
+- Address may lack state code — infer MA if zip starts with 01xxx or 02xxx
+- "Selling Price" is a bare number without $ sign
+
+PURCHASE CONTRACT SPECIFIC:
+- "Dealer/Seller Name and Address" = Broadway (ignore this address)
+- "Purchaser(s) Name(s) and Address(es)" = the BUYER
+- "Vehicle Sales Price" = disposedPrice
+- "Stock No." = stockNumber
+
+NEVER use Broadway's address as the purchaser's address.${docText}`;
 }
 
 function buildAutoPrompt(textOrEmpty) {
   const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
-  return `Extract all vehicle information from this document. Return ONLY a raw JSON object.
-Determine if this is an ACQUISITION (we bought) or a SALE (we sold). 
-Our dealership is "Broadway Used Auto Sales" (2125 REVERE BEACH PKWY, EVERETT, MA 02149).
+  return `Extract all vehicle information from this document.
+Determine direction: If Broadway is BUYER → ACQUISITION. If Broadway is SELLER → SALE.
 
+Return ONLY this JSON (set unknown fields to null):
 {
-  "vin": "17-char VIN", "make": "", "model": "", "year": 0, "color": "", "mileage": 0,
+  "vin": "17-char VIN", "make": "", "model": "model name NOT body type", "year": 0, "color": "", "mileage": 0,
   "titleNumber": null, "stockNumber": "",
-  "purchasedFrom": "AUCTION name if acquisition", "purchasePrice": 0, "purchaseDate": "YYYY-MM-DD",
-  "usedVehicleSourceAddress": "AUCTION street address", "usedVehicleSourceCity": "", "usedVehicleSourceState": "", "usedVehicleSourceZipCode": "",
-  "disposedTo": "BUYER name if sale", "disposedAddress": "BUYER street address", "disposedCity": "", "disposedState": "", "disposedZip": "",
-  "disposedDate": "YYYY-MM-DD", "disposedPrice": 0, "disposedOdometer": 0
+  "purchasedFrom": "SELLER name if acquisition", "purchasePrice": 0, "purchaseDate": "YYYY-MM-DD",
+  "usedVehicleSourceAddress": "SELLER street", "usedVehicleSourceCity": "", "usedVehicleSourceState": "XX", "usedVehicleSourceZipCode": "",
+  "disposedTo": "BUYER name if sale", "disposedAddress": "BUYER street", "disposedCity": "", "disposedState": "XX", "disposedZip": "",
+  "disposedDate": "YYYY-MM-DD", "disposedPrice": 0, "disposedOdometer": 0,
+  "disposedDlNumber": "", "disposedDlState": "XX"
 }
 
-TITLE NUMBER: Only extract if explicitly labeled ("Title No", "Title #", "Certificate #"). Return just the number, NOT the label. If not present, return null. VIN and stock numbers are NOT title numbers.
-
-IMPORTANT: Split the address into separate Street, City, State, and Zip fields. NEVER extract Broadway Used Auto Sales' address (2125 REVERE BEACH PKWY) into the source or disposed address fields.${docText}`;
+RULES:
+- "Body Type" (Sedan/SUV/Hatchback/Coupe) is NOT the model. Model = vehicle name (Corolla, Pilot, Focus).
+- Infer state from zip if missing (01xxx/02xxx = MA, 06xxx = CT, etc.).
+- "Selling Price" bare number (e.g. 7751) = dollar amount without $ sign.
+- NEVER use Broadway's address for source or disposed fields.${docText}`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -237,10 +271,7 @@ async function textExtract(text, purpose = "") {
       body: JSON.stringify({
         model: "meta/llama-3.1-8b-instruct",
         messages: [
-          { 
-            role: "system", 
-            content: "You are a precise document data extractor. Extract VIN, TITLE NUMBER, VEHICLE DETAILS, and ADDRESS fields. Split addresses into street, city, state (2-letter code), zip. Output ONLY valid JSON." 
-          },
+          { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: prompt }
         ],
         temperature: 0,
@@ -331,13 +362,16 @@ async function visionExtract(fileBuffer, mimetype, purpose = "") {
       },
       body: JSON.stringify({
         model: "meta/llama-3.2-11b-vision-instruct",
-        messages: [{
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            { type: "image_url", image_url: { url: `data:${imgMime};base64,${base64Image}` } }
-          ]
-        }],
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              { type: "image_url", image_url: { url: `data:${imgMime};base64,${base64Image}` } }
+            ]
+          }
+        ],
         max_tokens: 1500,
         temperature: 0,
         stream: false
@@ -366,9 +400,10 @@ async function visionExtract(fileBuffer, mimetype, purpose = "") {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// CLEAN — Normalize all extracted data
-// ═══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════�
+// ===============================================================
+// CLEAN - Normalize all extracted data
+// ===============================================================
 const STATE_MAP = {
   'ALABAMA': 'AL', 'ALASKA': 'AK', 'ARIZONA': 'AZ', 'ARKANSAS': 'AR', 'CALIFORNIA': 'CA',
   'COLORADO': 'CO', 'CONNECTICUT': 'CT', 'DELAWARE': 'DE', 'FLORIDA': 'FL', 'GEORGIA': 'GA',
@@ -382,11 +417,33 @@ const STATE_MAP = {
   'VIRGINIA': 'VA', 'WASHINGTON': 'WA', 'WEST VIRGINIA': 'WV', 'WISCONSIN': 'WI', 'WYOMING': 'WY'
 };
 
+// ZIP prefix -> state code mapping for inferring missing states → state code mapping for inferring missing states
+const ZIP_TO_STATE = {
+  '01': 'MA', '02': 'MA', '03': 'NH', '04': 'ME', '05': 'VT', '06': 'CT',
+  '07': 'NJ', '08': 'NJ', '10': 'NY', '11': 'NY', '12': 'NY', '13': 'NY', '14': 'NY',
+  '15': 'PA', '16': 'PA', '17': 'PA', '18': 'PA', '19': 'PA',
+  '20': 'DC', '21': 'MD', '22': 'VA', '23': 'VA', '24': 'VA',
+  '02861': 'RI', '02840': 'RI', '02860': 'RI', '02898': 'RI', '028': 'RI', '029': 'RI',
+  '30': 'GA', '33': 'FL', '02119': 'MA', '02170': 'MA',
+};
+
+function inferStateFromZip(zip) {
+  if (!zip) return null;
+  const z = String(zip).trim();
+  // Check 5-digit first, then 3-digit prefix, then 2-digit prefix
+  if (ZIP_TO_STATE[z]) return ZIP_TO_STATE[z];
+  if (ZIP_TO_STATE[z.substring(0, 3)]) return ZIP_TO_STATE[z.substring(0, 3)];
+  if (ZIP_TO_STATE[z.substring(0, 2)]) return ZIP_TO_STATE[z.substring(0, 2)];
+  return null;
+}
+
 function clean(d) {
   if (!d) return {};
   // s() returns empty string for junk values, NEVER null — safe for chaining
   const s = v => {
-    const str = String(v || '').trim();
+    const str = String(v || '').trim()
+      .replace(/\s+US$/i, '')   // Strip " US" suffix from Manheim addresses
+      .trim();
     if (!str) return '';
     if (/^(null|undefined|none|n\/a|unknown|unknow|pending|unknown unknown|unknow unknow|0|-)$/i.test(str)) return '';
     return str;
@@ -408,13 +465,16 @@ function clean(d) {
     const x = parseInt(matches[matches.length - 1], 10);
     return Number.isFinite(x) ? x : 0;
   };
-  const st = v => {
-    const raw = String(v || '').trim().toUpperCase();
+  const st = (v, zip) => {
+    const raw = String(v || '').trim().toUpperCase().replace(/\s+US$/i, '');
+    if (!raw && zip) return inferStateFromZip(zip);
     if (!raw) return null;
     if (STATE_MAP[raw]) return STATE_MAP[raw];
     if (raw.length === 2 && /^[A-Z]{2}$/.test(raw)) return raw;
     const match = raw.match(/\b([A-Z]{2})\b/);
     if (match) return match[1];
+    // Last resort: try ZIP inference
+    if (zip) return inferStateFromZip(zip);
     return raw.slice(0, 2) || null;
   };
 
@@ -485,13 +545,38 @@ function clean(d) {
     s(d.disposedZip)
   );
 
+  // Filter out Broadway addresses that may have leaked into source/disposed fields
+  const isBroadwayAddr = (addr) => {
+    if (!addr) return false;
+    const u = String(addr).toUpperCase();
+    return u.includes('REVERE BEACH') || u.includes('100 BROADWAY') || u.includes('BROADWAY USED');
+  };
+
   return {
     vin,
-    make: s(d.make) || null,
-    model: s(d.model) || null,
+    make: (() => {
+      const raw = s(d.make);
+      if (!raw) return null;
+      // Strip "Make/Manufacturer" label noise and body types that leaked
+      return raw.replace(/^make\/manufacturer:?\s*/i, '')
+        .replace(/^(sedan|suv|coupe|truck|van|wagon|hatchback|convertible)\s*/i, '')
+        .trim() || null;
+    })(),
+    model: (() => {
+      const raw = s(d.model);
+      if (!raw) return null;
+      // Strip body types that may have been prepended ("SUV Pilot" → "Pilot")
+      const parts = raw.split(/\s+/);
+      const bodyTypes = /^(suv|sedan|coupe|truck|van|wagon|hatchback|convertible|sport\s*utility)$/i;
+      if (parts.length > 1 && bodyTypes.test(parts[0])) {
+        return parts.slice(1).join(' ');
+      }
+      // Also handle "Sedan Corolla LE" → "Corolla LE"
+      return raw.replace(/^(sedan|suv|coupe|truck|van|wagon|hatchback|convertible|sport\s*utility\s*v?)\s+/i, '').trim() || raw;
+    })(),
     year: i(d.year) || null,
     color: s(d.color) || null,
-    mileage: i(d.mileage),
+    mileage: i(d.mileage || d.odometer || d.odometerReading),
     titleNumber: (() => {
       const raw = s(d.titleNumber);
       if (!raw) return null;
@@ -518,15 +603,15 @@ function clean(d) {
     purchasedFrom: s(d.purchasedFrom) || null,
     purchasePrice: n(d.purchasePrice),
     purchaseDate: dt(d.purchaseDate),
-    usedVehicleSourceAddress: acq.a || null,
-    usedVehicleSourceCity: acq.c || null,
-    usedVehicleSourceState: st(acq.s),
-    usedVehicleSourceZipCode: s(acq.z) || null,
+    usedVehicleSourceAddress: isBroadwayAddr(acq.a) ? null : (acq.a || null),
+    usedVehicleSourceCity: isBroadwayAddr(acq.a) ? null : (acq.c || null),
+    usedVehicleSourceState: isBroadwayAddr(acq.a) ? null : st(acq.s, acq.z),
+    usedVehicleSourceZipCode: isBroadwayAddr(acq.a) ? null : (s(acq.z) || null),
     disposedTo: s(d.disposedTo) || null,
-    disposedAddress: disp.a || null,
-    disposedCity: disp.c || null,
-    disposedState: st(disp.s),
-    disposedZip: s(disp.z) || null,
+    disposedAddress: isBroadwayAddr(disp.a) ? null : (disp.a || null),
+    disposedCity: isBroadwayAddr(disp.a) ? null : (disp.c || null),
+    disposedState: isBroadwayAddr(disp.a) ? null : st(disp.s, disp.z),
+    disposedZip: isBroadwayAddr(disp.a) ? null : (s(disp.z) || null),
     disposedDate: dt(d.disposedDate),
     disposedPrice: n(d.disposedPrice),
     disposedOdometer: i(d.disposedOdometer),
