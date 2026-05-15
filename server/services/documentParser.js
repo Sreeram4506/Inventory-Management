@@ -274,9 +274,9 @@ Dealership addresses: 2125 REVERE BEACH PKWY, EVERETT, MA 02149 or 100 BROADWAY,
 CRITICAL RULES:
 1. ROLE DETECTION: If Broadway appears as BUYER → this is an ACQUISITION. If Broadway appears as SELLER/DEALER → this is a SALE.
 2. ADDRESS FILTERING: NEVER return Broadway's own address as the source or disposed address. Return null instead.
-3. BODY TYPE vs MODEL: "Body Type" (Sedan, SUV, Hatchback, Coupe) is NOT the model. "Model" is the vehicle name (Corolla, Pilot, Focus, Wrangler).
+3. BODY TYPE vs MODEL: "Body Type" (Sedan, SUV, Hatchback, Coupe) is NOT the model. "Model" is the vehicle name (Corolla, Camry, C250, E350, 328i, Wrangler). For luxury cars (Mercedes-Benz, BMW, Audi), the model is ALWAYS the alphanumeric code (e.g. C250). NEVER put "Sedan" or "SUV" in the model field.
 4. TITLE NUMBER: This is CRITICAL. Extract if labeled "Certificate of Title", "Title No", "Title #", "Certificate No", or "Cert of Origin". It is usually an 8-10 digit alphanumeric code (e.g. BK182936).
-5. PRICE (TOTAL ONLY): ALWAYS extract the ABSOLUTE TOTAL/BALANCE DUE (e.g. 4195.00). NEVER extract the "Sale Price" or "Selling Price" (e.g. 3800.00) if a larger TOTAL exists below it. Fees must be included. Look at the absolute bottom of the document.
+5. PRICE (TOTAL ONLY): ALWAYS extract the ABSOLUTE TOTAL/BALANCE DUE (e.g. 7645.00). NEVER extract the "Sale Price" or "Selling Price" (e.g. 7200.00) if a larger TOTAL exists below it. Fees MUST be included.
 6. Return ONLY a valid JSON object wrapped in JSON_START and JSON_END markers.
 Example:
 JSON_START
@@ -321,10 +321,10 @@ LABEL MAPPING:
 DOCUMENT-SPECIFIC:
 - ADESA: Seller name in "SELLER:" field or top-left header. Address under facility name.
 - CMAA: The price MUST be the one beside "TOTAL" or "TOTAL DUE", not "SALE PRICE". The Total is usually at the bottom-right of the table and includes buyer fees. Ignore the "Selling Price" column.
-- CarMax: Seller address at BOTTOM-RIGHT. Broadway in middle. The price MUST be the "TOTAL" at the bottom of the column, not the "Selling Price" at the top. Fees must be included.
+- CarMax: SELLER address is at the ABSOLUTE BOTTOM-RIGHT (e.g. "170 Turnpike Rd"). Broadway's address is in the middle table — IGNORE the middle table for address extraction. The price MUST be the "TOTAL" at the bottom of the table, not "Selling Price".
 - Manheim: "TRANSACTION LOCATION" = auction name. Seller in "REMIT PAYMENT TO" or "DUE FROM OWNER" section. Strip " US" from addresses.
 
-NEVER use Broadway's address (100 BROADWAY / 2125 REVERE BEACH PKWY) as source address.${docText}`;
+NEVER use Broadway's address (100 BROADWAY / 2125 REVERE BEACH PKWY / NORWOOD, MA 02062) as the source address. If you see "BROADWAY USED AUTO SALES" in a table, the address beside it is the BUYER, not the seller.${docText}`;
 }
 
 function buildSalePrompt(textOrEmpty) {
@@ -663,7 +663,8 @@ function clean(d) {
       if (parts.length >= 2) {
         const lastPart = parts[parts.length - 1].trim();
         const cityPart = parts[parts.length - 2].trim();
-        const stateZipMatch = lastPart.match(/^([A-Z]{2})\s*(\d{5})?$/i);
+        // Support 5-digit or 9-digit (ZIP+4) codes
+        const stateZipMatch = lastPart.match(/^([A-Z]{2})\s*(\d{5}(?:-\d{4})?)?$/i);
         if (stateZipMatch || /^[A-Z]{2}$/i.test(lastPart)) {
           return {
             a: parts.slice(0, -2).join(',').trim() || rawAddr,
@@ -674,8 +675,8 @@ function clean(d) {
         }
       }
       
-      // 2. Try regex fallback for "City ST 12345" or "City, ST 12345"
-      const geoMatch = rawAddr.match(/([^,]+)\s+([A-Z]{2})\s+(\d{5})?$/i);
+      // 2. Try regex fallback for "City ST 12345" or "City, ST 12345-6789"
+      const geoMatch = rawAddr.match(/([^,]+)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)?$/i);
       if (geoMatch) {
         const fullPrefix = rawAddr.substring(0, geoMatch.index).trim();
         const streetParts = fullPrefix.split(/\s+/);

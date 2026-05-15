@@ -149,6 +149,7 @@ router.post(
         ? templateFile.buffer
         : await getTemplateBuffer();
       const templateMimeType = templateFile?.mimetype || 'image/jpeg';
+      
       const filledPdf = await fillUsedVehiclePdf(templateBuffer, info, templateMimeType);
       const pdfBase64Str = filledPdf;
 

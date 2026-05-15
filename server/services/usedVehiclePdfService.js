@@ -102,8 +102,25 @@ export function buildUsedVehiclePdfFileName(vehicleInfo) {
 
 function drawField(page, field, value, font, debug = false) {
   const bounds = scaleRect(page, field);
-  const fontSize = scaleFontSize(page, 10);
-  const text = truncateToFit(value, bounds.width, font, fontSize);
+  const startFontSize = scaleFontSize(page, 10);
+  const minFontSize = scaleFontSize(page, 6);
+  
+  let fontSize = startFontSize;
+  let text = String(value || '').replace(/\s+/g, ' ').trim();
+
+  // Auto-scale font size if text is too long
+  if (text && font) {
+    while (fontSize > minFontSize && font.widthOfTextAtSize(text, fontSize) > bounds.width) {
+      fontSize -= 0.5;
+    }
+    // Final truncation if still too long at min size
+    if (font.widthOfTextAtSize(text, fontSize) > bounds.width) {
+      while (text.length > 1 && font.widthOfTextAtSize(text, fontSize) > bounds.width) {
+        text = text.slice(0, -1);
+      }
+      text = text.trim();
+    }
+  }
 
   if (debug) {
     page.drawRectangle({
@@ -120,9 +137,12 @@ function drawField(page, field, value, font, debug = false) {
     return;
   }
 
+  // Adjust Y offset slightly based on font size to keep it centered vertically
+  const yOffset = (startFontSize - fontSize) / 2;
+
   page.drawText(text, {
     x: bounds.x,
-    y: bounds.y,
+    y: bounds.y + yOffset,
     size: fontSize,
     font,
     color: rgb(0, 0, 0),
@@ -231,27 +251,6 @@ function formatUsedVehicleDate(value) {
   const year = date.getUTCFullYear();
 
   return `${day}-${month}-${year}`;
-}
-
-function truncateToFit(value, maxWidth, font, fontSize) {
-  if (!value) {
-    return '';
-  }
-
-  const text = String(value).replace(/\s+/g, ' ').trim();
-
-  // If we have font metrics, use them for precise truncation
-  if (font && fontSize) {
-    let truncated = text;
-    while (truncated.length > 1 && font.widthOfTextAtSize(truncated, fontSize) > maxWidth) {
-      truncated = truncated.slice(0, -1);
-    }
-    return truncated.trim();
-  }
-
-  // Fallback: approximate character width
-  const maxChars = Math.max(1, Math.floor(maxWidth / 5.8));
-  return text.length > maxChars ? `${text.slice(0, maxChars - 1).trim()}` : text;
 }
 
 function sanitizeFileNamePart(value) {
