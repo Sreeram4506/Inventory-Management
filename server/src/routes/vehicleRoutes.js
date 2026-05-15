@@ -112,7 +112,9 @@ router.get('/:id/data', async (req, res, next) => {
     let sourceDocumentBase64 = vehicle.purchase?.sourceDocumentBase64;
     
     // Fallback: If data missing in purchase record, look in DocumentRegistry by VIN
-    if ((!documentBase64 || !sourceDocumentBase64) && vehicle.vin) {
+    // Only fallback if the VIN looks like a real VIN (not a short placeholder or AI template text)
+    const isSuspiciousVin = !vehicle.vin || vehicle.vin.length < 11 || /exact 17-char/i.test(vehicle.vin);
+    if ((!documentBase64 || !sourceDocumentBase64) && !isSuspiciousVin) {
       const registryEntry = await prisma.documentRegistry.findFirst({
         where: { 
           vin: vehicle.vin, 

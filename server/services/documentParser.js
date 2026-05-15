@@ -62,39 +62,33 @@ function extractTotalFromText(text) {
   const lines = text.split(/\n/);
   let totalPrice = null;
   
-  // Strategy 1: Look for lines containing "TOTAL", "BALANCE", etc. with a dollar amount
+  // Strategy 1: Look for lines containing "TOTAL" with a dollar amount
   for (const line of lines) {
     const upper = line.toUpperCase().trim();
-    // Broaden keywords to catch all types of totals
-    const isTotalLine = /\b(TOTAL|BALANCE|NET|AMOUNT)\b/i.test(upper) && 
-                       /\b(DUE|PAID|TOTAL)\b/i.test(upper) && 
-                       !/\b(SUBTOTAL|UNIT)\b/i.test(upper);
-
-    if (isTotalLine) {
+    // Match "TOTAL" but NOT "SUBTOTAL" or "TOTAL DUE FROM"
+    if (/\bTOTAL\b/i.test(upper) && !/\bSUBTOTAL\b/i.test(upper) && !/\bTOTAL\s+DUE\s+FROM\b/i.test(upper)) {
       // Extract dollar amounts from this line
       const priceMatch = line.replace(/[$,]/g, '').match(/(\d+[,.]?\d*\.?\d*)/g);
       if (priceMatch) {
         const prices = priceMatch.map(p => parseFloat(p)).filter(p => p > 100 && Number.isFinite(p));
         if (prices.length > 0) {
-          totalPrice = Math.max(...prices);
+          // Take the last price on the TOTAL line (usually the rightmost column)
+          totalPrice = prices[prices.length - 1];
         }
       }
     }
   }
   
-  // Strategy 2: Look for the LARGEST numeric value in the whole document (excluding years/VINs)
-  // This is a safety net because Total is almost always the biggest number.
-  const allNumbers = text.replace(/[$,]/g, '').match(/(\d{3,}(\.\d{2})?)/g);
-  if (allNumbers) {
-    const validPrices = allNumbers
-      .map(n => parseFloat(n))
-      .filter(num => num > 100 && (num < 1900 || num > 2030) && Number.isFinite(num));
-    
-    if (validPrices.length > 0) {
-      const maxFound = Math.max(...validPrices);
-      // If we don't have a total price yet, or this is significantly different, consider it
-      if (!totalPrice || maxFound > totalPrice) {
-        totalPrice = maxFound;
+  // Strategy 2: Regex for "TOTAL $X,XXX.XX" or "TOTAL D$ X,XXX.XX" patterns
+  if (!totalPrice) {
+    const totalRegex = /\bTOTAL\s*\$?\s*[\d,]+\.?\d*/gi;
+    const allMatches = text.match(totalRegex);
+    if (allMatches) {
+      for (const match of allMatches) {
+        const num = parseFloat(match.replace(/[^0-9.]/g, ''));
+        if (num > 100 && Number.isFinite(num)) {
+          totalPrice = num; // Keep updating — last TOTAL wins (bottom of document)
+        }
       }
     }
   }
@@ -296,23 +290,24 @@ function buildAcquisitionPrompt(textOrEmpty) {
 
 JSON_START
 {
-  "vin": "exact 17-char VIN",
-  "make": "manufacturer (Toyota, Ford, Honda, etc.)",
-  "model": "model name ONLY (Corolla, Camry, Pilot) — NOT body type",
+  "vin": "VIN (17 chars) or null",
+  "make": "Manufacturer or null",
+  "model": "Model name or null",
   "year": 2014,
-  "color": "color",
+  "color": "Color or null",
   "mileage": 131575,
-  "titleNumber": null,
-  "stockNumber": "stock or lot number",
-  "purchasedFrom": "SELLER/AUCTION name",
+  "titleNumber": "Number or null",
+  "stockNumber": "Number or null",
+  "purchasedFrom": "Seller or null",
   "purchasePrice": 6340,
-  "purchaseDate": "YYYY-MM-DD",
-  "usedVehicleSourceAddress": "SELLER street address",
-  "usedVehicleSourceCity": "SELLER city",
-  "usedVehicleSourceState": "XX (2-letter code)",
-  "usedVehicleSourceZipCode": "SELLER zip"
+  "purchaseDate": "YYYY-MM-DD or null",
+  "usedVehicleSourceAddress": "Address or null",
+  "usedVehicleSourceCity": "City or null",
+  "usedVehicleSourceState": "XX or null",
+  "usedVehicleSourceZipCode": "Zip or null"
 }
 JSON_END
+IMPORTANT: If a value is missing or unclear, return null. NEVER return placeholder text like "exact 17-char VIN".
 
 LABEL MAPPING:
 - VIN: "VIN", "V.I.N. No.", "Vehicle Identification Number", "Serial #"
@@ -604,7 +599,7 @@ function clean(d) {
       .replace(/\s+US$/i, '')   // Strip " US" suffix from Manheim addresses
       .trim();
     if (!str) return '';
-    if (/^(null|undefined|none|n\/a|unknown|unknow|pending|unknown unknown|unknow unknow|0|-)$/i.test(str)) return '';
+    if (/^(null|undefined|none|n\/a|unknown|unknow|pending|unknown unknown|unknow unknow|0|-|exact 17-char VIN|manufacturer|model name ONLY|color|SELLER|YYYY-MM-DD)$/i.test(str)) return '';
     return str;
   };
   const n = v => {
