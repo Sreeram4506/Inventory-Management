@@ -34,7 +34,21 @@ function parseCurrency(value) {
  */
 async function findFuzzyRegistryEntry(vin, type, req) {
   if (!vin) return null;
-  const upperVin = vin.toUpperCase();
+  const upperVin = vin.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+  // Only do fuzzy matching on valid 17-char VINs
+  if (upperVin.length !== 17) {
+    // For non-standard VINs, only do exact match
+    const entry = await prisma.documentRegistry.findFirst({
+      where: { 
+        vin: upperVin, 
+        documentType: type,
+        dealershipId: req.dealershipId
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    return entry || null;
+  }
 
   // 1. Exact match first
   let entry = await prisma.documentRegistry.findFirst({
@@ -47,7 +61,7 @@ async function findFuzzyRegistryEntry(vin, type, req) {
   });
   if (entry) return entry;
 
-  // 2. Try common OCR swaps
+  // 2. Try common OCR swaps (single character swap only)
   const swaps = { '5': 'S', 'S': '5', '0': 'O', 'O': '0', '1': 'I', 'I': '1', 'B': '8', '8': 'B' };
   const vinChars = upperVin.split('');
   
@@ -73,22 +87,8 @@ async function findFuzzyRegistryEntry(vin, type, req) {
     }
   }
 
-  // 3. Last 8 characters match (VIS)
-  if (upperVin.length >= 8) {
-    const vis = upperVin.substring(upperVin.length - 8);
-    entry = await prisma.documentRegistry.findFirst({
-      where: { 
-        vin: { endsWith: vis },
-        documentType: type,
-        dealershipId: req.dealershipId 
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-    if (entry) {
-      console.log(`[FuzzyMatch] Found match by VIS (last 8): ${entry.vin}`);
-      return entry;
-    }
-  }
+  // NOTE: Removed the old "last 8 characters" match — it was too aggressive
+  // and caused different vehicles to share documents when they had similar VINs.
 
   return null;
 }

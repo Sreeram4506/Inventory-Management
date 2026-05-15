@@ -47,27 +47,169 @@ async function fetchWithTimeout(url, options, timeoutMs = 25000, retries = 1) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// POST-PROCESSING: Deterministic price & title extraction from raw text
+// These run AFTER AI extraction and OVERRIDE the AI if they find better data
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Scans raw OCR/PDF text for a "TOTAL" line and extracts the dollar amount.
+ * Returns the total price if found, or null if not found.
+ */
+function extractTotalFromText(text) {
+  if (!text) return null;
+  
+  // Normalize the text
+  const lines = text.split(/\n/);
+  let totalPrice = null;
+  
+  // Strategy 1: Look for lines containing "TOTAL" with a dollar amount
+  for (const line of lines) {
+    const upper = line.toUpperCase().trim();
+    // Match "TOTAL" but NOT "SUBTOTAL" or "TOTAL DUE FROM"
+    if (/\bTOTAL\b/i.test(upper) && !/\bSUBTOTAL\b/i.test(upper) && !/\bTOTAL\s+DUE\s+FROM\b/i.test(upper)) {
+      // Extract dollar amounts from this line
+      const priceMatch = line.replace(/[$,]/g, '').match(/(\d+[,.]?\d*\.?\d*)/g);
+      if (priceMatch) {
+        const prices = priceMatch.map(p => parseFloat(p)).filter(p => p > 100 && Number.isFinite(p));
+        if (prices.length > 0) {
+          // Take the last price on the TOTAL line (usually the rightmost column)
+          totalPrice = prices[prices.length - 1];
+        }
+      }
+    }
+  }
+  
+  // Strategy 2: Regex for "TOTAL $X,XXX.XX" or "TOTAL D$ X,XXX.XX" patterns
+  if (!totalPrice) {
+    const totalRegex = /\bTOTAL\s*\$?\s*[\d,]+\.?\d*/gi;
+    const allMatches = text.match(totalRegex);
+    if (allMatches) {
+      for (const match of allMatches) {
+        const num = parseFloat(match.replace(/[^0-9.]/g, ''));
+        if (num > 100 && Number.isFinite(num)) {
+          totalPrice = num; // Keep updating — last TOTAL wins (bottom of document)
+        }
+      }
+    }
+  }
+  
+  if (totalPrice) {
+    console.log(`[Parser:PostProcess] Found TOTAL price from text: $${totalPrice}`);
+  }
+  return totalPrice;
+}
+
+/**
+ * Scans raw OCR/PDF text for title number patterns.
+ * Returns the title number if found, or null.
+ * Must be STRICT to avoid false positives from OCR noise.
+ */
+function extractTitleFromText(text) {
+  if (!text) return null;
+  
+  // Strategy 1: Look for "XX/XXXXXXXX" pattern (e.g. "MA/BN355731", "CT/AA2606042")
+  // This is the most reliable pattern found in ADESA/CMAA documents
+  const stateSlashPatterns = text.match(/\b([A-Z]{2})\/([A-Z]{1,3}\d{4,9})\b/gi);
+  if (stateSlashPatterns) {
+    for (const m of stateSlashPatterns) {
+      const parts = m.split('/');
+      if (parts.length === 2) {
+        const titleNum = parts[1].toUpperCase();
+        // Must have letters AND digits (like BN355731, AA2606042)
+        if (/[A-Z]/.test(titleNum) && /\d{4,}/.test(titleNum) && titleNum.length >= 5 && titleNum.length <= 12) {
+          console.log(`[Parser:PostProcess] Found Title Number (state/number format): ${titleNum}`);
+          return titleNum;
+        }
+      }
+    }
+  }
+  
+  // Strategy 2: Look for explicit "Title State/Number:" or "Title #:" label followed by value
+  const labelMatch = text.match(/(?:Title\s*(?:State\/Number|#|No\.?|Number))\s*[:.]?\s*(?:([A-Z]{2})\/)?\s*([A-Z]{0,3}\d{4,9})/i);
+  if (labelMatch) {
+    const titleNum = (labelMatch[2] || '').toUpperCase();
+    if (titleNum.length >= 5 && /\d{2,}/.test(titleNum)) {
+      console.log(`[Parser:PostProcess] Found Title Number (label format): ${titleNum}`);
+      return titleNum;
+    }
+  }
+  
+  // Strategy 3: Look for "Certificate of Title" followed by alphanumeric code
+  const certMatch = text.match(/(?:Certificate\s*(?:of\s*Title|No\.?|#))\s*[:.]?\s*(?:([A-Z]{2})\/)?\s*([A-Z]{0,3}\d{4,9})/i);
+  if (certMatch) {
+    const titleNum = (certMatch[2] || '').toUpperCase();
+    if (titleNum.length >= 5 && /\d{2,}/.test(titleNum)) {
+      console.log(`[Parser:PostProcess] Found Title Number (certificate format): ${titleNum}`);
+      return titleNum;
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Apply post-processing fixes to AI result using raw document text.
+ */
+function postProcessResult(result, rawText, purpose) {
+  if (!result || !rawText) return result;
+  
+  // Fix price: override AI's "Sale Price" with the actual TOTAL
+  // Only for ACQUISITION documents — sale documents (MA Title) don't have separate totals
+  if (purpose === 'acquisition' || purpose === '') {
+    const totalFromText = extractTotalFromText(rawText);
+    if (totalFromText) {
+      const priceField = 'purchasePrice';
+      const currentPrice = result[priceField] || 0;
+      
+      // If the TOTAL from text is larger than what AI returned, use it
+      if (totalFromText > currentPrice) {
+        console.log(`[Parser:PostProcess] Overriding ${priceField}: ${currentPrice} → ${totalFromText} (TOTAL from document text)`);
+        result[priceField] = totalFromText;
+      }
+    }
+  }
+  
+  // Fix title number: if AI returned null but we can find it in text
+  if (!result.titleNumber) {
+    const titleFromText = extractTitleFromText(rawText);
+    if (titleFromText) {
+      console.log(`[Parser:PostProcess] Filling titleNumber from text: ${titleFromText}`);
+      result.titleNumber = titleFromText;
+    }
+  }
+  
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // SINGLE ENTRY POINT — Extract everything from any document
 // purpose: "acquisition" | "sale" | "" (unknown)
 // ═══════════════════════════════════════════════════════════════
 export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
   console.log(`[Parser] START | mime=${mimetype} | purpose=${purpose || 'auto'} | nvidia=${hasNvidiaKey}`);
 
-  // For images — go straight to Vision AI
+  // For images — go straight to Vision AI, then post-process with OCR text
   if (mimetype.startsWith('image/')) {
+    // Always run OCR so we have raw text for post-processing
+    const ocrText = await ocrImage(fileBuffer);
+    
     try {
       const visionResult = await visionExtract(fileBuffer, mimetype, purpose);
-      if (visionResult && visionResult.vin) return visionResult;
+      if (visionResult && (visionResult.vin || visionResult.make || visionResult.disposedTo)) {
+        // Post-process: fix price and title using OCR text
+        return postProcessResult(visionResult, ocrText, purpose);
+      }
     } catch (err) {
       console.warn(`[Parser] Vision AI failed, falling back to OCR: ${err.message}`);
     }
     
-    // Fallback: OCR the image then send text to LLM
-    const ocrText = await ocrImage(fileBuffer);
+    // Fallback: OCR text to LLM
     if (hasNvidiaKey && ocrText.length > 30) {
       try {
         const textResult = await textExtract(ocrText, purpose);
-        if (textResult) return textResult;
+        if (textResult && (textResult.vin || textResult.make || textResult.disposedTo)) {
+          return postProcessResult(textResult, ocrText, purpose);
+        }
       } catch (err) {
         console.warn(`[Parser] Text LLM failed after OCR: ${err.message}`);
       }
@@ -84,7 +226,9 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
     if (combinedText.replace(/\s/g, '').length > 30 && hasNvidiaKey) {
       try {
         const textResult = await textExtract(combinedText, purpose);
-        if (textResult && textResult.vin) return textResult;
+        if (textResult && (textResult.vin || textResult.make || textResult.disposedTo)) {
+          return postProcessResult(textResult, combinedText, purpose);
+        }
       } catch (err) {
         console.warn(`[Parser] Text LLM failed on native PDF text: ${err.message}`);
       }
@@ -106,7 +250,7 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
   if (hasNvidiaKey && text.length > 30) {
     try {
       const textResult = await textExtract(text, purpose);
-      if (textResult) return textResult;
+      if (textResult) return postProcessResult(textResult, text, purpose);
     } catch (err) {
       console.warn(`[Parser] Text LLM failed on Word/Other: ${err.message}`);
     }
@@ -131,14 +275,20 @@ CRITICAL RULES:
 1. ROLE DETECTION: If Broadway appears as BUYER → this is an ACQUISITION. If Broadway appears as SELLER/DEALER → this is a SALE.
 2. ADDRESS FILTERING: NEVER return Broadway's own address as the source or disposed address. Return null instead.
 3. BODY TYPE vs MODEL: "Body Type" (Sedan, SUV, Hatchback, Coupe) is NOT the model. "Model" is the vehicle name (Corolla, Pilot, Focus, Wrangler).
-4. TITLE NUMBER: Only extract if explicitly labeled "Title No", "Title #", "Certificate of Title Number". If not present, return null. VIN is NOT a title number.
-5. Return ONLY valid JSON. No markdown, no explanation.`;
+4. TITLE NUMBER: This is CRITICAL. Extract if labeled "Certificate of Title", "Title No", "Title #", "Certificate No", or "Cert of Origin". It is usually an 8-10 digit alphanumeric code (e.g. BK182936).
+5. PRICE (TOTAL ONLY): ALWAYS extract the ABSOLUTE TOTAL/BALANCE DUE (e.g. 4195.00). NEVER extract the "Sale Price" or "Selling Price" (e.g. 3800.00) if a larger TOTAL exists below it. Fees must be included. Look at the absolute bottom of the document.
+6. Return ONLY a valid JSON object wrapped in JSON_START and JSON_END markers.
+Example:
+JSON_START
+{ "vin": "...", ... }
+JSON_END
+No markdown, no explanation outside markers.`;
 
 function buildAcquisitionPrompt(textOrEmpty) {
   const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
   return `Extract data from this VEHICLE ACQUISITION document. Broadway is the BUYER.
 
-Return ONLY this JSON (set unknown fields to null):
+JSON_START
 {
   "vin": "exact 17-char VIN",
   "make": "manufacturer (Toyota, Ford, Honda, etc.)",
@@ -156,19 +306,21 @@ Return ONLY this JSON (set unknown fields to null):
   "usedVehicleSourceState": "XX (2-letter code)",
   "usedVehicleSourceZipCode": "SELLER zip"
 }
+JSON_END
 
 LABEL MAPPING:
-- VIN: "VIN", "V.I.N. No.", "Vehicle Identification Number"
+- VIN: "VIN", "V.I.N. No.", "Vehicle Identification Number", "Serial #"
 - Make/Model: "Make/Manufacturer" → make. "Model" → model. "Body Type" is NOT model.
-- Mileage: "Odometer", "Miles", "Reading", "OVER 100,000" means mileage > 100000
-- Price: "Purchase Price", "Selling Price", "VEHICLE PURCHASE" amount
-- Seller: "SELLER:", "CONSIGNOR:", top-left entity name on auction docs
-- Title: "Title #", "Title State/Number", "Certificate #" — return just the number
+- Mileage: "Odometer", "Miles", "Reading", "OVER 100,000", "EXEMPT" (means check title)
+- Price: "TOTAL", "Balance Due", "Total Amount", "Amount Paid". YOU MUST SCROLL TO THE BOTTOM. The price MUST be the final balance due (selling price + fees). Ignore subtotals.
+- Seller: "SELLER:", "CONSIGNOR:", "FACILITY:", "SELLING DEALER", or top-left entity
+- Stock: "Stock #", "Lot #", "Unit ID", "Stock Number", "Inventory #"
+- Title: "Title #", "Title State/Number", "Certificate #", "Cert of Origin" — return just the number
 
 DOCUMENT-SPECIFIC:
 - ADESA: Seller name in "SELLER:" field or top-left header. Address under facility name.
-- CMAA: Seller in top-left box. Buyer (Broadway) at bottom-left. Total = selling price + fees.
-- CarMax: Seller address at BOTTOM-RIGHT (e.g. "CarMax - Westborough, 170 Turnpike Rd..."). Broadway in middle.
+- CMAA: The price MUST be the one beside "TOTAL" or "TOTAL DUE", not "SALE PRICE". The Total is usually at the bottom-right of the table and includes buyer fees. Ignore the "Selling Price" column.
+- CarMax: Seller address at BOTTOM-RIGHT. Broadway in middle. The price MUST be the "TOTAL" at the bottom of the column, not the "Selling Price" at the top. Fees must be included.
 - Manheim: "TRANSACTION LOCATION" = auction name. Seller in "REMIT PAYMENT TO" or "DUE FROM OWNER" section. Strip " US" from addresses.
 
 NEVER use Broadway's address (100 BROADWAY / 2125 REVERE BEACH PKWY) as source address.${docText}`;
@@ -178,7 +330,7 @@ function buildSalePrompt(textOrEmpty) {
   const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
   return `Extract data from this VEHICLE SALE document. Broadway is the SELLER.
 
-Return ONLY this JSON (set unknown fields to null):
+JSON_START
 {
   "vin": "exact 17-char VIN",
   "make": "manufacturer (Toyota, Ford, Honda, etc.)",
@@ -198,22 +350,24 @@ Return ONLY this JSON (set unknown fields to null):
   "disposedDlNumber": "driver license number",
   "disposedDlState": "XX"
 }
+JSON_END
 
 LABEL MAPPING:
-- VIN: "VIN", "Vehicle/Vessel Identification Number"
+- VIN: "VIN", "Vehicle/Vessel Identification Number", "Vessel ID"
 - Make/Model: "Make/Manufacturer" → make. "Model" → model. "Body Type" (Sedan/SUV/Hatchback) is NOT model.
-- Purchaser: "Print Name(s) of Purchaser(s)", "Purchaser(s) Name(s)", "Buyer"
-- Address: "Address" row under purchaser. City/State/Zip in labeled columns. If state is missing, infer from zip.
-- Price: "Selling Price", "Vehicle Sales Price", the numeric value (e.g. 7751 means $7,751)
-- Date: "Date of Sale", field next to selling price
-- DL: "DL Number", "DL State" — the purchaser's driver license
-- Title: "Certificate of Title Number" — return just the alphanumeric code (e.g. "BK517792")
+- Purchaser: "Print Name(s) of Purchaser(s)", "Purchaser(s) Name(s)", "Buyer", "Sold To"
+- Address: "Address" row under purchaser. City/State/Zip in labeled columns.
+- Price: "Total Price", "Selling Price", "Sale Price", "Vehicle Sales Price". The price must be the final total, including fees. Look for "Total Due" or "Balance Due".
+- Date: "Date of Sale", "Transaction Date", "Date"
+- DL: "DL Number", "DL State", "Driver License"
+- Title: "Certificate of Title Number", "Title #" — return just the alphanumeric code
 
 MA TITLE TRANSFER FORM SPECIFIC:
 - Layout: Year | Make/Manufacturer | Body Type | Model | Color
-- "Body Type" column contains Sedan/SUV/Hatchback — do NOT put this in model field
-- Address may lack state code — infer MA if zip starts with 01xxx or 02xxx
-- "Selling Price" is a bare number without $ sign
+- "Body Type" column contains Sedan/SUV/Hatchback — do NOT put this in model field.
+- "Selling Price" is often next to a "Salesperson" ID number (e.g. "6/17/2025 9121" where 9121 is the price). Ensure you don't confuse the Salesperson ID with the Price.
+- Address may lack state code — infer MA if zip starts with 01xxx or 02xxx.
+- "Selling Price" is a bare number without $ sign.
 
 PURCHASE CONTRACT SPECIFIC:
 - "Dealer/Seller Name and Address" = Broadway (ignore this address)
@@ -229,7 +383,7 @@ function buildAutoPrompt(textOrEmpty) {
   return `Extract all vehicle information from this document.
 Determine direction: If Broadway is BUYER → ACQUISITION. If Broadway is SELLER → SALE.
 
-Return ONLY this JSON (set unknown fields to null):
+JSON_START
 {
   "vin": "17-char VIN", "make": "", "model": "model name NOT body type", "year": 0, "color": "", "mileage": 0,
   "titleNumber": null, "stockNumber": "",
@@ -239,9 +393,11 @@ Return ONLY this JSON (set unknown fields to null):
   "disposedDate": "YYYY-MM-DD", "disposedPrice": 0, "disposedOdometer": 0,
   "disposedDlNumber": "", "disposedDlState": "XX"
 }
+JSON_END
 
 RULES:
 - "Body Type" (Sedan/SUV/Hatchback/Coupe) is NOT the model. Model = vehicle name (Corolla, Pilot, Focus).
+- Price: The price must be the final total, including fees. Look for "Total Due" or "Balance Due".
 - Infer state from zip if missing (01xxx/02xxx = MA, 06xxx = CT, etc.).
 - "Selling Price" bare number (e.g. 7751) = dollar amount without $ sign.
 - NEVER use Broadway's address for source or disposed fields.${docText}`;
@@ -285,11 +441,10 @@ async function textExtract(text, purpose = "") {
 
     const raw = data.choices[0].message.content;
     console.log(`[Parser:Text] Raw AI response: ${raw.substring(0, 800)}`);
-
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    const jsonMatch = raw.match(/JSON_START\s*(\{[\s\S]*\})\s*JSON_END/) || raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('No JSON in response');
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonMatch[1] || jsonMatch[0]);
     const result = clean(parsed);
     console.log(`[Parser:Text] Cleaned result:`, JSON.stringify(result, null, 2));
     return result;
@@ -321,7 +476,7 @@ async function visionExtract(fileBuffer, mimetype, purpose = "") {
       const cf = createCanvasFactory();
       const { canvas, context } = cf.create(Math.ceil(vp.width), Math.ceil(vp.height));
       await page.render({ canvasContext: context, viewport: vp, canvasFactory: cf }).promise;
-      base64Image = canvas.toBuffer('image/jpeg', { quality: 0.7 }).toString('base64');
+      base64Image = canvas.toBuffer('image/jpeg', { quality: 0.6 }).toString('base64');
       imgMime = 'image/jpeg';
       cf.destroy({ canvas, context });
     } catch (e) {
@@ -386,11 +541,10 @@ async function visionExtract(fileBuffer, mimetype, purpose = "") {
 
     const raw = data.choices[0].message.content;
     console.log(`[Parser:Vision] Raw response: ${raw.substring(0, 800)}`);
-
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    const jsonMatch = raw.match(/JSON_START\s*(\{[\s\S]*\})\s*JSON_END/) || raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('No JSON in vision response');
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonMatch[1] || jsonMatch[0]);
     const result = clean(parsed);
     console.log(`[Parser:Vision] Cleaned result:`, JSON.stringify(result, null, 2));
     return result;
@@ -400,10 +554,9 @@ async function visionExtract(fileBuffer, mimetype, purpose = "") {
   }
 }
 
-// ══════════════════════════════════════�
-// ===============================================================
-// CLEAN - Normalize all extracted data
-// ===============================================================
+// ═══════════════════════════════════════════════════════════════
+// CLEAN — Normalize all extracted data
+// ═══════════════════════════════════════════════════════════════
 const STATE_MAP = {
   'ALABAMA': 'AL', 'ALASKA': 'AK', 'ARIZONA': 'AZ', 'ARKANSAS': 'AR', 'CALIFORNIA': 'CA',
   'COLORADO': 'CO', 'CONNECTICUT': 'CT', 'DELAWARE': 'DE', 'FLORIDA': 'FL', 'GEORGIA': 'GA',
@@ -417,7 +570,7 @@ const STATE_MAP = {
   'VIRGINIA': 'VA', 'WASHINGTON': 'WA', 'WEST VIRGINIA': 'WV', 'WISCONSIN': 'WI', 'WYOMING': 'WY'
 };
 
-// ZIP prefix -> state code mapping for inferring missing states → state code mapping for inferring missing states
+// ZIP prefix -> state code mapping for inferring missing states
 const ZIP_TO_STATE = {
   '01': 'MA', '02': 'MA', '03': 'NH', '04': 'ME', '05': 'VT', '06': 'CT',
   '07': 'NJ', '08': 'NJ', '10': 'NY', '11': 'NY', '12': 'NY', '13': 'NY', '14': 'NY',
@@ -450,12 +603,19 @@ function clean(d) {
   };
   const n = v => {
     if (typeof v === 'number') return v;
-    const cleanStr = String(v || '0').replace(/[$,]/g, '').trim();
-    const matches = cleanStr.match(/-?\d+(\.\d+)?/g);
+    const cleanStr = String(v || '0').trim();
+    const matches = cleanStr.replace(/[$,]/g, '').match(/-?\d+(\.\d+)?/g);
     if (!matches) return 0;
-    const priceMatch = [...matches].reverse().find(m => m.includes('.'));
-    const x = parseFloat(priceMatch || matches[matches.length - 1]);
-    return Number.isFinite(x) ? x : 0;
+    
+    const numericMatches = matches.map(m => parseFloat(m)).filter(num => Number.isFinite(num));
+    if (numericMatches.length === 0) return 0;
+    
+    // User wants the "belowest" (last) one. 
+    // We'll filter out years (1900-2026) to avoid model years.
+    const candidates = numericMatches.filter(num => num > 2026 || num < 1900);
+    if (candidates.length > 0) return candidates[candidates.length - 1];
+
+    return numericMatches[numericMatches.length - 1];
   };
   const i = v => {
     if (typeof v === 'number') return v;
@@ -557,22 +717,18 @@ function clean(d) {
     make: (() => {
       const raw = s(d.make);
       if (!raw) return null;
-      // Strip "Make/Manufacturer" label noise and body types that leaked
+      // Strip "Make/Manufacturer" label noise and body types that leaked anywhere in the string
       return raw.replace(/^make\/manufacturer:?\s*/i, '')
-        .replace(/^(sedan|suv|coupe|truck|van|wagon|hatchback|convertible)\s*/i, '')
+        .replace(/\b(sedan|suv|coupe|truck|van|wagon|hatchback|convertible|sport\s*utility)\b/gi, '')
+        .replace(/\s+/g, ' ')
         .trim() || null;
     })(),
     model: (() => {
       const raw = s(d.model);
       if (!raw) return null;
-      // Strip body types that may have been prepended ("SUV Pilot" → "Pilot")
-      const parts = raw.split(/\s+/);
-      const bodyTypes = /^(suv|sedan|coupe|truck|van|wagon|hatchback|convertible|sport\s*utility)$/i;
-      if (parts.length > 1 && bodyTypes.test(parts[0])) {
-        return parts.slice(1).join(' ');
-      }
-      // Also handle "Sedan Corolla LE" → "Corolla LE"
-      return raw.replace(/^(sedan|suv|coupe|truck|van|wagon|hatchback|convertible|sport\s*utility\s*v?)\s+/i, '').trim() || raw;
+      // Strip body types that may have been prepended or embedded
+      const bodyTypes = /\b(sedan|suv|coupe|truck|van|wagon|hatchback|convertible|sport\s*utility\s*v?)\b/gi;
+      return raw.replace(bodyTypes, '').replace(/\s+/g, ' ').trim() || raw;
     })(),
     year: i(d.year) || null,
     color: s(d.color) || null,
@@ -586,18 +742,16 @@ function clean(d) {
         .replace(/^(title|cert(ificate)?|doc(ument)?)[\s.:##-]*(no|number|num|id|#)?[\s.:##-]*/i, '')
         .replace(/^(no|number|num|#)[\s.:##-]*/i, '')
         .replace(/^[A-Z]{2}\//, '')  // Remove state prefix like "MA/"
+        .replace(/\s/g, '')         // Strip all internal whitespace for consistency
         .trim();
       
-      if (!cleaned) return null;
+      if (!cleaned || cleaned.length < 4) return null;
       
       // Reject if the "title number" is actually the VIN (17 chars, all alphanum)
       const vinCandidate = cleaned.replace(/[^A-Z0-9]/gi, '');
       if (vinCandidate.length === 17 && vin && vinCandidate === vin) return null;
       
-      // Reject if it's clearly not a title number (too short or just "0")
-      if (/^(0+|null|none|n\/a|unknown|pending|not available)$/i.test(cleaned)) return null;
-      
-      return cleaned;
+      return cleaned.toUpperCase();
     })(),
     stockNumber: s(d.stockNumber) || null,
     purchasedFrom: s(d.purchasedFrom) || null,
@@ -656,7 +810,7 @@ async function ocrImage(fileBuffer) {
 async function resizeImageIfNeeded(fileBuffer) {
   try {
     const img = await loadImage(fileBuffer);
-    const maxDim = 2048; // Higher resolution to prevent OCR/Vision issues with spaced characters
+    const maxDim = 2048; // Reverting to high resolution for absolute accuracy on price/fees
     if (img.width <= maxDim && img.height <= maxDim) return fileBuffer;
 
     let w = img.width;
@@ -672,7 +826,7 @@ async function resizeImageIfNeeded(fileBuffer) {
     const canvas = createCanvas(w, h);
     const ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0, w, h);
-    return canvas.toBuffer('image/jpeg', { quality: 0.8 });
+    return canvas.toBuffer('image/jpeg', { quality: 0.85 });
   } catch (err) {
     console.error('[Resize] Failed:', err.message);
     return fileBuffer;
