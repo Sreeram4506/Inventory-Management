@@ -164,6 +164,13 @@ router.post(
         });
       }
 
+      if (!info.usedVehicleSourceAddress) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Could not extract a valid Source Address. Please ensure the seller/auction address block is clearly visible in the photo.'
+        });
+      }
+
       // ── Save/Update in Document Registry ──
       try {
         const docData = {
