@@ -57,119 +57,157 @@ async function fetchWithTimeout(url, options, timeoutMs = 25000, retries = 1) {
  */
 function extractTotalFromText(text) {
   if (!text) return null;
-  
-  // Normalize the text
-  const lines = text.split(/\n/);
-  let totalPrice = null;
-  
-  // Strategy 1: Look for lines containing "TOTAL" with a dollar amount
+
+  const lines = text.split(/\r?\n/);
+  const amountRegex = /\$?\s*[\d,]+(?:\.\d{1,2})?/g;
+  const totalMarkers = /\b(?:TOTAL|BALANCE\s+DUE|AMOUNT\s+DUE|TOTAL\s+DUE|DUE\s+NOW|AMOUNT\s+PAYABLE|NET\s+AMOUNT|BALANCE)\b/i;
+  const skipMarkers = /\bSUBTOTAL\b/i;
+  const excludeSaleMarkers = /\bTOTAL\s+(?:SALE|SELLING)\s+PRICE\b/i;
+  const candidates = [];
+
   for (const line of lines) {
-    const upper = line.toUpperCase().trim();
-    // Match "TOTAL" but NOT "SUBTOTAL" or "TOTAL DUE FROM"
-    if (/\bTOTAL\b/i.test(upper) && !/\bSUBTOTAL\b/i.test(upper) && !/\bTOTAL\s+DUE\s+FROM\b/i.test(upper)) {
-      // Extract dollar amounts from this line
-      const priceMatch = line.replace(/[$,]/g, '').match(/(\d+[,.]?\d*\.?\d*)/g);
-      if (priceMatch) {
-        const prices = priceMatch.map(p => parseFloat(p)).filter(p => p > 100 && Number.isFinite(p));
-        if (prices.length > 0) {
-          // Take the last price on the TOTAL line (usually the rightmost column)
-          totalPrice = prices[prices.length - 1];
-        }
+    if (!totalMarkers.test(line) || skipMarkers.test(line)) continue;
+    if (excludeSaleMarkers.test(line)) continue;
+
+    const matches = line.match(amountRegex);
+    if (!matches) continue;
+
+    for (const match of matches) {
+      const value = parseFloat(match.replace(/[^0-9.]/g, ''));
+      if (Number.isFinite(value) && value > 100) {
+        candidates.push(value);
       }
     }
   }
-  
-  // Strategy 2: Regex for "TOTAL $X,XXX.XX" or "TOTAL D$ X,XXX.XX" patterns
+
+  let totalPrice = candidates.length ? Math.max(...candidates) : null;
+
   if (!totalPrice) {
-    const totalRegex = /\bTOTAL\s*\$?\s*[\d,]+\.?\d*/gi;
-    const allMatches = text.match(totalRegex);
-    if (allMatches) {
-      for (const match of allMatches) {
-        const num = parseFloat(match.replace(/[^0-9.]/g, ''));
-        if (num > 100 && Number.isFinite(num)) {
-          totalPrice = num; // Keep updating — last TOTAL wins (bottom of document)
-        }
+    const broadRegex = /\b(?:TOTAL|BALANCE\s+DUE|AMOUNT\s+DUE|TOTAL\s+DUE|DUE\s+NOW|AMOUNT\s+PAYABLE|NET\s+AMOUNT|BALANCE)\b[^\n]*?(\$?\s*[\d,]+(?:\.\d{1,2})?)/gi;
+    let match;
+    while ((match = broadRegex.exec(text)) !== null) {
+      const value = parseFloat(match[1].replace(/[^0-9.]/g, ''));
+      if (Number.isFinite(value) && value > 100) {
+        candidates.push(value);
       }
     }
+    if (candidates.length) totalPrice = Math.max(...candidates);
   }
-  
+
   if (totalPrice) {
     console.log(`[Parser:PostProcess] Found TOTAL price from text: $${totalPrice}`);
   }
   return totalPrice;
 }
 
+function extractVinFromText(text) {
+  if (!text) return null;
+  const cleaned = text.replace(/[^A-Z0-9\n]/gi, ' ').toUpperCase();
+  const vinMatch = cleaned.match(/\b([A-HJ-NPR-Z0-9]{17})\b/);
+  return vinMatch ? vinMatch[1] : null;
+}
+
 /**
  * Scans raw OCR/PDF text for title number patterns.
  * Returns the title number if found, or null.
- * Must be STRICT to avoid false positives from OCR noise.
  */
 function extractTitleFromText(text) {
   if (!text) return null;
-  
-  // Strategy 1: Look for "XX/XXXXXXXX" pattern (e.g. "MA/BN355731", "CT/AA2606042")
-  // This is the most reliable pattern found in ADESA/CMAA documents
-  const stateSlashPatterns = text.match(/\b([A-Z]{2})\/([A-Z]{1,3}\d{4,9})\b/gi);
-  if (stateSlashPatterns) {
-    for (const m of stateSlashPatterns) {
-      const parts = m.split('/');
-      if (parts.length === 2) {
-        const titleNum = parts[1].toUpperCase();
-        // Must have letters AND digits (like BN355731, AA2606042)
-        if (/[A-Z]/.test(titleNum) && /\d{4,}/.test(titleNum) && titleNum.length >= 5 && titleNum.length <= 12) {
-          console.log(`[Parser:PostProcess] Found Title Number (state/number format): ${titleNum}`);
-          return titleNum;
-        }
+
+  const cleanCandidate = (candidate) => {
+    if (!candidate) return null;
+    const cleaned = String(candidate).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!cleaned || cleaned.length < 4 || cleaned.length > 12) return null;
+    if (/^0+$/.test(cleaned)) return null;
+    if (/^[A-HJ-NPR-Z0-9]{17}$/.test(cleaned)) return null; // avoid VIN
+    return cleaned;
+  };
+
+  const lines = text.split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const titleLineMatch = line.match(/\b(?:Title\s*(?:State\/?Number|#|No\.?|Number|State Number)|Certificate\s*(?:of\s*Title|No\.?|#)|Cert\s*(?:of\s*Origin)?|Title\s*ID|Document\s*(?:No\.?|ID))\b/i);
+    if (!titleLineMatch) continue;
+
+    const valueMatch = line.match(/(?:Title\s*(?:State\/?Number|#|No\.?|Number|State Number)|Certificate\s*(?:of\s*Title|No\.?|#)|Cert\s*(?:of\s*Origin)?|Title\s*ID|Document\s*(?:No\.?|ID))\s*[:\-]?\s*(?:([A-Z]{2})\s*[\/\\]\s*)?([A-Z0-9]{4,12})/i);
+    if (valueMatch) {
+      const titleNum = cleanCandidate(valueMatch[2]);
+      if (titleNum) {
+        console.log(`[Parser:PostProcess] Found Title Number (label format): ${titleNum}`);
+        return titleNum;
+      }
+    }
+
+    const slashMatch = line.match(/\b([A-Z]{2})\s*[\/\\]\s*([A-Z0-9]{4,12})\b/);
+    if (slashMatch) {
+      const candidate = cleanCandidate(slashMatch[2]);
+      if (candidate) {
+        console.log(`[Parser:PostProcess] Found Title Number (state/number format): ${candidate}`);
+        return candidate;
+      }
+    }
+
+    const fallbackMatch = line.match(/\b([A-Z]{1,2}[0-9]{4,12})\b/);
+    if (fallbackMatch && /title/i.test(line)) {
+      const candidate = cleanCandidate(fallbackMatch[1]);
+      if (candidate) {
+        console.log(`[Parser:PostProcess] Extracted Title Number from title line: ${candidate}`);
+        return candidate;
       }
     }
   }
-  
-  // Strategy 2: Look for explicit "Title State/Number:" or "Title #:" label followed by value
-  const labelMatch = text.match(/(?:Title\s*(?:State\/Number|#|No\.?|Number))\s*[:.]?\s*(?:([A-Z]{2})\/)?\s*([A-Z]{0,3}\d{4,9})/i);
-  if (labelMatch) {
-    const titleNum = (labelMatch[2] || '').toUpperCase();
-    if (titleNum.length >= 5 && /\d{2,}/.test(titleNum)) {
-      console.log(`[Parser:PostProcess] Found Title Number (label format): ${titleNum}`);
+
+  // Final pass: find any labeled title state/number string in the whole text
+  const globalMatch = text.match(/\b(?:Title\s*(?:State\/?Number|#|No\.?|Number)|Certificate\s*(?:of\s*Title|No\.?|#)|Cert\s*(?:of\s*Origin)?|Title\s*ID|Document\s*(?:No\.?|ID))\s*[:\-]?\s*(?:([A-Z]{2})\s*[\/\\]\s*)?([A-Z0-9]{4,12})\b/i);
+  if (globalMatch) {
+    const titleNum = cleanCandidate(globalMatch[2]);
+    if (titleNum) {
+      console.log(`[Parser:PostProcess] Found Title Number (global label scan): ${titleNum}`);
       return titleNum;
     }
   }
-  
-  // Strategy 3: Look for "Certificate of Title" followed by alphanumeric code
-  const certMatch = text.match(/(?:Certificate\s*(?:of\s*Title|No\.?|#))\s*[:.]?\s*(?:([A-Z]{2})\/)?\s*([A-Z]{0,3}\d{4,9})/i);
-  if (certMatch) {
-    const titleNum = (certMatch[2] || '').toUpperCase();
-    if (titleNum.length >= 5 && /\d{2,}/.test(titleNum)) {
-      console.log(`[Parser:PostProcess] Found Title Number (certificate format): ${titleNum}`);
-      return titleNum;
-    }
-  }
-  
+
   return null;
 }
 
 /**
  * Apply post-processing fixes to AI result using raw document text.
  */
+function mergeFallbackResult(result, fallback) {
+  if (!fallback) return result;
+  const merged = { ...result };
+  for (const [key, value] of Object.entries(fallback)) {
+    if (value === undefined || value === null || value === '') continue;
+    if (merged[key] === undefined || merged[key] === null || merged[key] === '' || merged[key] === 0) {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
 function postProcessResult(result, rawText, purpose) {
   if (!result || !rawText) return result;
-  
+
+  // Fill missing VIN/title/price from raw text if AI returned partial output
+  const fallback = extractFallbackInfo(rawText, purpose);
+  result = mergeFallbackResult(result, fallback);
+
   // Fix price: override AI's "Sale Price" with the actual TOTAL
   // Only for ACQUISITION documents — sale documents (MA Title) don't have separate totals
   if (purpose === 'acquisition' || purpose === '') {
     const totalFromText = extractTotalFromText(rawText);
     if (totalFromText) {
       const priceField = 'purchasePrice';
-      const currentPrice = result[priceField] || 0;
-      
-      // If the TOTAL from text is larger than what AI returned, use it
-      if (totalFromText > currentPrice) {
+      const currentPrice = Number(result[priceField] || 0);
+      if (totalFromText > 100 && (currentPrice <= 0 || totalFromText >= currentPrice + 50)) {
         console.log(`[Parser:PostProcess] Overriding ${priceField}: ${currentPrice} → ${totalFromText} (TOTAL from document text)`);
         result[priceField] = totalFromText;
       }
     }
   }
-  
-  // Fix title number: if AI returned null but we can find it in text
+
   if (!result.titleNumber) {
     const titleFromText = extractTitleFromText(rawText);
     if (titleFromText) {
@@ -177,8 +215,34 @@ function postProcessResult(result, rawText, purpose) {
       result.titleNumber = titleFromText;
     }
   }
-  
+
+  if (!result.vin) {
+    const vinFromText = extractVinFromText(rawText);
+    if (vinFromText) {
+      console.log(`[Parser:PostProcess] Filling VIN from text: ${vinFromText}`);
+      result.vin = vinFromText;
+    }
+  }
+
   return result;
+}
+
+function extractFallbackInfo(text, purpose) {
+  if (!text) return null;
+  const fallback = {};
+  const vin = extractVinFromText(text);
+  if (vin) fallback.vin = vin;
+  const titleNumber = extractTitleFromText(text);
+  if (titleNumber) fallback.titleNumber = titleNumber;
+  const totalValue = extractTotalFromText(text);
+  if (totalValue) {
+    if (purpose === 'sale') {
+      fallback.disposedPrice = totalValue;
+    } else {
+      fallback.purchasePrice = totalValue;
+    }
+  }
+  return Object.keys(fallback).length ? fallback : null;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -214,6 +278,10 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
         console.warn(`[Parser] Text LLM failed after OCR: ${err.message}`);
       }
     }
+
+    const fallbackResult = extractFallbackInfo(ocrText, purpose);
+    if (fallbackResult) return fallbackResult;
+
     return {};
   }
 
@@ -237,10 +305,13 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
     // Scanned PDF or text extraction failed — render to image, use vision
     try {
       const visionResult = await visionExtract(fileBuffer, mimetype, purpose);
-      if (visionResult) return visionResult;
+      if (visionResult) return postProcessResult(visionResult, combinedText, purpose);
     } catch (err) {
       console.warn(`[Parser] Vision AI failed on PDF render: ${err.message}`);
     }
+
+    const fallbackResult = extractFallbackInfo(combinedText, purpose);
+    if (fallbackResult) return fallbackResult;
 
     return {};
   }
@@ -255,6 +326,10 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
       console.warn(`[Parser] Text LLM failed on Word/Other: ${err.message}`);
     }
   }
+
+  const fallbackResult = extractFallbackInfo(text, purpose);
+  if (fallbackResult) return fallbackResult;
+
   return {};
 }
 

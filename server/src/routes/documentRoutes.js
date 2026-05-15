@@ -164,10 +164,21 @@ router.post(
         });
       }
 
+      // If source address is missing but a disposed address was found, 
+      // it means the AI likely flipped the roles. Use the found address as a fallback.
+      if (!info.usedVehicleSourceAddress && info.disposedAddress) {
+        console.log(`[DocumentRoute] Falling back to disposedAddress for sourceAddress extraction`);
+        info.usedVehicleSourceAddress = info.disposedAddress;
+        info.usedVehicleSourceCity = info.disposedCity;
+        info.usedVehicleSourceState = info.disposedState;
+        info.usedVehicleSourceZipCode = info.disposedZip;
+        if (!info.purchasedFrom) info.purchasedFrom = info.disposedTo;
+      }
+
       if (!info.usedVehicleSourceAddress) {
         return res.status(400).json({
           status: 'error',
-          message: 'Could not extract a valid Source Address. Please ensure the seller/auction address block is clearly visible in the photo.'
+          message: 'Could not extract a valid Address from the document. Please ensure the address block is clearly visible in the photo.'
         });
       }
 

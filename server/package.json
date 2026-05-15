@@ -4,9 +4,13 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "NODE_ENV=production node index.js",
+    "start": "cross-env NODE_ENV=production node index.js",
     "build": "prisma generate",
     "dev": "nodemon index.js"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "nodemon": "^3.0.2"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.97",
