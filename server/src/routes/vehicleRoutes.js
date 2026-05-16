@@ -271,7 +271,8 @@ router.get('/', async (req, res, next) => {
 router.post('/', validate(vehicleSchema), async (req, res, next) => {
   const { 
     vin, make, model, year, mileage, color, purchaseDate,
-    purchasedFrom, purchasePrice, paymentMethod, transportCost, buyerFee,
+    purchasedFrom, sellerAddress, sellerCity, sellerState, sellerZip,
+    purchasePrice, paymentMethod, transportCost, buyerFee,
     inspectionCost, registrationCost, repairCost, titleNumber, documentBase64, sourceDocumentBase64
   } = req.body;
 
@@ -307,6 +308,10 @@ router.post('/', validate(vehicleSchema), async (req, res, next) => {
         purchase: {
           create: {
             sellerName: purchasedFrom,
+            sellerAddress: sellerAddress || '',
+            sellerCity: sellerCity || '',
+            sellerState: sellerState || '',
+            sellerZip: sellerZip || '',
             purchasePrice,
             buyerFee,
             transportCost,

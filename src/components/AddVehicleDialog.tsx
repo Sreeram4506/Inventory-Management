@@ -34,6 +34,10 @@ const createInitialFormData = () => ({
   inspectionCost: '0',
   registrationCost: '0',
   titleNumber: '',
+  sellerAddress: '',
+  sellerCity: '',
+  sellerState: '',
+  sellerZip: '',
 });
 
 const paymentMethodOptions = ['Cash', 'Check', 'Bank Transfer'] as const;
@@ -117,6 +121,10 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
       inspectionCost: info.inspectionCost ? String(info.inspectionCost) : prev.inspectionCost,
       registrationCost: info.registrationCost ? String(info.registrationCost) : prev.registrationCost,
       titleNumber: info.titleNumber || prev.titleNumber,
+      sellerAddress: info.usedVehicleSourceAddress || prev.sellerAddress,
+      sellerCity: info.usedVehicleSourceCity || prev.sellerCity,
+      sellerState: info.usedVehicleSourceState || prev.sellerState,
+      sellerZip: info.usedVehicleSourceZipCode || prev.sellerZip,
     }));
 
     if (pdfInfo) {
@@ -170,6 +178,10 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
         documentBase64: pdfData?.base64 || null,
         sourceDocumentBase64: sourceData || null,
         status: 'Available',
+        sellerAddress: formData.sellerAddress,
+        sellerCity: formData.sellerCity,
+        sellerState: formData.sellerState,
+        sellerZip: formData.sellerZip,
       } as Partial<Vehicle>);
       
       toast.success('Vehicle added successfully');
@@ -288,6 +300,24 @@ export default function AddVehicleDialog({ open, onOpenChange, onViewExisting }:
                     <SelectItem value="Individual">Individual</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2 col-span-1 md:col-span-2">
+                <Label className="text-muted-foreground">Seller Address</Label>
+                <Input name="sellerAddress" value={formData.sellerAddress} onChange={handleInputChange} placeholder="Street Address" className="bg-muted/50 border-border text-foreground" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">City</Label>
+                <Input name="sellerCity" value={formData.sellerCity} onChange={handleInputChange} placeholder="City" className="bg-muted/50 border-border text-foreground" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">State</Label>
+                  <Input name="sellerState" value={formData.sellerState} onChange={handleInputChange} placeholder="ST" maxLength={2} className="bg-muted/50 border-border text-foreground" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Zip</Label>
+                  <Input name="sellerZip" value={formData.sellerZip} onChange={handleInputChange} placeholder="Zip" className="bg-muted/50 border-border text-foreground" />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Purchase Price ($)<span className="text-red-500 ml-1">*</span></Label>

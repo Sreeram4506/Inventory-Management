@@ -26,6 +26,20 @@ export default function EditRegistryDialog({ log, open, onOpenChange }: EditRegi
     titleNumber: '',
     purchasedFrom: '',
     purchaseDate: '',
+    sellerAddress: '',
+    sellerCity: '',
+    sellerState: '',
+    sellerZip: '',
+    disposedTo: '',
+    disposedAddress: '',
+    disposedCity: '',
+    disposedState: '',
+    disposedZip: '',
+    disposedDate: '',
+    disposedPrice: '',
+    disposedOdometer: '',
+    disposedDlNumber: '',
+    disposedDlState: '',
   });
 
   useEffect(() => {
@@ -40,6 +54,10 @@ export default function EditRegistryDialog({ log, open, onOpenChange }: EditRegi
         titleNumber: log.titleNumber || '',
         purchasedFrom: log.purchasedFrom || '',
         purchaseDate: log.purchaseDate ? log.purchaseDate.split('T')[0] : '',
+        sellerAddress: log.sellerAddress || '',
+        sellerCity: log.sellerCity || '',
+        sellerState: log.sellerState || '',
+        sellerZip: log.sellerZip || '',
         disposedTo: log.disposedTo || '',
         disposedAddress: log.disposedAddress || '',
         disposedCity: log.disposedCity || '',
@@ -169,6 +187,43 @@ export default function EditRegistryDialog({ log, open, onOpenChange }: EditRegi
               onChange={(e) => setFormData({ ...formData, purchaseDate: e.target.value })}
               className="bg-muted border-border text-foreground"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-muted-foreground text-xs uppercase tracking-wider">Seller Address</Label>
+            <Input
+              value={formData.sellerAddress}
+              onChange={(e) => setFormData({ ...formData, sellerAddress: e.target.value })}
+              className="bg-muted border-border text-foreground"
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-2 col-span-1">
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">Seller City</Label>
+              <Input
+                value={formData.sellerCity}
+                onChange={(e) => setFormData({ ...formData, sellerCity: e.target.value })}
+                className="bg-muted border-border text-foreground"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">State</Label>
+              <Input
+                value={formData.sellerState}
+                onChange={(e) => setFormData({ ...formData, sellerState: e.target.value })}
+                className="bg-muted border-border text-foreground"
+                maxLength={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider">Zip</Label>
+              <Input
+                value={formData.sellerZip}
+                onChange={(e) => setFormData({ ...formData, sellerZip: e.target.value })}
+                className="bg-muted border-border text-foreground"
+              />
+            </div>
           </div>
 
           <div className="pt-4 pb-2 border-t border-border">

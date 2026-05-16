@@ -108,34 +108,84 @@ router.patch('/:id', async (req, res, next) => {
       return res.status(404).json({ message: 'Document log not found' });
     }
 
-    // 2. Merge updates
-    const updatedData = { ...currentLog, ...updates };
+    // 2. Perform updates in a transaction to maintain consistency
+    const updatedLog = await prisma.$transaction(async (tx) => {
+      // 2a. Update the DocumentRegistry entry
+      const log = await tx.documentRegistry.update({
+        where: { id },
+        data: updates
+      });
 
-    // 3. Regenerate PDF with updated info
-    // We use the default template for now as it's the standard for 'Used Vehicle Record'
-    const templateBuffer = await readFile(defaultUsedVehicleTemplatePath);
-    const filledPdf = await fillUsedVehiclePdf(
-      templateBuffer,
-      updatedData,
-      'image/jpeg'
-    );
+      // 2b. Sync to Vehicle record if VIN is present
+      if (log.vin) {
+        const vehicle = await tx.vehicle.findFirst({
+          where: { vin: log.vin, dealershipId: req.dealershipId },
+          include: { purchase: true, sale: true }
+        });
 
-    // 4. Save back to DB
-    const updateResult = await prisma.documentRegistry.updateMany({
-      where: { id, dealershipId: req.dealershipId },
-      data: {
-        ...updates,
-        documentBase64: filledPdf
+        if (vehicle) {
+          // Update base vehicle details
+          await tx.vehicle.update({
+            where: { id: vehicle.id },
+            data: {
+              ...(updates.make && { make: updates.make }),
+              ...(updates.model && { model: updates.model }),
+              ...(updates.year && { year: parseInt(updates.year) }),
+              ...(updates.color && { color: updates.color }),
+              ...(updates.mileage && { mileage: parseInt(updates.mileage) }),
+              ...(updates.titleNumber && { titleNumber: updates.titleNumber }),
+              ...(updates.purchaseDate && { purchaseDate: new Date(updates.purchaseDate) }),
+            }
+          });
+
+          // Update Purchase record
+          if (vehicle.purchase) {
+            await tx.purchase.update({
+              where: { id: vehicle.purchase.id },
+              data: {
+                ...(updates.purchasedFrom && { sellerName: updates.purchasedFrom }),
+                ...(updates.sellerAddress && { sellerAddress: updates.sellerAddress }),
+                ...(updates.sellerCity && { sellerCity: updates.sellerCity }),
+                ...(updates.sellerState && { sellerState: updates.sellerState }),
+                ...(updates.sellerZip && { sellerZip: updates.sellerZip }),
+                ...(updates.purchaseDate && { purchaseDate: new Date(updates.purchaseDate) }),
+              }
+            });
+          }
+
+          // Update Sale record if disposition details are changed
+          if (vehicle.sale && (updates.disposedTo || updates.disposedPrice || updates.disposedDate)) {
+            await tx.sale.update({
+              where: { id: vehicle.sale.id },
+              data: {
+                ...(updates.disposedTo && { customerName: updates.disposedTo }),
+                ...(updates.disposedAddress && { address: updates.disposedAddress }), // We could merge city/state/zip here if needed
+                ...(updates.disposedDate && { saleDate: new Date(updates.disposedDate) }),
+                ...(updates.disposedPrice && { salePrice: parseFloat(updates.disposedPrice) }),
+              }
+            });
+          }
+        }
       }
+
+      // 3. Regenerate PDF with fully updated info
+      const templateBuffer = await readFile(defaultUsedVehicleTemplatePath);
+      // Ensure we have all fields for the PDF filling
+      const fullData = { ...currentLog, ...updates };
+      const filledPdf = await fillUsedVehiclePdf(
+        templateBuffer,
+        fullData,
+        'image/jpeg'
+      );
+
+      // Update the log with the new PDF
+      return await tx.documentRegistry.update({
+        where: { id },
+        data: { documentBase64: filledPdf }
+      });
     });
 
-    if (updateResult.count === 0) {
-      return res.status(404).json({ message: 'Document log not found' });
-    }
-
-    const log = await prisma.documentRegistry.findUnique({ where: { id } });
-
-    res.json(log);
+    res.json(updatedLog);
   } catch (err) {
     console.error('[Registry Patch Error]', err);
     next(err);

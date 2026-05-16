@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { extractVehicleInfoFromText } from '../../server/services/documentParser.js';
+import {
+  extractAcquisitionDetailsFromText,
+  extractDispositionDetailsFromText,
+  extractVehicleInfoFromText
+} from '../../server/services/documentParser.js';
 
 describe('document parser fallback extraction', () => {
   it('parses OCR-style used vehicle record fields without dropping numeric zip values', () => {
@@ -55,6 +59,52 @@ describe('document parser fallback extraction', () => {
 
     expect(info.vin).toBe('104RJEAG0PC123456');
     expect(info.usedVehicleSourceZipCode).toBe('02118');
+    expect(info.disposedZip).toBe('02169');
+  });
+
+  it('prefers auction facility details over Broadway buyer details for acquisitions', () => {
+    const text = `
+      ADESA Boston Bill of Sale
+      Facility: ADESA Boston
+      Address: 63 Western Avenue
+      Framingham, MA 01702
+
+      Buyer: Broadway Used Auto Sales Inc
+      Address: 100 Broadway
+      Norwood, MA 02062
+
+      Seller: Bernardi Toyota-Scion
+      VIN: 1HGCM82633A004352
+      Total Due $5,785.00
+    `;
+
+    const info = extractAcquisitionDetailsFromText(text);
+
+    expect(info.purchasedFrom).toBe('ADESA Boston');
+    expect(info.usedVehicleSourceAddress).toBe('63 Western Avenue');
+    expect(info.usedVehicleSourceCity).toBe('Framingham');
+    expect(info.usedVehicleSourceState).toBe('MA');
+    expect(info.usedVehicleSourceZipCode).toBe('01702');
+  });
+
+  it('extracts disposition buyer details from bill of sale text, not Broadway seller details', () => {
+    const text = `
+      Motor Vehicle Purchase Contract
+      Dealer/Seller Name and Address: Broadway Used Auto Sales Inc
+      100 Broadway
+      Norwood, MA 02062
+
+      Purchaser(s) Name(s) and Address(es): Jane Customer
+      Address: 9 Main Street City: Quincy State: MA Zip: 02169
+      Vehicle Sales Price: $12,500
+    `;
+
+    const info = extractDispositionDetailsFromText(text);
+
+    expect(info.disposedTo).toBe('Jane Customer');
+    expect(info.disposedAddress).toBe('9 Main Street');
+    expect(info.disposedCity).toBe('Quincy');
+    expect(info.disposedState).toBe('MA');
     expect(info.disposedZip).toBe('02169');
   });
 });

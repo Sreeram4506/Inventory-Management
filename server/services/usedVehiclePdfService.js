@@ -45,10 +45,10 @@ export async function fillUsedVehiclePdf(templateBuffer, vehicleInfo, templateMi
   // ── Acquisition of Motor Vehicle/Part ──
   drawField(page, fieldMap.obtainedFrom, sourceName, courier, debug);
   drawField(page, fieldMap.transactionDate, formatUsedVehicleDate(vehicleInfo.purchaseDate), courier, debug);
-  drawField(page, fieldMap.address, vehicleInfo.usedVehicleSourceAddress || '', courier, debug);
-  drawField(page, fieldMap.city, vehicleInfo.usedVehicleSourceCity || '', courier, debug);
-  drawField(page, fieldMap.state, vehicleInfo.usedVehicleSourceState || '', courier, debug);
-  drawField(page, fieldMap.zipCode, vehicleInfo.usedVehicleSourceZipCode || '', courier, debug);
+  drawField(page, fieldMap.address, vehicleInfo.usedVehicleSourceAddress || vehicleInfo.sellerAddress || '', courier, debug);
+  drawField(page, fieldMap.city, vehicleInfo.usedVehicleSourceCity || vehicleInfo.sellerCity || '', courier, debug);
+  drawField(page, fieldMap.state, vehicleInfo.usedVehicleSourceState || vehicleInfo.sellerState || '', courier, debug);
+  drawField(page, fieldMap.zipCode, vehicleInfo.usedVehicleSourceZipCode || vehicleInfo.sellerZip || '', courier, debug);
   drawField(
     page,
     fieldMap.odometerIn,

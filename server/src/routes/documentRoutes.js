@@ -2,7 +2,12 @@ import express from 'express';
 import multer from 'multer';
 import { readFile } from 'fs/promises';
 import { authenticateToken } from '../middlewares/authMiddleware.js';
-import { extractVehicleInfo, extractText } from '../../services/documentParser.js';
+import {
+  extractAcquisitionDetailsFromText,
+  extractDispositionDetailsFromText,
+  extractVehicleInfo,
+  extractText
+} from '../../services/documentParser.js';
 import { buildUsedVehiclePdfFileName, fillUsedVehiclePdf } from '../../services/usedVehiclePdfService.js';
 import prisma from '../db/prisma.js';
 
@@ -27,6 +32,18 @@ function parseCurrency(value) {
   if (typeof value === 'number') return value;
   const parsed = Number(String(value).replace(/[^0-9.-]+/g, ""));
   return isNaN(parsed) ? 0 : parsed;
+}
+
+function mergeExtractionInfo(baseInfo, fallbackInfo) {
+  if (!baseInfo) return fallbackInfo || {};
+  if (!fallbackInfo) return baseInfo;
+  const merged = { ...baseInfo };
+  for (const [key, value] of Object.entries(fallbackInfo)) {
+    if (merged[key] === undefined || merged[key] === null || merged[key] === '') {
+      merged[key] = value;
+    }
+  }
+  return merged;
 }
 
 // Attempt to parse a simple US street address block from OCR/text
@@ -185,8 +202,17 @@ router.post(
         });
       }
 
-      // ── Extract data from document (purpose: acquisition) ──
-      info = await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype, 'acquisition');
+      // ── Extract data from document (purpose: auto) ──
+      info = await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype, '');
+      if (!info || !info.vin || !info.make || !info.model) {
+        const saleFallback = await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype, 'sale');
+        info = mergeExtractionInfo(info, saleFallback);
+      }
+      if (!info || !info.vin || !info.make || !info.model) {
+        const acquisitionFallback = await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype, 'acquisition');
+        info = mergeExtractionInfo(info, acquisitionFallback);
+      }
+      info = info || {};
       console.log(`[UserForm] Extracted VIN: ${info.vin}, Make: ${info.make}, Model: ${info.model}`);
 
       // ── Generate PDF ──
@@ -194,9 +220,6 @@ router.post(
         ? templateFile.buffer
         : await getTemplateBuffer();
       const templateMimeType = templateFile?.mimetype || 'image/jpeg';
-      
-      const filledPdf = await fillUsedVehiclePdf(templateBuffer, info, templateMimeType);
-      const pdfBase64Str = filledPdf;
 
       const isPushToInventory = req.body.pushToInventory === 'true';
       let vehicleId = null;
@@ -225,13 +248,13 @@ router.post(
       if (!info.usedVehicleSourceAddress) {
         try {
           const rawText = await extractText(sourceFile.buffer, sourceFile.mimetype);
-          const parsed = parseAddressFromText(rawText);
-          if (parsed) {
-            info.usedVehicleSourceAddress = parsed.street;
-            info.usedVehicleSourceCity = parsed.city;
-            info.usedVehicleSourceState = parsed.state;
-            info.usedVehicleSourceZipCode = parsed.zip;
-            if (!info.purchasedFrom) info.purchasedFrom = parsed.vendor || info.purchasedFrom;
+          const parsed = extractAcquisitionDetailsFromText(rawText);
+          if (parsed && Object.keys(parsed).length) {
+            info.usedVehicleSourceAddress = parsed.usedVehicleSourceAddress || info.usedVehicleSourceAddress;
+            info.usedVehicleSourceCity = parsed.usedVehicleSourceCity || info.usedVehicleSourceCity;
+            info.usedVehicleSourceState = parsed.usedVehicleSourceState || info.usedVehicleSourceState;
+            info.usedVehicleSourceZipCode = parsed.usedVehicleSourceZipCode || info.usedVehicleSourceZipCode;
+            if (!info.purchasedFrom) info.purchasedFrom = parsed.purchasedFrom || info.purchasedFrom;
             console.log('[DocumentRoute] Parsed address from text fallback:', parsed);
           } else {
             warnings.addressMissing = true;
@@ -242,6 +265,11 @@ router.post(
           console.warn('[DocumentRoute] Text fallback failed:', err?.message || err);
         }
       }
+
+      // ── Generate PDF AFTER all data corrections ──
+      console.log(`[UserForm] Generating PDF with: VIN=${info.vin}, From=${info.purchasedFrom}, Addr=${info.usedVehicleSourceAddress}, City=${info.usedVehicleSourceCity}, State=${info.usedVehicleSourceState}`);
+      const filledPdf = await fillUsedVehiclePdf(templateBuffer, info, templateMimeType);
+      const pdfBase64Str = filledPdf;
 
       // ── Save/Update in Document Registry ──
       try {
@@ -414,6 +442,15 @@ router.post('/upload-bill-of-sale', upload.single('file'), async (req, res, next
 
     // ── Step 1: Extract Disposition + VIN from Bill of Sale (purpose: sale) ──
     const billOfSaleInfo = await extractVehicleInfo(req.file.buffer, req.file.mimetype, 'sale');
+    try {
+      const rawBillText = await extractText(req.file.buffer, req.file.mimetype);
+      const dispositionFallback = extractDispositionDetailsFromText(rawBillText);
+      for (const key of ['disposedTo', 'disposedAddress', 'disposedCity', 'disposedState', 'disposedZip']) {
+        if (dispositionFallback[key]) billOfSaleInfo[key] = dispositionFallback[key];
+      }
+    } catch (err) {
+      console.warn('[BillOfSale] Disposition text fallback failed:', err?.message || err);
+    }
     
     console.log(`[BillOfSale] Extracted:`, JSON.stringify(billOfSaleInfo, null, 2));
 

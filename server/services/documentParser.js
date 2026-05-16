@@ -198,9 +198,22 @@ function extractTitleFromText(text) {
 function mergeFallbackResult(result, fallback) {
   if (!fallback) return result;
   const merged = { ...result };
+  const isSuspiciousValue = (val) => {
+    if (!val || typeof val !== 'string') return false;
+    const v = val.toLowerCase();
+    if (/\b(http:|https:|www\.|\.com|\.net|inventory|stock#|stock:|sku|\/inventory)\b/.test(v)) return true;
+    if (/\b(invoice|click here|learn more)\b/.test(v)) return true;
+    return false;
+  };
   for (const [key, value] of Object.entries(fallback)) {
     if (value === undefined || value === null || value === '') continue;
-    if (merged[key] === undefined || merged[key] === null || merged[key] === '' || merged[key] === 0) {
+    const target = merged[key];
+    if (target === undefined || target === null || target === '' || target === 0) {
+      merged[key] = value;
+      continue;
+    }
+    // Prefer fallback if existing value looks like a hallucinated link/inventory token
+    if (isSuspiciousValue(target) && !isSuspiciousValue(value)) {
       merged[key] = value;
     }
   }
@@ -213,6 +226,72 @@ function postProcessResult(result, rawText, purpose) {
   // Fill missing VIN/title/price from raw text if AI returned partial output
   const fallback = extractFallbackInfo(rawText, purpose);
   result = mergeFallbackResult(result, fallback);
+
+  // Also parse the raw text deterministically and prefer those values for
+  // acquisition/disposition contact fields when the AI output looks suspicious
+  try {
+    const parsed = extractVehicleInfoFromText(rawText || '');
+    const preferFields = [
+      'purchasedFrom',
+      'usedVehicleSourceAddress',
+      'usedVehicleSourceCity',
+      'usedVehicleSourceState',
+      'usedVehicleSourceZipCode',
+      'disposedTo',
+      'disposedAddress',
+      'disposedCity',
+      'disposedState',
+      'disposedZip'
+    ];
+    const isSuspicious = (v) => !v ? false : /\b(http:|https:|www\.|\.com|inventory|stock#|stock:|sku)\b/i.test(String(v));
+    for (const f of preferFields) {
+      if ((!result[f] || isSuspicious(result[f])) && parsed[f]) {
+        result[f] = parsed[f];
+      }
+    }
+    // If document contains explicit 'auction' markers, prefer that as purchasedFrom
+    const auction = inferAuctionFromText(rawText || '');
+    if ((purpose === 'acquisition' || /\bauction\b/i.test(rawText)) && auction) {
+      result.purchasedFrom = auction;
+    }
+    if (purpose === 'acquisition' || purpose === '') {
+      result = mergePreferredFields(result, extractAcquisitionDetailsFromText(rawText || ''), [
+        'purchasedFrom',
+        'usedVehicleSourceAddress',
+        'usedVehicleSourceCity',
+        'usedVehicleSourceState',
+        'usedVehicleSourceZipCode'
+      ]);
+    }
+    if (purpose === 'sale') {
+      result = mergePreferredFields(result, extractDispositionDetailsFromText(rawText || ''), [
+        'disposedTo',
+        'disposedAddress',
+        'disposedCity',
+        'disposedState',
+        'disposedZip'
+      ]);
+    }
+  } catch (err) {
+    // parsing fallback failed — ignore
+  }
+
+  // If AI got confused and put acquisition data into sale fields, flip it
+  if (purpose === 'acquisition' || purpose === '') {
+    if (!result.purchasedFrom && result.disposedTo) {
+      console.log(`[Parser:PostProcess] AI flipped roles. Moving disposedTo -> purchasedFrom`);
+      result.purchasedFrom = result.disposedTo;
+    }
+    if (!result.usedVehicleSourceAddress && result.disposedAddress) {
+      result.usedVehicleSourceAddress = result.disposedAddress;
+      result.usedVehicleSourceCity = result.disposedCity;
+      result.usedVehicleSourceState = result.disposedState;
+      result.usedVehicleSourceZipCode = result.disposedZip;
+    }
+    if (!result.purchasePrice && result.disposedPrice) {
+      result.purchasePrice = result.disposedPrice;
+    }
+  }
 
   // Fix price: override AI's sale values with the actual TOTAL.
   const totalFromText = extractTotalFromText(rawText);
@@ -256,6 +335,182 @@ function postProcessResult(result, rawText, purpose) {
   return result;
 }
 
+// Heuristic to infer auction name from raw document text
+function inferAuctionFromText(text) {
+  if (!text) return null;
+  const m = text.match(/([A-Z0-9 &'"-]{3,}?)\s+(?:AUCTION|AUTO AUCTION|VEHICLE AUCTION|AUCTIONS)\b/i);
+  if (m) return m[1].trim();
+  const m2 = text.match(/Auction[:\s-]+(.+?)(?:\r?\n|$)/i);
+  if (m2) return m2[1].trim();
+  return null;
+}
+
+const BROADWAY_PATTERN = /\b(BROADWAY USED AUTO SALES|AUTO SALES ON BROADWAY|100 BROADWAY|2125 REVERE BEACH|NORWOOD,?\s+MA\s+02062|EVERETT,?\s+MA\s+02149)\b/i;
+const AUCTION_NAME_PATTERN = /\b(ADESA|MANHEIM|CARMAX|CMAA|CENTRAL MASS(?:ACHUSETTS)? AUTO AUCTION|AMERICA'?S (?:AA|AUTO AUCTION)|ACV|COPART|IAAI|AUTO AUCTION|AUCTION)\b/i;
+const STREET_PATTERN = /^\d{1,6}\s+.+\b(?:ST|STREET|RD|ROAD|AVE|AVENUE|BLVD|BOULEVARD|DR|DRIVE|LN|LANE|PKWY|PARKWAY|HWY|HIGHWAY|WAY|CT|COURT|PL|PLACE|PIKE|TURNPIKE)\b\.?/i;
+const CITY_STATE_ZIP_PATTERN = /([A-Za-z .'-]+),?\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/i;
+
+function mergePreferredFields(base, preferred, fields) {
+  if (!preferred) return base;
+  const merged = { ...base };
+  for (const field of fields) {
+    const value = preferred[field];
+    if (value !== undefined && value !== null && value !== '') merged[field] = value;
+  }
+  return merged;
+}
+
+function normalizeDocumentLines(text) {
+  return String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+}
+
+function isBroadwayValue(value) {
+  return BROADWAY_PATTERN.test(String(value || ''));
+}
+
+function cleanRoleName(value) {
+  if (!value) return null;
+  const cleaned = String(value)
+    .replace(/^\s*(?:BUYER|PURCHASER|SOLD TO|CUSTOMER|SELLER|DEALER|CONSIGNOR|FACILITY|AUCTION|REMIT PAYMENT TO|TRANSACTION LOCATION|BILL TO|SHIP TO)\b\s*[:#-]*/i, '')
+    .replace(/\b(?:ADDRESS|ADDR|CITY|STATE|ZIP|DATE|VIN|STOCK|LOT|INVOICE|TOTAL)\b.*$/i, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (!cleaned || isBroadwayValue(cleaned)) return null;
+  return cleaned;
+}
+
+function splitAddressParts(street, cityStateZip) {
+  const streetValue = String(street || '').replace(/\s+US$/i, '').trim();
+  const geoValue = String(cityStateZip || '').replace(/\s+US$/i, '').trim();
+  const match = geoValue.match(CITY_STATE_ZIP_PATTERN) || streetValue.match(CITY_STATE_ZIP_PATTERN);
+  const addressOnly = match && streetValue.includes(match[0])
+    ? streetValue.replace(match[0], '').replace(/,\s*$/, '').trim()
+    : streetValue;
+  return {
+    address: addressOnly || null,
+    city: match ? match[1].replace(/,$/, '').trim() : null,
+    state: match ? match[2].toUpperCase() : null,
+    zip: match ? match[3] : null
+  };
+}
+
+function findAddressNear(lines, startIndex, direction = 1, window = 8) {
+  const end = direction > 0
+    ? Math.min(lines.length, startIndex + window + 1)
+    : Math.max(-1, startIndex - window - 1);
+
+  for (let i = startIndex; direction > 0 ? i < end : i > end; i += direction) {
+    const line = lines[i] || '';
+    const inline = line.match(/(?:^|\s)Address(?!\()(?: \(number and street\))?\s*[:#-]?\s*(.+?)(?=\s+City\b|\s+State\b|\s+Zip\b|$)/i);
+    const street = inline?.[1]?.trim() || (STREET_PATTERN.test(line) ? line : null);
+    if (!street || isBroadwayValue(street)) continue;
+
+    const sameLineGeo = line.match(CITY_STATE_ZIP_PATTERN)?.[0] || '';
+    const nextGeoLine = [lines[i + 1] || '', lines[i + 2] || ''].find((candidate) => CITY_STATE_ZIP_PATTERN.test(candidate)) || '';
+    const parts = splitAddressParts(street, sameLineGeo || nextGeoLine);
+
+    if (!parts.city) {
+      const city = line.match(/\bCity(?: or Town)?\s*[:#-]?\s*([A-Za-z .'-]+?)(?=\s+State\b|\s+Zip\b|$)/i)?.[1]?.trim();
+      const state = line.match(/\bState\s*[:#-]?\s*([A-Z]{2})\b/i)?.[1]?.toUpperCase();
+      const zip = line.match(/\bZip(?: Code)?\s*[:#-]?\s*(\d{5}(?:-\d{4})?)/i)?.[1];
+      if (city || state || zip) {
+        parts.city = city || parts.city;
+        parts.state = state || parts.state;
+        parts.zip = zip || parts.zip;
+      }
+    }
+
+    return parts;
+  }
+
+  return null;
+}
+
+function findNameNear(lines, startIndex, labelRegex, window = 5) {
+  for (let i = startIndex; i < Math.min(lines.length, startIndex + window); i++) {
+    const line = lines[i] || '';
+    const inline = line.match(labelRegex);
+    if (inline?.[1]) {
+      const name = cleanRoleName(inline[1]);
+      if (name) return name;
+    }
+    if (i > startIndex && !STREET_PATTERN.test(line) && !CITY_STATE_ZIP_PATTERN.test(line) && !/\b(Address|City|State|Zip|VIN|Total|Price|Date)\b/i.test(line)) {
+      const name = cleanRoleName(line);
+      if (name) return name;
+    }
+  }
+  return null;
+}
+
+export function extractAcquisitionDetailsFromText(text) {
+  const lines = normalizeDocumentLines(text);
+  if (!lines.length) return {};
+
+  const candidates = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (isBroadwayValue(line)) continue;
+
+    const isAuctionLine = AUCTION_NAME_PATTERN.test(line);
+    const isFacilityLine = /\b(FACILITY|TRANSACTION LOCATION|REMIT PAYMENT TO|AUCTION LOCATION)\b/i.test(line);
+    const isSellerLine = /\b(SELLER|CONSIGNOR|SOLD BY|FROM)\b/i.test(line);
+    if (!isAuctionLine && !isFacilityLine && !isSellerLine) continue;
+
+    const name = cleanRoleName(
+      line.match(/(?:Facility|Transaction Location|Remit Payment To|Auction Location|Seller|Consignor|Sold By|From)\s*[:#-]?\s*(.+)$/i)?.[1]
+      || (isAuctionLine ? line : '')
+    );
+    const address = findAddressNear(lines, i, 1, 10) || findAddressNear(lines, i, -1, 3);
+    const score = (isAuctionLine ? 10 : 0) + (isFacilityLine ? 8 : 0) + (address?.address ? 4 : 0) + (name ? 2 : 0);
+    candidates.push({ score, name, address });
+  }
+
+  const best = candidates
+    .filter((candidate) => candidate.name || candidate.address?.address)
+    .sort((a, b) => b.score - a.score)[0];
+
+  if (!best) return {};
+  return clean({
+    purchasedFrom: best.name,
+    usedVehicleSourceAddress: best.address?.address,
+    usedVehicleSourceCity: best.address?.city,
+    usedVehicleSourceState: best.address?.state,
+    usedVehicleSourceZipCode: best.address?.zip,
+  });
+}
+
+export function extractDispositionDetailsFromText(text) {
+  const lines = normalizeDocumentLines(text);
+  if (!lines.length) return {};
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!/\b(PURCHASER|BUYER|SOLD TO|CUSTOMER|TRANSFERRED TO)\b/i.test(line) || isBroadwayValue(line)) continue;
+
+    const name = findNameNear(
+      lines,
+      i,
+      /(?:Print Name\(s\) of Purchaser\(s\)|Purchaser\(s\)? Name\(s\) and Address(?:\(es\)|es)?|Purchaser\(s\)? Name\(s\)|Buyer Name|Buyer|Sold To|Customer|Transferred To)\s*[:#-]?\s*(.+?)(?=\s+Address\b|\s+City\b|\s+State\b|\s+Zip\b|\s+Date\b|$)/i
+    );
+    const address = findAddressNear(lines, i, 1, 8);
+
+    if (name || address?.address) {
+      return clean({
+        disposedTo: name,
+        disposedAddress: address?.address,
+        disposedCity: address?.city,
+        disposedState: address?.state,
+        disposedZip: address?.zip,
+      });
+    }
+  }
+
+  return {};
+}
+
 function extractFallbackInfo(text, purpose) {
   if (!text) return null;
   const fallback = {};
@@ -272,6 +527,202 @@ function extractFallbackInfo(text, purpose) {
     }
   }
   return Object.keys(fallback).length ? fallback : null;
+}
+
+export function extractVehicleInfoFromText(text) {
+  if (!text) return {};
+
+  const lines = String(text)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const data = {
+    vin: null,
+    year: null,
+    make: null,
+    model: null,
+    color: null,
+    titleNumber: null,
+    mileage: null,
+    purchasedFrom: null,
+    usedVehicleSourceAddress: null,
+    usedVehicleSourceCity: null,
+    usedVehicleSourceState: null,
+    usedVehicleSourceZipCode: null,
+    disposedTo: null,
+    disposedAddress: null,
+    disposedCity: null,
+    disposedState: null,
+    disposedZip: null,
+    disposedOdometer: null,
+  };
+  let currentSection = 'source';
+
+  const readValue = (line, regex) => {
+    const match = line.match(regex);
+    return match ? match[1].trim() : '';
+  };
+
+  const addAddress = (line) => {
+    const value = readValue(line, /Address(?: \(number and street\))?[:\s]+(.+?)(?=\s+City\b|$)/i);
+    if (!value) return;
+    if (currentSection === 'disposed') {
+      data.disposedAddress = value;
+    } else {
+      data.usedVehicleSourceAddress = value;
+    }
+  };
+
+  for (const line of lines) {
+    if (/\bObtained From\b/i.test(line)) {
+      currentSection = 'source';
+      data.purchasedFrom = readValue(line, /Obtained From(?: \(Source\))?[:\s]+(.+?)(?=\s+Transaction Date:|\s+Address:|$)/i) || data.purchasedFrom;
+    }
+
+    if (/\b(Transferred To|Buyer Name|Purchaser\(s\)? Name\(s\))\b/i.test(line)) {
+      currentSection = 'disposed';
+      data.disposedTo = readValue(line, /(?:Transferred To|Buyer Name|Purchaser\(s\)? Name\(s\))[:\s]+(.+?)(?=\s+Transaction Date:|\s+Address:|$)/i) || data.disposedTo;
+    }
+
+    if (/\bAddress\b/i.test(line)) {
+      addAddress(line);
+    }
+
+    if (/\bCity(?: or Town)?[:\s]/i.test(line)) {
+      const value = readValue(line, /^City(?: or Town)?[:\s]+(.+?)(?:\s+State:|\s+Zip|$)/i);
+      if (currentSection === 'disposed') {
+        data.disposedCity = value || data.disposedCity;
+      } else {
+        data.usedVehicleSourceCity = value || data.usedVehicleSourceCity;
+      }
+    }
+
+    if (/\bState[:\s]/i.test(line)) {
+      const value = readValue(line, /State[:\s]+([A-Z]{2})/i);
+      if (currentSection === 'disposed') {
+        data.disposedState = value || data.disposedState;
+      } else {
+        data.usedVehicleSourceState = value || data.usedVehicleSourceState;
+      }
+    }
+
+    if (/\bZip\b/i.test(line)) {
+      const value = readValue(line, /Zip(?: Code)?:[:\s]+(\d{5}(?:-\d{4})?)/i);
+      if (currentSection === 'disposed') {
+        data.disposedZip = value || data.disposedZip;
+      } else {
+        data.usedVehicleSourceZipCode = value || data.usedVehicleSourceZipCode;
+      }
+    }
+
+    if (/\bOdometer(?: In| Out| Reading)?\b/i.test(line)) {
+      const value = readValue(line, /Odometer(?: In| Out| Reading)?[:\s]+([\d,]+)/i);
+      const num = value ? Number(value.replace(/,/g, '')) : null;
+      if (Number.isFinite(num)) {
+        if (/\bOdometer\s+Out\b/i.test(line)) {
+          data.disposedOdometer = num;
+        } else {
+          data.mileage = num;
+        }
+      }
+      continue;
+    }
+
+    if (/\bYear\b/i.test(line) && !data.year) {
+      const value = readValue(line, /Year[:\s]+((?:19|20)\d{2})/i);
+      if (value) data.year = Number(value);
+    }
+
+    if (/\bMake\b/i.test(line) && !data.make) {
+      data.make = readValue(line, /Make[:\s]+([A-Za-z0-9 &\-/]+?)(?=\s+Model|\s+Color|\s+Year|$)/i) || data.make;
+    }
+
+    if (/\bModel(?!\s+Year)\b/i.test(line) && !data.model) {
+      data.model = readValue(line, /Model(?!\s+Year)[:\s]+([A-Za-z0-9 &\-/]+?)(?=\s+Color|\s+Year|\s+Title|\s+Vehicle|\s+Stock|\s+Address|\s+City|\s+State|\s+Zip|\s+Odometer|\s+Transaction Date|$)/i) || data.model;
+    }
+
+    if (/\bColor\b/i.test(line) && !data.color) {
+      data.color = readValue(line, /Color[:\s]+([A-Za-z0-9 &\-/]+)/i) || data.color;
+    }
+
+    if (/\bTitle\b/i.test(line) && !data.titleNumber) {
+      data.titleNumber = readValue(line, /Title\s*(?:No\.?|Number|#)?[:\s]*([A-Z0-9\-/]+)/i) || data.titleNumber;
+    }
+
+    if (/^Vehicle Ident|^VIN|Vehicle Identification Number/i.test(line) && !data.vin) {
+      const condensed = line.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const tailMatch = condensed.match(/([A-Z0-9]{17})$/);
+      if (tailMatch) {
+        const normalized = tailMatch[1].replace(/[IOQ]/g, (char) => (char === 'I' ? '1' : '0'));
+        data.vin = normalized;
+      }
+    }
+  }
+
+  const findVinCandidate = (source) => {
+    const normalized = String(source).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    for (let i = 0; i + 17 <= normalized.length; i++) {
+      let candidate = normalized.slice(i, i + 17);
+      if (!/^[A-Z0-9]{17}$/.test(candidate)) continue;
+      const transformed = candidate.replace(/[IOQ]/g, (char) => (char === 'I' ? '1' : '0'));
+      if (isValidVin(transformed)) return transformed;
+    }
+    return null;
+  };
+
+  if (!data.vin) {
+    const fallbackVin = findVinCandidate(text);
+    if (fallbackVin) data.vin = fallbackVin;
+  }
+
+  const result = clean({
+    vin: data.vin,
+    year: data.year,
+    make: data.make,
+    model: data.model,
+    color: data.color,
+    titleNumber: data.titleNumber,
+    mileage: data.mileage,
+    purchasedFrom: data.purchasedFrom,
+    usedVehicleSourceAddress: data.usedVehicleSourceAddress,
+    usedVehicleSourceCity: data.usedVehicleSourceCity,
+    usedVehicleSourceState: data.usedVehicleSourceState,
+    usedVehicleSourceZipCode: data.usedVehicleSourceZipCode,
+    disposedTo: data.disposedTo,
+    disposedAddress: data.disposedAddress,
+    disposedCity: data.disposedCity,
+    disposedState: data.disposedState,
+    disposedZip: data.disposedZip,
+    disposedOdometer: data.disposedOdometer,
+  });
+
+  if (!result.usedVehicleSourceAddress && data.usedVehicleSourceAddress) {
+    result.usedVehicleSourceAddress = data.usedVehicleSourceAddress.trim();
+  }
+  if (!result.usedVehicleSourceCity && data.usedVehicleSourceCity) {
+    result.usedVehicleSourceCity = data.usedVehicleSourceCity.trim();
+  }
+  if (!result.usedVehicleSourceState && data.usedVehicleSourceState) {
+    result.usedVehicleSourceState = data.usedVehicleSourceState.trim();
+  }
+  if (!result.usedVehicleSourceZipCode && data.usedVehicleSourceZipCode) {
+    result.usedVehicleSourceZipCode = data.usedVehicleSourceZipCode.trim();
+  }
+  if (!result.disposedAddress && data.disposedAddress) {
+    result.disposedAddress = data.disposedAddress.trim();
+  }
+  if (!result.disposedCity && data.disposedCity) {
+    result.disposedCity = data.disposedCity.trim();
+  }
+  if (!result.disposedState && data.disposedState) {
+    result.disposedState = data.disposedState.trim();
+  }
+  if (!result.disposedZip && data.disposedZip) {
+    result.disposedZip = data.disposedZip.trim();
+  }
+
+  return result;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -317,6 +768,39 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
       }
     }
 
+    // RETRY: If purpose was 'auto' or empty and we got nothing, retry with 'acquisition' prompt
+    if (purpose !== 'acquisition' && hasNvidiaKey) {
+      console.log(`[Parser] Auto-detect returned empty. Retrying with acquisition prompt...`);
+      try {
+        const retryVision = await visionExtract(fileBuffer, mimetype, 'acquisition');
+        if (retryVision && (retryVision.vin || retryVision.make)) {
+          if ((!retryVision.make || !retryVision.model || !retryVision.year) && ocrText) {
+            const heuristic = parseMakeModelYearFromText(ocrText);
+            if (heuristic) {
+              retryVision.make = retryVision.make || heuristic.make;
+              retryVision.model = retryVision.model || heuristic.model;
+              retryVision.year = retryVision.year || heuristic.year;
+            }
+          }
+          return postProcessResult(retryVision, ocrText, 'acquisition');
+        }
+      } catch (err) {
+        console.warn(`[Parser] Acquisition retry also failed: ${err.message}`);
+      }
+      
+      // Last resort: retry OCR text with acquisition prompt
+      if (ocrText.length > 30) {
+        try {
+          const retryText = await textExtract(ocrText, 'acquisition');
+          if (retryText && (retryText.vin || retryText.make)) {
+            return postProcessResult(retryText, ocrText, 'acquisition');
+          }
+        } catch (err) {
+          console.warn(`[Parser] Acquisition text retry also failed: ${err.message}`);
+        }
+      }
+    }
+
     const fallbackResult = extractFallbackInfo(ocrText, purpose);
     if (fallbackResult) return fallbackResult;
 
@@ -355,6 +839,38 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
       if (visionResult) return postProcessResult(visionResult, combinedText, purpose);
     } catch (err) {
       console.warn(`[Parser] Vision AI failed on PDF render: ${err.message}`);
+    }
+
+    // RETRY: If purpose was 'auto' or empty and we got nothing, retry with 'acquisition' prompt
+    if (purpose !== 'acquisition' && hasNvidiaKey) {
+      console.log(`[Parser] Auto-detect for PDF returned empty. Retrying with acquisition prompt...`);
+      if (combinedText.replace(/\s/g, '').length > 30) {
+        try {
+          const retryText = await textExtract(combinedText, 'acquisition');
+          if (retryText && (retryText.vin || retryText.make)) {
+            if ((!retryText.make || !retryText.model || !retryText.year) && combinedText) {
+              const heuristic = parseMakeModelYearFromText(combinedText);
+              if (heuristic) {
+                retryText.make = retryText.make || heuristic.make;
+                retryText.model = retryText.model || heuristic.model;
+                retryText.year = retryText.year || heuristic.year;
+              }
+            }
+            return postProcessResult(retryText, combinedText, 'acquisition');
+          }
+        } catch (err) {
+          console.warn(`[Parser] PDF text Acquisition retry failed: ${err.message}`);
+        }
+      }
+      
+      try {
+        const retryVision = await visionExtract(fileBuffer, mimetype, 'acquisition');
+        if (retryVision && (retryVision.vin || retryVision.make)) {
+          return postProcessResult(retryVision, combinedText, 'acquisition');
+        }
+      } catch (err) {
+        console.warn(`[Parser] PDF vision Acquisition retry failed: ${err.message}`);
+      }
     }
 
     // If Vision AI is unavailable or fails, OCR the PDF to salvage VIN/total/title data
@@ -402,11 +918,15 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
 // PROMPT BUILDERS — Separate focused prompts for acquisition vs sale
 // ═══════════════════════════════════════════════════════════════
 // ─── Shared system prompt for ALL AI calls (text + vision) ───
-const SYSTEM_PROMPT = `You are a UNIVERSAL vehicle document data extractor. You process diverse automotive documents including:
-- Auction Bills of Sale (ADESA, CMAA/Central Mass, Manheim, CarMax)
+const SYSTEM_PROMPT = `You are a UNIVERSAL vehicle document data extractor. You process ANY automotive document, including but not limited to:
+- Auction Bills of Sale (ADESA, CMAA/Central Mass, Manheim, CarMax, America's AA)
 - MA Title Transfer Forms ("FOR A MOTOR VEHICLE, MOBILE HOME...")
 - Motor Vehicle Purchase Contracts (Carsforsale.com format)
 - Dealer invoices and wholesale receipts
+- Private party bills of sale
+- Insurance documents, registration forms, and any other vehicle paperwork
+
+Even if the document format is UNFAMILIAR, you MUST still extract every vehicle detail you can find. NEVER return an empty result if any vehicle data is visible.
 
 Our dealership is "Broadway Used Auto Sales" (also "Broadway Used Auto Sales Inc", "Auto Sales On Broadway").
 Dealership addresses: 2125 REVERE BEACH PKWY, EVERETT, MA 02149 or 100 BROADWAY, NORWOOD, MA 02062.
@@ -417,7 +937,7 @@ CRITICAL RULES:
 3. BODY TYPE vs MODEL: "Body Type" (Sedan, SUV, Hatchback, Coupe) is NOT the model. "Model" is the vehicle name (Corolla, Camry, C250, E350, 328i, Wrangler). For luxury cars (Mercedes-Benz, BMW, Audi), the model is ALWAYS the alphanumeric code (e.g. C250). NEVER put "Sedan" or "SUV" in the model field.
 4. TITLE NUMBER: This is CRITICAL. Extract if labeled "Certificate of Title", "Title No", "Title #", "Certificate No", or "Cert of Origin". It is usually an 8-10 digit alphanumeric code (e.g. BK182936).
 5. PRICE (TOTAL ONLY): ALWAYS extract the ABSOLUTE TOTAL/BALANCE DUE (e.g. 7645.00). NEVER extract the "Sale Price" or "Selling Price" (e.g. 7200.00) if a larger TOTAL exists below it. Fees MUST be included.
-6. Return ONLY a valid JSON object wrapped in JSON_START and JSON_END markers.
+6. You MUST return ONLY a valid JSON object wrapped in JSON_START and JSON_END markers. Do NOT write explanations, reasoning, or markdown.
 Example:
 JSON_START
 { "vin": "...", ... }
@@ -522,26 +1042,51 @@ NEVER use Broadway's address as the purchaser's address.${docText}`;
 
 function buildAutoPrompt(textOrEmpty) {
   const docText = textOrEmpty ? `\n\nDocument text:\n${textOrEmpty}` : '';
-  return `Extract all vehicle information from this document.
-Determine direction: If Broadway is BUYER → ACQUISITION. If Broadway is SELLER → SALE.
+  return `Extract ALL vehicle information from this document. This could be ANY type of vehicle document.
+Determine direction: If Broadway is BUYER → ACQUISITION. If Broadway is SELLER → SALE. If unclear, treat as ACQUISITION.
+
+You MUST return a JSON object. Do NOT explain. Do NOT write markdown.
 
 JSON_START
 {
-  "vin": "17-char VIN", "make": "", "model": "model name NOT body type", "year": 0, "color": "", "mileage": 0,
-  "titleNumber": null, "stockNumber": "",
-  "purchasedFrom": "SELLER name if acquisition", "purchasePrice": 0, "purchaseDate": "YYYY-MM-DD",
-  "usedVehicleSourceAddress": "SELLER street", "usedVehicleSourceCity": "", "usedVehicleSourceState": "XX", "usedVehicleSourceZipCode": "",
-  "disposedTo": "BUYER name if sale", "disposedAddress": "BUYER street", "disposedCity": "", "disposedState": "XX", "disposedZip": "",
-  "disposedDate": "YYYY-MM-DD", "disposedPrice": 0, "disposedOdometer": 0,
-  "disposedDlNumber": "", "disposedDlState": "XX"
+  "vin": "VIN (17 chars) or null",
+  "make": "Manufacturer or null",
+  "model": "Model name (NOT body type) or null",
+  "year": 2014,
+  "color": "Color or null",
+  "mileage": 131575,
+  "titleNumber": "Title number or null",
+  "stockNumber": "Stock number or null",
+  "purchasedFrom": "Seller/Auction name or null",
+  "purchasePrice": 6340,
+  "purchaseDate": "YYYY-MM-DD or null",
+  "usedVehicleSourceAddress": "Seller/Auction street address or null",
+  "usedVehicleSourceCity": "City or null",
+  "usedVehicleSourceState": "XX or null",
+  "usedVehicleSourceZipCode": "Zip or null",
+  "disposedTo": "Buyer name if sale or null",
+  "disposedAddress": "Buyer street if sale or null",
+  "disposedCity": "City or null",
+  "disposedState": "XX or null",
+  "disposedZip": "Zip or null",
+  "disposedDate": "YYYY-MM-DD or null",
+  "disposedPrice": 0,
+  "disposedOdometer": 0,
+  "disposedDlNumber": "Driver license or null",
+  "disposedDlState": "XX or null"
 }
 JSON_END
+IMPORTANT: If a value is missing or unclear, return null. NEVER return placeholder text.
 
-RULES:
-- "Body Type" (Sedan/SUV/Hatchback/Coupe) is NOT the model. Model = vehicle name (Corolla, Pilot, Focus).
-- Price: The price must be the final total, including fees. Look for "Total Due" or "Balance Due".
+LABEL MAPPING:
+- VIN: "VIN", "V.I.N.", "Vehicle Identification Number", "Serial #"
+- Make/Model: "Make" → make. "Model" → model. "Body Type" (Sedan/SUV) is NOT model.
+- Mileage: "Odometer", "Miles", "Reading", "OVER 100,000"
+- Price: "TOTAL", "Balance Due", "Total Amount". Must be the final total with fees.
+- Source: Prioritize AUCTION/FACILITY name and address. Look for any company name or address that is NOT Broadway.
+- Title: "Title #", "Certificate #", "Cert of Origin"
+- Stock: "Stock #", "Lot #", "Unit ID"
 - Infer state from zip if missing (01xxx/02xxx = MA, 06xxx = CT, etc.).
-- "Selling Price" bare number (e.g. 7751) = dollar amount without $ sign.
 - NEVER use Broadway's address for source or disposed fields.${docText}`;
 }
 
@@ -740,7 +1285,7 @@ function clean(d) {
       .replace(/\s+US$/i, '')   // Strip " US" suffix from Manheim addresses
       .trim();
     if (!str) return '';
-    if (/^(null|undefined|none|n\/a|unknown|unknow|pending|unknown unknown|unknow unknow|0|-|exact 17-char VIN|manufacturer|model name ONLY|color|SELLER|YYYY-MM-DD)$/i.test(str)) return '';
+    if (/^(null|undefined|none|n\/a|unknown|unknow|pending|unknown unknown|unknow unknow|0|-|exact 17-char VIN|manufacturer|model name ONLY|model name|color|SELLER|YYYY-MM-DD|information|not available|see title|see document)$/i.test(str)) return '';
     return str;
   };
   const n = v => {
@@ -862,23 +1407,119 @@ function clean(d) {
     return u.includes('REVERE BEACH') || u.includes('100 BROADWAY') || u.includes('BROADWAY USED');
   };
 
+  // ── Universal Vehicle Make Database ──
+  const KNOWN_MAKES = new Set([
+    'ACURA','ALFA ROMEO','ASTON MARTIN','AUDI','BENTLEY','BMW','BUICK','CADILLAC',
+    'CHEVROLET','CHEVY','CHRYSLER','CITROEN','DAEWOO','DAIHATSU','DODGE','EAGLE',
+    'FERRARI','FIAT','FISKER','FORD','GENESIS','GEO','GMC','HONDA','HUMMER',
+    'HYUNDAI','INFINITI','ISUZU','JAGUAR','JEEP','KIA','LAMBORGHINI','LAND ROVER',
+    'LEXUS','LINCOLN','LOTUS','LUCID','MASERATI','MAZDA','MCLAREN','MERCEDES-BENZ',
+    'MERCEDES','BENZ','MERCURY','MINI','MITSUBISHI','NISSAN','OLDSMOBILE','OPEL',
+    'PAGANI','PEUGEOT','PLYMOUTH','POLESTAR','PONTIAC','PORSCHE','RAM','RENAULT',
+    'RIVIAN','ROLLS-ROYCE','ROLLS ROYCE','SAAB','SATURN','SCION','SEAT','SKODA',
+    'SMART','SUBARU','SUZUKI','TESLA','TOYOTA','VOLKSWAGEN','VW','VOLVO',
+  ]);
+
+  // ── Universal Validators ──
+  const isKnownMake = (val) => {
+    if (!val) return false;
+    return KNOWN_MAKES.has(val.toUpperCase().trim());
+  };
+
+  const isValidModel = (val) => {
+    if (!val || val.length < 2) return false;
+    const u = val.toUpperCase();
+    // A valid model should be short (1-4 words max) and NOT look like:
+    // - An address (contains road/street/avenue/pkwy/blvd/drive etc.)
+    // - A business entity (contains inc/llc/corp/sales/buyer/seller/dealer etc.)
+    // - A sentence or label (more than 5 words)
+    // - Pure noise (contains "payment", "remit", "announcement", "clerk", etc.)
+    const words = u.split(/\s+/);
+    if (words.length > 5) return false;
+    if (/\b(road|rd|street|st|avenue|ave|blvd|boulevard|drive|dr|lane|ln|pkwy|parkway|highway|hwy|way|circle|court|ct|place|pl)\b/i.test(u)) return false;
+    if (/\b(inc|llc|corp|ltd|co\b|sales|buyer|seller|dealer|auction|broadway|remit|payment|purchaser|transferee|clerk|unit|block|announcement|mats|fear|warehouse)\b/i.test(u)) return false;
+    if (/\b(of\s+[a-z]+town|of\s+[a-z]+ford|of\s+[a-z]+bury|of\s+[a-z]+ham)\b/i.test(u)) return false;
+    // Should not be a state name or zip code
+    if (/^\d{5}(-\d{4})?$/.test(u)) return false;
+    if (STATE_MAP[u]) return false;
+    return true;
+  };
+
+  const isValidTitleNumber = (val) => {
+    if (!val || val.length < 4) return false;
+    // A valid title number is an alphanumeric CODE, not a word
+    // Must contain at least 2 digits
+    if ((val.match(/\d/g) || []).length < 2) return false;
+    // Should not be a plain English word
+    if (/^[a-z]+$/i.test(val) && val.length < 10) return false;
+    return true;
+  };
+
+  const cleanSourceName = (val) => {
+    if (!val) return null;
+    let cleaned = val;
+    // Strip trailing dates in any format (MM/DD/YYYY, DD-MON-YYYY, etc.)
+    cleaned = cleaned.replace(/\s+\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}.*$/i, '');
+    cleaned = cleaned.replace(/\s+\d{1,2}-[A-Z]{3}-\d{2,4}.*$/i, '');
+    // Strip trailing price fragments ($, dollar amounts)
+    cleaned = cleaned.replace(/\s*\$\s*[\d,.]+.*$/g, '');
+    // Strip trailing noise words (announcements, sale price, block clerk, etc.)
+    cleaned = cleaned.replace(/\s+(announcements?|sale\s*price|block\s*clerk|dealer\s*unit|office\s*copy|conditions?|terms?)(\b.*)?$/gi, '');
+    // Strip trailing sequences of 4+ digit numbers
+    cleaned = cleaned.replace(/\s+\d{4,}(\s+\d+)*\s*$/g, '');
+    // Strip trailing time patterns (HH:MM or HH:MM:SS)
+    cleaned = cleaned.replace(/\s+\d{1,2}:\d{2}(:\d{2})?\s*$/g, '');
+    return cleaned.trim() || null;
+  };
+
+  const cleanAddress = (val) => {
+    if (!val) return null;
+    let cleaned = val;
+    // Strip trailing non-address noise (block clerk, announcements, dealer unit, etc.)
+    cleaned = cleaned.replace(/\s+(block\s*clerk|dealer\s*unit|announcements?|sale\s*price|office\s*copy|conditions?|lot\s*#?\s*\d*)(\b.*)?$/gi, '');
+    // Strip trailing date patterns
+    cleaned = cleaned.replace(/\s+\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}.*$/i, '');
+    // Strip trailing long numeric sequences (not zip codes — those are 5 digits)
+    cleaned = cleaned.replace(/\s+\d{6,}.*$/g, '');
+    return cleaned.trim() || null;
+  };
+
   return {
     vin,
     make: (() => {
       const raw = s(d.make);
       if (!raw) return null;
-      // Strip labels and body types
-      return raw.replace(/^(make|manufacturer|mfr)[\s.:##-]*/i, '')
+      // Strip label prefixes
+      let cleaned = raw.replace(/^(make|manufacturer|mfr)[\s.:##-]*/i, '')
         .replace(/\b(sedan|suv|coupe|truck|van|wagon|hatchback|convertible|sport\s*utility)\b/gi, '')
         .replace(/\s+/g, ' ')
-        .trim() || null;
+        .trim();
+      if (!cleaned) return null;
+      // Universal validation: must be a known manufacturer
+      if (!isKnownMake(cleaned)) {
+        // Try to find a known make within the string
+        for (const make of KNOWN_MAKES) {
+          if (cleaned.toUpperCase().includes(make)) {
+            return make.charAt(0) + make.slice(1).toLowerCase();
+          }
+        }
+        return null;
+      }
+      return cleaned;
     })(),
     model: (() => {
       const raw = s(d.model);
       if (!raw) return null;
-      // Strip body types that may have been prepended or embedded
+      // Strip body types
       const bodyTypes = /\b(sedan|suv|coupe|truck|van|wagon|hatchback|convertible|sport\s*utility\s*v?)\b/gi;
-      return raw.replace(bodyTypes, '').replace(/\s+/g, ' ').trim() || raw;
+      let cleaned = raw.replace(bodyTypes, '')
+        // Strip stock/trim/package noise generically
+        .replace(/\b(stock|base|trim|package|edition|standard|premium)\b.*/gi, '')
+        .replace(/\s+/g, ' ').trim();
+      if (!cleaned) return null;
+      // Universal validation
+      if (!isValidModel(cleaned)) return null;
+      return cleaned;
     })(),
     year: i(d.year, true) || null,
     color: s(d.color) || null,
@@ -887,27 +1528,29 @@ function clean(d) {
       const raw = s(d.titleNumber);
       if (!raw) return null;
       
-      // Strip only obvious label prefixes the AI might have included
+      // Strip label prefixes
       let cleaned = raw.trim()
-        .replace(/^(title|cert(ificate)?|doc(ument)?)[\s.:##-]*(no|number|num|id|#)?[\s.:##-]*/i, '')
+        .replace(/^(title|cert(ificate)?|doc(ument)?|warranty|this|that|the|repairable|parts|prior|reconstructed|information|pending|salvage|see|check|none|not)[\s.:##-]*(no|number|num|id|#)?[\s.:##-]*/i, '')
         .replace(/^(no|number|num|#)[\s.:##-]*/i, '')
-        .replace(/^[A-Z]{2}\//, '')  // Remove state prefix like "MA/"
-        .replace(/\s/g, '')         // Strip all internal whitespace for consistency
+        .replace(/^[A-Z]{2}\//, '')
+        .replace(/\s/g, '')
         .trim();
       
       if (!cleaned || cleaned.length < 4) return null;
+      // Universal validation: must be an alphanumeric code with digits
+      if (!isValidTitleNumber(cleaned)) return null;
       
-      // Reject if the "title number" is actually the VIN (17 chars, all alphanum)
+      // Reject if the "title number" is actually the VIN
       const vinCandidate = cleaned.replace(/[^A-Z0-9]/gi, '');
       if (vinCandidate.length === 17 && vin && vinCandidate === vin) return null;
       
       return cleaned.toUpperCase();
     })(),
     stockNumber: s(d.stockNumber) || null,
-    purchasedFrom: s(d.purchasedFrom) || null,
+    purchasedFrom: cleanSourceName(s(d.purchasedFrom)),
     purchasePrice: n(d.purchasePrice),
     purchaseDate: dt(d.purchaseDate),
-    usedVehicleSourceAddress: isBroadwayAddr(acq.a) ? null : (acq.a || null),
+    usedVehicleSourceAddress: cleanAddress(isBroadwayAddr(acq.a) ? null : (acq.a || null)),
     usedVehicleSourceCity: isBroadwayAddr(acq.a) ? null : (acq.c || null),
     usedVehicleSourceState: isBroadwayAddr(acq.a) ? null : st(acq.s, acq.z),
     usedVehicleSourceZipCode: isBroadwayAddr(acq.a) ? null : (s(acq.z) || null),
@@ -1190,4 +1833,3 @@ export function isValidVin(vin) {
 }
 
 export { extractTotalFromText, extractVinFromText, extractTitleFromText };
-
