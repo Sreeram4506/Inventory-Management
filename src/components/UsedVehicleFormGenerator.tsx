@@ -67,6 +67,10 @@ export default function UsedVehicleFormGenerator({
           data = (await response.json()) as GenerateUsedVehicleResponse & { inventoryAdded?: boolean };
         }
         
+        if (data.warnings?.addressMissing) {
+          toast.warn(`${file.name}: Address could not be reliably extracted. Review before adding to inventory.`);
+        }
+
         onScanComplete({ 
           info: data.info, 
           pdfBase64: data.pdfBase64, 

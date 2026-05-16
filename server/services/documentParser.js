@@ -15,13 +15,8 @@ const ocrLangPath = path.dirname(
   require.resolve('@tesseract.js-data/eng/4.0.0/eng.traineddata.gz')
 );
 
-let tesseractWorker = null;
-
 async function getTesseractWorker() {
-  if (!tesseractWorker) {
-    tesseractWorker = await createWorker('eng', 1, { langPath: ocrLangPath, gzip: true });
-  }
-  return tesseractWorker;
+  return await createWorker('eng', 1, { langPath: ocrLangPath, gzip: true });
 }
 
 // Fetch with timeout + 1 automatic retry for transient NVIDIA API failures
@@ -46,6 +41,22 @@ async function fetchWithTimeout(url, options, timeoutMs = 25000, retries = 1) {
   }
 }
 
+function isPdfMimeType(mimetype) {
+  return [
+    'application/pdf',
+    'application/x-pdf',
+    'application/acrobat',
+    'applications/vnd.pdf',
+    'text/pdf'
+  ].includes(String(mimetype).toLowerCase());
+}
+
+function isPdfBuffer(fileBuffer) {
+  if (!fileBuffer || !fileBuffer.length) return false;
+  const header = fileBuffer.slice(0, 5).toString('utf8');
+  return header === '%PDF-';
+}
+
 // ═══════════════════════════════════════════════════════════════
 // POST-PROCESSING: Deterministic price & title extraction from raw text
 // These run AFTER AI extraction and OVERRIDE the AI if they find better data
@@ -59,36 +70,46 @@ function extractTotalFromText(text) {
   if (!text) return null;
 
   const lines = text.split(/\r?\n/);
-  const amountRegex = /\$?\s*[\d,]+(?:\.\d{1,2})?/g;
-  const totalMarkers = /\b(?:TOTAL|BALANCE\s+DUE|AMOUNT\s+DUE|TOTAL\s+DUE|DUE\s+NOW|AMOUNT\s+PAYABLE|NET\s+AMOUNT|BALANCE)\b/i;
+  const amountRegex = /(\$|USD)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)/g;
+  const totalMarkers = /\b(?:TOTAL\s*(?:AMOUNT|DUE|PAYABLE)?|BALANCE\s+DUE|AMOUNT\s+DUE|TOTAL\s+DUE|DUE\s+NOW|AMOUNT\s+PAYABLE|NET\s+AMOUNT|BALANCE)(?!\s*FORWARD)\b/i;
   const skipMarkers = /\bSUBTOTAL\b/i;
   const excludeSaleMarkers = /\bTOTAL\s+(?:SALE|SELLING)\s+PRICE\b/i;
   const candidates = [];
 
-  for (const line of lines) {
+  const extractAmounts = (source) => {
+    const matches = [...source.matchAll(amountRegex)];
+    return matches.map(match => parseFloat(match[2].replace(/,/g, ''))).filter(value => Number.isFinite(value));
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (!totalMarkers.test(line) || skipMarkers.test(line)) continue;
     if (excludeSaleMarkers.test(line)) continue;
 
-    const matches = line.match(amountRegex);
-    if (!matches) continue;
+    const combined = [line, lines[i + 1] || '', lines[i - 1] || ''].join(' ');
+    const values = extractAmounts(combined);
+    for (const value of values) {
+      if (value >= 10) candidates.push(value);
+    }
+  }
 
-    for (const match of matches) {
-      const value = parseFloat(match.replace(/[^0-9.]/g, ''));
-      if (Number.isFinite(value) && value > 100) {
-        candidates.push(value);
-      }
+  if (!candidates.length) {
+    const footerLines = lines.slice(-12).join(' ');
+    const values = extractAmounts(footerLines);
+    for (const value of values) {
+      if (value >= 10) candidates.push(value);
     }
   }
 
   let totalPrice = candidates.length ? Math.max(...candidates) : null;
 
   if (!totalPrice) {
-    const broadRegex = /\b(?:TOTAL|BALANCE\s+DUE|AMOUNT\s+DUE|TOTAL\s+DUE|DUE\s+NOW|AMOUNT\s+PAYABLE|NET\s+AMOUNT|BALANCE)\b[^\n]*?(\$?\s*[\d,]+(?:\.\d{1,2})?)/gi;
+    const broadRegex = /\b(?:TOTAL\s*(?:AMOUNT|DUE|PAYABLE)?|BALANCE\s+DUE|AMOUNT\s+DUE|TOTAL\s+DUE|DUE\s+NOW|AMOUNT\s+PAYABLE|NET\s+AMOUNT|BALANCE)(?!\s*FORWARD)\b[\s:\-]*([^\n]*)/gi;
     let match;
     while ((match = broadRegex.exec(text)) !== null) {
-      const value = parseFloat(match[1].replace(/[^0-9.]/g, ''));
-      if (Number.isFinite(value) && value > 100) {
-        candidates.push(value);
+      const values = extractAmounts(match[1]);
+      for (const value of values) {
+        if (value >= 10) candidates.push(value);
       }
     }
     if (candidates.length) totalPrice = Math.max(...candidates);
@@ -102,9 +123,21 @@ function extractTotalFromText(text) {
 
 function extractVinFromText(text) {
   if (!text) return null;
-  const cleaned = text.replace(/[^A-Z0-9\n]/gi, ' ').toUpperCase();
-  const vinMatch = cleaned.match(/\b([A-HJ-NPR-Z0-9]{17})\b/);
-  return vinMatch ? vinMatch[1] : null;
+
+  const normalizedText = text.replace(/[^A-Z0-9\n]/gi, ' ').toUpperCase();
+  const rawCandidates = new Set(normalizedText.match(/\b[A-HJ-NPR-Z0-9]{17}\b/g) || []);
+  const normalizeVin = (vin) => vin.replace(/[IOQ]/g, (char) => (char === 'I' ? '1' : '0'));
+
+  for (const candidate of rawCandidates) {
+    if (isValidVin(candidate)) return candidate;
+  }
+
+  for (const candidate of rawCandidates) {
+    const fixed = normalizeVin(candidate);
+    if (fixed !== candidate && isValidVin(fixed)) return fixed;
+  }
+
+  return rawCandidates.values().next().value || null;
 }
 
 /**
@@ -117,55 +150,42 @@ function extractTitleFromText(text) {
   const cleanCandidate = (candidate) => {
     if (!candidate) return null;
     const cleaned = String(candidate).toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (!cleaned || cleaned.length < 4 || cleaned.length > 12) return null;
+    if (!cleaned || cleaned.length < 4 || cleaned.length > 14) return null;
     if (/^0+$/.test(cleaned)) return null;
     if (/^[A-HJ-NPR-Z0-9]{17}$/.test(cleaned)) return null; // avoid VIN
     return cleaned;
   };
 
   const lines = text.split(/\r?\n/);
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line) continue;
+  const titleMarkers = /\b(?:TITLE\s*(?:NUMBER|NO\.?|#|STATE\s*NUMBER)?|CERTIFICATE\s*(?:OF\s*TITLE)?\s*(?:NUMBER|NO\.?|#)?|CERT\s*(?:OF\s*ORIGIN)?\s*(?:NUMBER|NO\.?|#)?|DOCUMENT\s*(?:NUMBER|NO\.?|#)?|TITLE\s*ID)\b/i;
 
-    const titleLineMatch = line.match(/\b(?:Title\s*(?:State\/?Number|#|No\.?|Number|State Number)|Certificate\s*(?:of\s*Title|No\.?|#)|Cert\s*(?:of\s*Origin)?|Title\s*ID|Document\s*(?:No\.?|ID))\b/i);
-    if (!titleLineMatch) continue;
-
-    const valueMatch = line.match(/(?:Title\s*(?:State\/?Number|#|No\.?|Number|State Number)|Certificate\s*(?:of\s*Title|No\.?|#)|Cert\s*(?:of\s*Origin)?|Title\s*ID|Document\s*(?:No\.?|ID))\s*[:\-]?\s*(?:([A-Z]{2})\s*[\/\\]\s*)?([A-Z0-9]{4,12})/i);
+  const candidateFromLine = (line) => {
+    const valueMatch = line.match(/(?:TITLE\s*(?:NUMBER|NO\.?|#|STATE\s*NUMBER)?|CERTIFICATE\s*(?:OF\s*TITLE)?\s*(?:NUMBER|NO\.?|#)?|CERT\s*(?:OF\s*ORIGIN)?\s*(?:NUMBER|NO\.?|#)?|DOCUMENT\s*(?:NUMBER|NO\.?|#)?|TITLE\s*ID)\s*[:\-\s]*([A-Z0-9\-/]{4,16})/i);
     if (valueMatch) {
-      const titleNum = cleanCandidate(valueMatch[2]);
-      if (titleNum) {
-        console.log(`[Parser:PostProcess] Found Title Number (label format): ${titleNum}`);
-        return titleNum;
-      }
+      return cleanCandidate(valueMatch[1]);
     }
+    const genericMatch = line.match(/\b([A-Z0-9]{4,14})\b/);
+    return genericMatch ? cleanCandidate(genericMatch[1]) : null;
+  };
 
-    const slashMatch = line.match(/\b([A-Z]{2})\s*[\/\\]\s*([A-Z0-9]{4,12})\b/);
-    if (slashMatch) {
-      const candidate = cleanCandidate(slashMatch[2]);
-      if (candidate) {
-        console.log(`[Parser:PostProcess] Found Title Number (state/number format): ${candidate}`);
-        return candidate;
-      }
-    }
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    if (!titleMarkers.test(line)) continue;
 
-    const fallbackMatch = line.match(/\b([A-Z]{1,2}[0-9]{4,12})\b/);
-    if (fallbackMatch && /title/i.test(line)) {
-      const candidate = cleanCandidate(fallbackMatch[1]);
-      if (candidate) {
-        console.log(`[Parser:PostProcess] Extracted Title Number from title line: ${candidate}`);
-        return candidate;
-      }
+    const candidate = candidateFromLine(line) || candidateFromLine(lines[i + 1] || '');
+    if (candidate) {
+      console.log(`[Parser:PostProcess] Found Title Number: ${candidate} from line: ${line}`);
+      return candidate;
     }
   }
 
-  // Final pass: find any labeled title state/number string in the whole text
-  const globalMatch = text.match(/\b(?:Title\s*(?:State\/?Number|#|No\.?|Number)|Certificate\s*(?:of\s*Title|No\.?|#)|Cert\s*(?:of\s*Origin)?|Title\s*ID|Document\s*(?:No\.?|ID))\s*[:\-]?\s*(?:([A-Z]{2})\s*[\/\\]\s*)?([A-Z0-9]{4,12})\b/i);
+  const globalMatch = text.match(/\b(?:TITLE\s*(?:NUMBER|NO\.?|#|STATE\s*NUMBER)?|CERTIFICATE\s*(?:OF\s*TITLE)?\s*(?:NUMBER|NO\.?|#)?|CERT\s*(?:OF\s*ORIGIN)?\s*(?:NUMBER|NO\.?|#)?|DOCUMENT\s*(?:NUMBER|NO\.?|#)?|TITLE\s*ID)\s*[:\-\s]*([A-Z0-9\-/]{4,16})\b/i);
   if (globalMatch) {
-    const titleNum = cleanCandidate(globalMatch[2]);
-    if (titleNum) {
-      console.log(`[Parser:PostProcess] Found Title Number (global label scan): ${titleNum}`);
-      return titleNum;
+    const candidate = cleanCandidate(globalMatch[1]);
+    if (candidate) {
+      console.log(`[Parser:PostProcess] Found Title Number (global): ${candidate}`);
+      return candidate;
     }
   }
 
@@ -194,16 +214,25 @@ function postProcessResult(result, rawText, purpose) {
   const fallback = extractFallbackInfo(rawText, purpose);
   result = mergeFallbackResult(result, fallback);
 
-  // Fix price: override AI's "Sale Price" with the actual TOTAL
-  // Only for ACQUISITION documents — sale documents (MA Title) don't have separate totals
-  if (purpose === 'acquisition' || purpose === '') {
-    const totalFromText = extractTotalFromText(rawText);
-    if (totalFromText) {
+  // Fix price: override AI's sale values with the actual TOTAL.
+  const totalFromText = extractTotalFromText(rawText);
+  if (totalFromText) {
+    const total = Number(totalFromText);
+    if (purpose === 'acquisition' || purpose === '') {
       const priceField = 'purchasePrice';
       const currentPrice = Number(result[priceField] || 0);
-      if (totalFromText > 100 && (currentPrice <= 0 || totalFromText >= currentPrice + 50)) {
-        console.log(`[Parser:PostProcess] Overriding ${priceField}: ${currentPrice} → ${totalFromText} (TOTAL from document text)`);
-        result[priceField] = totalFromText;
+      if (!currentPrice || total > currentPrice) {
+        console.log(`[Parser:PostProcess] Overriding ${priceField}: ${currentPrice} → ${total} (TOTAL from document text)`);
+        result[priceField] = total;
+      }
+    }
+
+    if (purpose === 'sale') {
+      const priceField = 'disposedPrice';
+      const currentPrice = Number(result[priceField] || 0);
+      if (!currentPrice || total > currentPrice) {
+        console.log(`[Parser:PostProcess] Overriding ${priceField}: ${currentPrice} → ${total} (TOTAL from document text)`);
+        result[priceField] = total;
       }
     }
   }
@@ -261,6 +290,15 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
       const visionResult = await visionExtract(fileBuffer, mimetype, purpose);
       if (visionResult && (visionResult.vin || visionResult.make || visionResult.disposedTo)) {
         // Post-process: fix price and title using OCR text
+        // If vision misses make/model/year, try heuristic on OCR text
+        if ((!visionResult.make || !visionResult.model || !visionResult.year) && ocrText) {
+          const heuristic = parseMakeModelYearFromText(ocrText);
+          if (heuristic) {
+            visionResult.make = visionResult.make || heuristic.make;
+            visionResult.model = visionResult.model || heuristic.model;
+            visionResult.year = visionResult.year || heuristic.year;
+          }
+        }
         return postProcessResult(visionResult, ocrText, purpose);
       }
     } catch (err) {
@@ -286,7 +324,7 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
   }
 
   // For PDFs
-  if (mimetype === 'application/pdf') {
+  if (isPdfMimeType(mimetype) || isPdfBuffer(fileBuffer)) {
     const { pages, combinedText } = await extractPdfTextPages(fileBuffer);
     console.log(`[Parser] PDF native text: ${combinedText.length} chars`);
 
@@ -295,6 +333,15 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
       try {
         const textResult = await textExtract(combinedText, purpose);
         if (textResult && (textResult.vin || textResult.make || textResult.disposedTo)) {
+          // Heuristic fill for missing make/model/year
+          if ((!textResult.make || !textResult.model || !textResult.year) && combinedText) {
+            const heuristic = parseMakeModelYearFromText(combinedText);
+            if (heuristic) {
+              textResult.make = textResult.make || heuristic.make;
+              textResult.model = textResult.model || heuristic.model;
+              textResult.year = textResult.year || heuristic.year;
+            }
+          }
           return postProcessResult(textResult, combinedText, purpose);
         }
       } catch (err) {
@@ -308,6 +355,24 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
       if (visionResult) return postProcessResult(visionResult, combinedText, purpose);
     } catch (err) {
       console.warn(`[Parser] Vision AI failed on PDF render: ${err.message}`);
+    }
+
+    // If Vision AI is unavailable or fails, OCR the PDF to salvage VIN/total/title data
+    const pdfOcrText = await ocrPdf(fileBuffer, 2);
+    if (pdfOcrText && pdfOcrText.replace(/\s/g, '').length > 30) {
+      const fallbackResult = extractFallbackInfo(pdfOcrText, purpose);
+      // supplement fallback with heuristic make/model/year
+      if (fallbackResult) {
+        if ((!fallbackResult.make || !fallbackResult.model || !fallbackResult.year) && pdfOcrText) {
+          const heuristic = parseMakeModelYearFromText(pdfOcrText);
+          if (heuristic) {
+            fallbackResult.make = fallbackResult.make || heuristic.make;
+            fallbackResult.model = fallbackResult.model || heuristic.model;
+            fallbackResult.year = fallbackResult.year || heuristic.year;
+          }
+        }
+        return fallbackResult;
+      }
     }
 
     const fallbackResult = extractFallbackInfo(combinedText, purpose);
@@ -868,9 +933,13 @@ function clean(d) {
 // TEXT EXTRACTION HELPERS
 // ═══════════════════════════════════════════════════════════════
 export async function extractText(fileBuffer, mimetype) {
-  if (mimetype === 'application/pdf') {
+  if (isPdfMimeType(mimetype) || isPdfBuffer(fileBuffer)) {
     const { combinedText } = await extractPdfTextPages(fileBuffer);
-    return combinedText;
+    if (combinedText.replace(/\s/g, '').length > 30) {
+      return combinedText;
+    }
+    const ocrText = await ocrPdf(fileBuffer, 2);
+    return ocrText || combinedText;
   } else if (mimetype?.includes('word')) {
     const result = await mammoth.extractRawText({ buffer: fileBuffer });
     return result.value;
@@ -881,15 +950,165 @@ export async function extractText(fileBuffer, mimetype) {
   }
 }
 
+async function ocrPdf(fileBuffer, maxPages = 2) {
+  try {
+    const loadingTask = getDocument({ data: new Uint8Array(fileBuffer), useSystemFonts: true, disableFontFace: true });
+    const doc = await loadingTask.promise;
+    let text = '';
+
+    for (let i = 1; i <= Math.min(maxPages, doc.numPages); i++) {
+      const page = await doc.getPage(i);
+      const vp = page.getViewport({ scale: 2.0 });
+      const cf = createCanvasFactory();
+      const { canvas, context } = cf.create(Math.ceil(vp.width), Math.ceil(vp.height));
+      await page.render({ canvasContext: context, viewport: vp, canvasFactory: cf }).promise;
+      const pageImage = canvas.toBuffer('image/jpeg', { quality: 0.85 });
+      cf.destroy({ canvas, context });
+      const pageText = await ocrImage(pageImage);
+      if (pageText) {
+        text += (text ? '\n' : '') + pageText;
+      }
+    }
+
+    return text.trim();
+  } catch (err) {
+    console.error('[OCR-PDF] Failed:', err.message);
+    return '';
+  }
+}
+
 async function ocrImage(fileBuffer) {
   const worker = await getTesseractWorker();
   try {
     const { data: { text } } = await worker.recognize(fileBuffer);
     return text;
   } catch (err) {
-    console.error('[OCR] Failed:', err.message);
+    console.error('[OCR] Failed:', err?.message || err);
     return '';
+  } finally {
+    try {
+      await worker.terminate();
+    } catch (terminateError) {
+      console.warn('[OCR] Worker termination failed:', terminateError?.message || terminateError);
+    }
   }
+}
+
+// Heuristic: parse Make, Model, Year from raw text when AI misses them
+function parseMakeModelYearFromText(text) {
+  if (!text) return null;
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return null;
+
+  let year = null;
+  let make = null;
+  let model = null;
+
+  const makes = [
+    'toyota','honda','ford','chevrolet','nissan','bmw','mercedes','audi','hyundai','kia','subaru','mazda','dodge','jeep','volkswagen','lexus','cadillac','infiniti','acura','chrysler','ram','gmc','buick','mitsubishi','porsche','jaguar','land rover','tesla'
+  ];
+  const makeRegex = new RegExp('\\b(' + makes.join('|') + ')\\b', 'i');
+  const cleanToken = (value) => value
+    .replace(/\b(make|model)\b/gi, '')
+    .replace(/[:\/\\]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const normalizeMake = (value) => {
+    if (!value) return value;
+    let clean = cleanToken(value);
+    if (!clean) return clean;
+    const tokens = clean.split(' ').filter(Boolean);
+    if (tokens.length > 1 && makes.includes(tokens[0].toLowerCase())) {
+      return tokens[0][0].toUpperCase() + tokens[0].slice(1).toLowerCase();
+    }
+    return tokens.map(w => w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : '').join(' ').trim();
+  };
+  const normalizeModel = (value, currentMake) => {
+    if (!value) return value;
+    let clean = cleanToken(value);
+    if (currentMake) {
+      const makeToken = currentMake.split(' ')[0];
+      const prefix = new RegExp('^' + makeToken + '\s+', 'i');
+      clean = clean.replace(prefix, '').trim();
+    }
+    return clean.replace(/\s+/g, ' ').trim();
+  };
+
+  for (const l of lines) {
+    const ym = l.match(/year[:\s]*([0-9]{4})/i);
+    if (ym && !year) year = ym[1];
+
+    const makeModelLine = l.match(/(?:make\s*\/\s*model|model\s*\/\s*make)[:\s-]*(.+)/i);
+    if (makeModelLine) {
+      const value = makeModelLine[1].trim();
+      const parts = value.split(/[,\/]+/).map(p => p.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        if (!make) make = normalizeMake(parts[0]);
+        if (!model) model = normalizeModel(parts.slice(1).join(' '), make);
+      } else if (parts.length === 1) {
+        const valueTokens = parts[0].split(/\s+/).filter(Boolean);
+        if (valueTokens.length >= 2 && makeRegex.test(parts[0])) {
+          if (!make) make = normalizeMake(valueTokens[0]);
+          if (!model) model = normalizeModel(valueTokens.slice(1).join(' '), make);
+        }
+      }
+    }
+
+    const mm = l.match(/make[:\s]*([A-Za-z0-9 &\-\.\/]+)/i);
+    if (mm && !make) make = normalizeMake(mm[1]);
+    const md = l.match(/model[:\s]*([A-Za-z0-9 &\-\.\/]+)/i);
+    if (md && !model) model = normalizeModel(md[1], make);
+  }
+
+  if ((!make || !model || !year) && lines.length) {
+    for (const l of lines) {
+      const ymatch = l.match(/\b(19|20)\d{2}\b/);
+      if (ymatch && !year) year = ymatch[0];
+
+      const m = l.match(makeRegex);
+      if (m) {
+        if (!make) make = normalizeMake(m[1]);
+        const after = l.slice(m.index + m[0].length).trim();
+        if (after) {
+          const tokens = after.split(/[,\/\\\-\s]+/).filter(Boolean);
+          while (tokens.length && /^(model|make)$/i.test(tokens[0])) tokens.shift();
+          const candidate = tokens.filter(t => !/^\d{4}$/.test(t)).slice(0, 3).join(' ');
+          if (candidate) model = model || normalizeModel(candidate, make);
+        }
+      }
+
+      const makeModelLine = l.match(/(?:make\s*\/\s*model|model\s*\/\s*make)[:\s-]*(.+)/i);
+      if (makeModelLine) {
+        const value = makeModelLine[1].trim();
+        const parts = value.split(/[,\/]+/).map(p => p.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+          if (!make) make = normalizeMake(parts[0]);
+          if (!model) model = normalizeModel(parts.slice(1).join(' '), make);
+        }
+      }
+
+      const modelOnlyMatch = l.match(/model[:\s-]*([A-Za-z0-9 &\-\.\/]+)/i);
+      if (modelOnlyMatch && !model) {
+        model = normalizeModel(modelOnlyMatch[1], make);
+      }
+
+      const leading = l.match(/^\s*(19|20)\d{2}\s+([A-Za-z0-9]+)\s+([A-Za-z0-9]+)/);
+      if (leading) {
+        if (!year) year = leading[0].match(/(19|20)\d{2}/)[0];
+        if (!make) make = normalizeMake(leading[2]);
+        if (!model) model = normalizeModel(leading[3], make);
+      }
+
+      if (make && model && year) break;
+    }
+  }
+
+  if (year) year = Number(String(year).replace(/[^0-9]/g, ''));
+  if (make) make = normalizeMake(make);
+  if (model) model = normalizeModel(model, make);
+
+  if (make || model || year) return { make, model, year };
+  return null;
 }
 
 async function resizeImageIfNeeded(fileBuffer) {
@@ -969,4 +1188,6 @@ export function isValidVin(vin) {
     return false;
   }
 }
+
+export { extractTotalFromText, extractVinFromText, extractTitleFromText };
 

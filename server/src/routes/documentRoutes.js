@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import { readFile } from 'fs/promises';
 import { authenticateToken } from '../middlewares/authMiddleware.js';
-import { extractVehicleInfo } from '../../services/documentParser.js';
+import { extractVehicleInfo, extractText } from '../../services/documentParser.js';
 import { buildUsedVehiclePdfFileName, fillUsedVehiclePdf } from '../../services/usedVehiclePdfService.js';
 import prisma from '../db/prisma.js';
 
@@ -27,6 +27,51 @@ function parseCurrency(value) {
   if (typeof value === 'number') return value;
   const parsed = Number(String(value).replace(/[^0-9.-]+/g, ""));
   return isNaN(parsed) ? 0 : parsed;
+}
+
+// Attempt to parse a simple US street address block from OCR/text
+function parseAddressFromText(text) {
+  if (!text || !text.trim()) return null;
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return null;
+
+  const cityStateZipRegex = /([A-Za-z .'-]+),?\s*([A-Z]{2})\s*(\d{5}(?:-\d{4})?)/i;
+  const streetRegex = /^\d{1,5}\s+.+/; // simple street line starting with number
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (streetRegex.test(line)) {
+      // Look ahead for city/state/zip in same line or next 2 lines
+      let cityStateLine = null;
+      if (cityStateZipRegex.test(line)) cityStateLine = line;
+      else if (i + 1 < lines.length && cityStateZipRegex.test(lines[i + 1])) cityStateLine = lines[i + 1];
+      else if (i + 2 < lines.length && cityStateZipRegex.test(lines[i + 2])) cityStateLine = lines[i + 2];
+
+      if (cityStateLine) {
+        const m = cityStateZipRegex.exec(cityStateLine);
+        if (m) {
+          const street = line;
+          const city = m[1].trim();
+          const state = m[2].trim().toUpperCase();
+          const zip = m[3].trim();
+          // vendor might be the previous non-empty line before street
+          const vendor = i - 1 >= 0 ? lines[i - 1] : null;
+          return { street, city, state, zip, vendor };
+        }
+      }
+    }
+  }
+
+  // As a last resort, try to find any city/state/zip block alone
+  for (const l of lines) {
+    const m = cityStateZipRegex.exec(l);
+    if (m) {
+      return { street: null, city: m[1].trim(), state: m[2].trim().toUpperCase(), zip: m[3].trim(), vendor: null };
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -175,11 +220,27 @@ router.post(
         if (!info.purchasedFrom) info.purchasedFrom = info.disposedTo;
       }
 
+      // If still missing address, try extracting raw text and parsing an address block
+      const warnings = {};
       if (!info.usedVehicleSourceAddress) {
-        return res.status(400).json({
-          status: 'error',
-          message: 'Could not extract a valid Address from the document. Please ensure the address block is clearly visible in the photo.'
-        });
+        try {
+          const rawText = await extractText(sourceFile.buffer, sourceFile.mimetype);
+          const parsed = parseAddressFromText(rawText);
+          if (parsed) {
+            info.usedVehicleSourceAddress = parsed.street;
+            info.usedVehicleSourceCity = parsed.city;
+            info.usedVehicleSourceState = parsed.state;
+            info.usedVehicleSourceZipCode = parsed.zip;
+            if (!info.purchasedFrom) info.purchasedFrom = parsed.vendor || info.purchasedFrom;
+            console.log('[DocumentRoute] Parsed address from text fallback:', parsed);
+          } else {
+            warnings.addressMissing = true;
+            console.log('[DocumentRoute] Address missing after text fallback');
+          }
+        } catch (err) {
+          warnings.addressMissing = true;
+          console.warn('[DocumentRoute] Text fallback failed:', err?.message || err);
+        }
       }
 
       // ── Save/Update in Document Registry ──
@@ -246,7 +307,8 @@ router.post(
             existingId: existingVehicle.id,
             info, // Return info anyway so UI can see it
             pdfBase64: pdfBase64Str,
-            registryAdded: !!registryId
+            registryAdded: !!registryId,
+            warnings: warnings || {}
           });
         }
 
@@ -316,7 +378,8 @@ router.post(
         fileName,
         pdfBase64: pdfBase64Str,
         inventoryAdded: !!vehicleId,
-        registryAdded: !!registryId
+        registryAdded: !!registryId,
+        warnings: warnings || {}
       });
     } catch (err) {
       if (err.message && err.message.includes('already exists in inventory')) {

@@ -10,15 +10,18 @@ import { Input } from '@/components/ui/input';
 interface BillOfSaleUploaderProps {
   token: string | null;
   onUploadComplete: (data: { info: any; pdfBase64?: string; fileName?: string }) => void;
+  initialMode?: 'bill' | 'repair';
 }
 
 export default function BillOfSaleUploader({
   token,
   onUploadComplete,
+  initialMode = 'bill',
 }: BillOfSaleUploaderProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [vin, setVin] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [uploadMode, setUploadMode] = useState<'bill' | 'repair'>(initialMode);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -32,7 +35,7 @@ export default function BillOfSaleUploader({
 
   const handleUpload = async () => {
     if (files.length === 0) {
-      toast.error('Choose the Bill of Sale file(s) first.');
+      toast.error(uploadMode === 'repair' ? 'Choose the repair bill file(s) first.' : 'Choose the Bill of Sale file(s) first.');
       return;
     }
 
@@ -44,39 +47,66 @@ export default function BillOfSaleUploader({
     const processFile = async (currentFile: File) => {
       const formData = new FormData();
       formData.append('file', currentFile);
-      
-      if (files.length === 1) {
-        if (vin) formData.append('vin', vin.trim().toUpperCase());
-        if (customerName) formData.append('customerName', customerName.trim());
+
+      if (vin) {
+        formData.append('vin', vin.trim().toUpperCase());
+      }
+      if (uploadMode === 'bill' && customerName) {
+        formData.append('customerName', customerName.trim());
       }
 
-      try {
-        const response = await fetch(apiUrl('/upload-bill-of-sale'), {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        });
+      const uploadPath = uploadMode === 'repair' ? '/repairs/upload-bill' : '/upload-bill-of-sale';
+      let lastError: Error | null = null;
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || 'Failed to process Bill of Sale');
+      try {
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+          try {
+            const response = await fetch(apiUrl(uploadPath), {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+              body: formData,
+            });
+
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              throw new Error(errorData.message || 'Failed to process document');
+            }
+
+            const data = await response.json();
+            if (data.status !== 'success') {
+              throw new Error(data.message || 'Document upload returned an error');
+            }
+
+            if (uploadMode === 'bill') {
+              onUploadComplete({
+                info: data.info,
+                pdfBase64: data.pdfBase64,
+                fileName: data.fileName
+              });
+
+              if (data.pdfBase64 && files.length === 1) {
+                downloadPdf(data.pdfBase64, data.fileName || `UsedVehicleRecord_${data.vin}.pdf`);
+              }
+            }
+
+            successCount++;
+            toast.success(uploadMode === 'repair' ? `Repair bill attached to ${data.vin || 'vehicle'}` : 'Bill of Sale processed successfully.');
+            lastError = null;
+            break;
+          } catch (error: any) {
+            lastError = error;
+            console.warn(`Upload attempt ${attempt} failed for ${currentFile.name}:`, error);
+            if (attempt >= 2) {
+              throw error;
+            }
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
         }
 
-        const data = await response.json();
-
-        if (data.status === 'success') {
-          onUploadComplete({
-            info: data.info,
-            pdfBase64: data.pdfBase64,
-            fileName: data.fileName
-          });
-
-          if (data.pdfBase64 && files.length === 1) {
-            downloadPdf(data.pdfBase64, data.fileName || `UsedVehicleRecord_${data.vin}.pdf`);
-          }
-          successCount++;
+        if (lastError) {
+          throw lastError;
         }
       } catch (error: any) {
         console.error(error);
@@ -86,10 +116,8 @@ export default function BillOfSaleUploader({
       }
     };
 
-    const batchSize = 2;
-    for (let i = 0; i < files.length; i += batchSize) {
-      const batch = files.slice(i, i + batchSize);
-      await Promise.all(batch.map(file => processFile(file)));
+    for (const file of files) {
+      await processFile(file);
     }
 
     if (successCount > 0) {
@@ -98,7 +126,8 @@ export default function BillOfSaleUploader({
       queryClient.invalidateQueries({ queryKey: ['sales'] });
       queryClient.invalidateQueries({ queryKey: ['registry'] });
 
-      toast.success(`Successfully processed ${successCount} sales documents.`, {
+      const successLabel = uploadMode === 'repair' ? 'repair bills' : 'sales documents';
+      toast.success(`Successfully processed ${successCount} ${successLabel}.`, {
         icon: <CheckCircle2 className="w-4 h-4 text-profit" />,
       });
     }
@@ -112,12 +141,34 @@ export default function BillOfSaleUploader({
   return (
     <div className="rounded-[24px] border border-border bg-white p-6 space-y-6 shadow-sm">
       <div>
-        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-profit mb-2">
-          Mark as Sold (Bulk)
-        </h3>
-        <p className="text-sm text-muted-foreground font-medium leading-relaxed">
-          Upload Bills of Sale. VINs will be matched against your inventory automatically.
-        </p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-profit mb-2">
+              {uploadMode === 'repair' ? 'Upload Repair Bills' : 'Mark as Sold (Bulk)'}
+            </h3>
+            <p className="text-sm text-muted-foreground font-medium leading-relaxed">
+              {uploadMode === 'repair'
+                ? 'Upload repair invoices and attach costs to the matching vehicle VIN.'
+                : 'Upload Bills of Sale. VINs will be matched against your inventory automatically.'}
+            </p>
+          </div>
+          <div className="inline-flex rounded-full border border-border bg-muted/80 p-1">
+            <button
+              type="button"
+              onClick={() => setUploadMode('bill')}
+              className={`rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] ${uploadMode === 'bill' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground'}`}
+            >
+              Bill of Sale
+            </button>
+            <button
+              type="button"
+              onClick={() => setUploadMode('repair')}
+              className={`rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] ${uploadMode === 'repair' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground'}`}
+            >
+              Repair Bill
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -136,7 +187,7 @@ export default function BillOfSaleUploader({
             <div className="relative">
               <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Customer Name Fallback"
+                placeholder={uploadMode === 'repair' ? 'Job / Description (Optional)' : 'Customer Name Fallback'}
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 className="pl-11 bg-muted/30 border-border rounded-xl h-11 text-sm font-medium focus-visible:ring-primary/20"
@@ -156,7 +207,9 @@ export default function BillOfSaleUploader({
               <FileUp className="h-6 w-6" />
             </div>
             <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-bold text-foreground">Bill of Sale Document(s)</p>
+              <p className="text-sm font-bold text-foreground">
+                {uploadMode === 'repair' ? 'Repair Bill Document(s)' : 'Bill of Sale Document(s)'}
+              </p>
               <p className="text-xs text-muted-foreground font-medium truncate mt-0.5">
                 {files.length > 0 
                   ? `${files.length} files selected` 
@@ -196,7 +249,7 @@ export default function BillOfSaleUploader({
         ) : (
           <>
             <FileText className="mr-2 h-4 w-4" />
-            Process Documents
+            {uploadMode === 'repair' ? 'Process Repair Bills' : 'Process Documents'}
           </>
         )}
       </Button>

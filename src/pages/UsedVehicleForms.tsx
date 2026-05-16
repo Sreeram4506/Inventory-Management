@@ -4,6 +4,7 @@ import UsedVehicleFormGenerator from '@/components/UsedVehicleFormGenerator';
 import BillOfSaleUploader from '@/components/BillOfSaleUploader';
 import { useAuth } from '@/context/auth-hooks';
 import { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ExtractedVehicleDocumentInfo, Vehicle } from '@/types/inventory';
 import { useInventory } from '@/hooks/useInventory';
 import { useRegistry } from '@/hooks/useRegistry';
@@ -15,6 +16,8 @@ import { toast } from '@/components/ui/toast-utils';
 
 export default function UsedVehicleForms() {
   const { token } = useAuth();
+  const [searchParams] = useSearchParams();
+  const initialUploadMode = searchParams.get('mode') === 'repair' ? 'repair' : 'bill';
   const [extractedInfo, setExtractedInfo] = useState<ExtractedVehicleDocumentInfo | null>(null);
   const [lastGeneratedPdf, setLastGeneratedPdf] = useState<{ base64: string; name: string } | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -125,6 +128,7 @@ export default function UsedVehicleForms() {
               <BillOfSaleUploader
                 token={token}
                 onUploadComplete={handleScanComplete}
+                initialMode={initialUploadMode}
               />
             </div>
 

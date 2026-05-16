@@ -4,6 +4,7 @@ import { useInventory } from '@/hooks/useInventory';
 import { cn } from '@/lib/utils';
 import QueryErrorState from '@/components/QueryErrorState';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/auth-hooks';
 import VehicleDetailDialog from '@/components/VehicleDetailDialog';
 import DocumentViewerDialog from '@/components/DocumentViewerDialog';
@@ -26,6 +27,7 @@ export default function Sales() {
   const { vehicles, isLoading: vehiclesLoading, isError: vehiclesError } = useInventory();
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const { user, token } = useAuth();
+  const navigate = useNavigate();
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<{ base64: string; name: string; type: string } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -107,9 +109,9 @@ export default function Sales() {
     toast.success(`Downloading ${type.replace('_', ' ')} for ${vehicle.make} ${vehicle.model}...`);
   };
 
-  const handleUploadBillOfSale = (saleId: string) => {
-    // We can either open a specific dialog or redirect to used forms with VIN
-    toast.info('To upload a Bill of Sale, please use the "Used Forms" section or open the vehicle details from Inventory.');
+  const handleUploadBillOfSale = (vin?: string) => {
+    const url = vin ? `/used-vehicle-forms?mode=repair&vin=${encodeURIComponent(vin)}` : '/used-vehicle-forms?mode=repair';
+    navigate(url);
   };
   const handleDeleteSale = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -209,7 +211,7 @@ export default function Sales() {
                               <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
                             </DropdownMenuItem>
                           ) : (
-                            <DropdownMenuItem onClick={() => handleUploadBillOfSale(sale.id)} className="text-[10px] font-black uppercase py-2 text-muted-foreground italic cursor-pointer hover:bg-muted/50">
+                            <DropdownMenuItem onClick={() => handleUploadBillOfSale(vehicle?.vin)} className="text-[10px] font-black uppercase py-2 text-muted-foreground italic cursor-pointer hover:bg-muted/50">
                               <Upload className="w-3.5 h-3.5 mr-2" /> Upload Bill of Sale
                             </DropdownMenuItem>
                           )}
@@ -371,8 +373,7 @@ export default function Sales() {
                                   <ShoppingCart className="w-3.5 h-3.5 mr-2" /> Bill of Sale
                                 </DropdownMenuItem>
                               ) : (
-                                <DropdownMenuItem onClick={() => handleUploadBillOfSale(sale.id)} className="text-[10px] font-black uppercase py-2 text-muted-foreground italic cursor-pointer hover:bg-muted/50">
-                                  <Upload className="w-3.5 h-3.5 mr-2" /> Upload Bill of Sale
+                                    <DropdownMenuItem onClick={() => handleUploadBillOfSale(vehicle?.vin)} className="text-[10px] font-black uppercase py-2 text-muted-foreground italic cursor-pointer hover:bg-muted/50">
                                 </DropdownMenuItem>
                               )}
                               
