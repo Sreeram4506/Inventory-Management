@@ -147,25 +147,34 @@ function extractVinFromText(text) {
 function extractTitleFromText(text) {
   if (!text) return null;
 
-  const cleanCandidate = (candidate) => {
-    if (!candidate) return null;
-    const cleaned = String(candidate).toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (!cleaned || cleaned.length < 4 || cleaned.length > 14) return null;
-    if (/^0+$/.test(cleaned)) return null;
-    if (/^[A-HJ-NPR-Z0-9]{17}$/.test(cleaned)) return null; // avoid VIN
-    return cleaned;
-  };
-
   const lines = text.split(/\r?\n/);
-  const titleMarkers = /\b(?:TITLE\s*(?:NUMBER|NO\.?|#|STATE\s*NUMBER)?|CERTIFICATE\s*(?:OF\s*TITLE)?\s*(?:NUMBER|NO\.?|#)?|CERT\s*(?:OF\s*ORIGIN)?\s*(?:NUMBER|NO\.?|#)?|DOCUMENT\s*(?:NUMBER|NO\.?|#)?|TITLE\s*ID)\b/i;
+  const joined = lines.join('\n');
+
+  const layoutPatterns = [
+    /\bTitle\s+State\s*\/\s*Number\s*[:#-]?\s*([A-Z]{2})\s*\/?\s*([A-Z]{1,4}\d{4,9})\b/i,
+    /\bTitle\s+State\s*\/\s*Number\s*[:#-]?\s*([A-Z]{2}[A-Z]{1,4}\d{4,9})\b/i,
+    /\bState\s+Title\s*#\s+V\.?I\.?N\.?\s*No\.?\s*\n?\s*([A-Z]{2})\s+([A-Z]{1,4}\d{4,9})\b/i,
+    /\b([A-Z]{2})\s*\|\s*([A-Z]{1,4}\d{4,9})\s+(?=[A-HJ-NPR-Z0-9]{17}\b)/i,
+    /\b(?:MA|CT|RI|NH|NY|NJ)\s+([A-Z]{1,4}\d{4,9})\s+(?=[A-HJ-NPR-Z0-9]{17}\b)/i,
+    /\bTitle\s*#\s*[:#-]?\s*([A-Z]{1,4}\d{4,9})\b/i,
+    /\bCertificate\s+of\s+Title\s+Number\s*[:#-]?\s*([A-Z]{1,4}\d{4,9})\b/i,
+  ];
+
+  for (const pattern of layoutPatterns) {
+    const match = joined.match(pattern);
+    if (!match) continue;
+    const candidate = normalizeTitleNumber(match[2] || match[1]);
+    if (candidate) {
+      console.log(`[Parser:PostProcess] Found Title Number: ${candidate}`);
+      return candidate;
+    }
+  }
+
+  const titleMarkers = /\b(?:TITLE\s*(?:NUMBER|NO\.?|#|STATE\s*NUMBER|STATE\s*\/\s*NUMBER)|CERTIFICATE\s*(?:OF\s*TITLE)?\s*(?:NUMBER|NO\.?|#)?|TITLE\s*ID)\b/i;
 
   const candidateFromLine = (line) => {
-    const valueMatch = line.match(/(?:TITLE\s*(?:NUMBER|NO\.?|#|STATE\s*NUMBER)?|CERTIFICATE\s*(?:OF\s*TITLE)?\s*(?:NUMBER|NO\.?|#)?|CERT\s*(?:OF\s*ORIGIN)?\s*(?:NUMBER|NO\.?|#)?|DOCUMENT\s*(?:NUMBER|NO\.?|#)?|TITLE\s*ID)\s*[:\-\s]*([A-Z0-9\-/]{4,16})/i);
-    if (valueMatch) {
-      return cleanCandidate(valueMatch[1]);
-    }
-    const genericMatch = line.match(/\b([A-Z0-9]{4,14})\b/);
-    return genericMatch ? cleanCandidate(genericMatch[1]) : null;
+    const valueMatch = line.match(/(?:TITLE\s*(?:NUMBER|NO\.?|#|STATE\s*NUMBER|STATE\s*\/\s*NUMBER)|CERTIFICATE\s*(?:OF\s*TITLE)?\s*(?:NUMBER|NO\.?|#)?|TITLE\s*ID)\s*[:#\-\s]*((?:[A-Z]{2}\s*\/?\s*)?[A-Z]{1,4}\d{4,9})\b/i);
+    return valueMatch ? normalizeTitleNumber(valueMatch[1]) : null;
   };
 
   for (let i = 0; i < lines.length; i++) {
@@ -180,9 +189,9 @@ function extractTitleFromText(text) {
     }
   }
 
-  const globalMatch = text.match(/\b(?:TITLE\s*(?:NUMBER|NO\.?|#|STATE\s*NUMBER)?|CERTIFICATE\s*(?:OF\s*TITLE)?\s*(?:NUMBER|NO\.?|#)?|CERT\s*(?:OF\s*ORIGIN)?\s*(?:NUMBER|NO\.?|#)?|DOCUMENT\s*(?:NUMBER|NO\.?|#)?|TITLE\s*ID)\s*[:\-\s]*([A-Z0-9\-/]{4,16})\b/i);
+  const globalMatch = text.match(/\b(?:TITLE\s*(?:NUMBER|NO\.?|#|STATE\s*NUMBER|STATE\s*\/\s*NUMBER)|CERTIFICATE\s*(?:OF\s*TITLE)?\s*(?:NUMBER|NO\.?|#)?|TITLE\s*ID)\s*[:#\-\s]*((?:[A-Z]{2}\s*\/?\s*)?[A-Z]{1,4}\d{4,9})\b/i);
   if (globalMatch) {
-    const candidate = cleanCandidate(globalMatch[1]);
+    const candidate = normalizeTitleNumber(globalMatch[1]);
     if (candidate) {
       console.log(`[Parser:PostProcess] Found Title Number (global): ${candidate}`);
       return candidate;
@@ -190,6 +199,25 @@ function extractTitleFromText(text) {
   }
 
   return null;
+}
+
+function normalizeTitleNumber(candidate) {
+  if (!candidate) return null;
+  let cleaned = String(candidate).toUpperCase().replace(/[^A-Z0-9/]/g, '');
+  if (!cleaned) return null;
+  cleaned = cleaned.replace(/^[A-Z]{2}\//, '');
+
+  const statePrefixMatch = cleaned.match(/^(MA|CT|RI|NH|NY|NJ|VT|ME)([A-Z]{1,4}\d{4,9})$/);
+  if (statePrefixMatch) cleaned = statePrefixMatch[2];
+
+  cleaned = cleaned.replace(/[^A-Z0-9]/g, '');
+  if (!cleaned || cleaned.length < 5 || cleaned.length > 12) return null;
+  if (/^0+$/.test(cleaned)) return null;
+  if (/^[A-HJ-NPR-Z0-9]{17}$/.test(cleaned)) return null;
+  if ((cleaned.match(/\d/g) || []).length < 2) return null;
+  if (/^(TITLE|TITL|INFORMATION|INFO|WARRANTY|WARR|ATTACHED|ABSENT|PENDING|NONE|NO|CERTIFICATE|ORIGIN|VEHICLE|STATE|NUMBER|DOCUMENT|SALVAGE|REBUILT|PARTS|REPAIRABLE)$/i.test(cleaned)) return null;
+  if (/^(TITLE|CERT|DOC|INFO|WARR)/i.test(cleaned) && (cleaned.match(/\d/g) || []).length < 4) return null;
+  return cleaned;
 }
 
 /**
@@ -391,6 +419,32 @@ function cleanRoleName(value) {
   return cleaned;
 }
 
+export function cleanDispositionName(value) {
+  if (!value) return null;
+  let cleaned = String(value || '').trim();
+  cleaned = cleaned
+    .replace(/^\s*(?:BUYER\s+NAME|BUYER|PURCHASER(?:\(S\))?\s+NAME(?:\(S\))?|PURCHASER|SOLD TO|CUSTOMER|TRANSFERRED TO)\s*[:#-]*/i, '')
+    .replace(/\b(?:ADDRESS|ADDR|CITY|STATE|ZIP|DATE OF SALE|TRANSACTION DATE)\b.*$/i, '')
+    .replace(/\b(?:DL|D\/L|DRIVER'?S?\s+LICENSE|LICENSE|LIC|AHTL|PHONE|TEL|DOB|SSN|SALESPERSON|SELLING PRICE|PRICE)\b.*$/i, '')
+    .replace(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g, ' ')
+    .replace(/\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/g, ' ')
+    .replace(/\$?\d[\d,]*(?:\.\d{2})?/g, ' ')
+    .replace(/[#()[\]{}|]/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/[.,;:\s]+$/g, '')
+    .trim();
+
+  cleaned = cleaned
+    .split(/\s+/)
+    .filter((token) => !/\d/.test(token))
+    .join(' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  if (!cleaned || cleaned.length < 3) return null;
+  return cleaned;
+}
+
 function splitAddressParts(street, cityStateZip) {
   const streetValue = String(street || '').replace(/\s+US$/i, '').trim();
   const geoValue = String(cityStateZip || '').replace(/\s+US$/i, '').trim();
@@ -443,11 +497,11 @@ function findNameNear(lines, startIndex, labelRegex, window = 5) {
     const line = lines[i] || '';
     const inline = line.match(labelRegex);
     if (inline?.[1]) {
-      const name = cleanRoleName(inline[1]);
+      const name = cleanDispositionName(inline[1]) || cleanRoleName(inline[1]);
       if (name) return name;
     }
     if (i > startIndex && !STREET_PATTERN.test(line) && !CITY_STATE_ZIP_PATTERN.test(line) && !/\b(Address|City|State|Zip|VIN|Total|Price|Date)\b/i.test(line)) {
-      const name = cleanRoleName(line);
+      const name = cleanDispositionName(line) || cleanRoleName(line);
       if (name) return name;
     }
   }
@@ -463,6 +517,9 @@ export function extractAcquisitionDetailsFromText(text) {
 
   const cmaa = extractCmaaAcquisitionDetails(lines);
   if (Object.keys(cmaa).length) return cmaa;
+
+  const knownAuction = extractKnownAuctionAcquisitionDetails(lines);
+  if (Object.keys(knownAuction).length) return knownAuction;
 
   const candidates = [];
   for (let i = 0; i < lines.length; i++) {
@@ -548,6 +605,53 @@ function extractCmaaAcquisitionDetails(lines) {
   });
 }
 
+function extractKnownAuctionAcquisitionDetails(lines) {
+  const fullText = lines.join(' ');
+  const knownAuctions = [
+    {
+      pattern: /\bADESA\s+Boston\b/i,
+      name: 'ADESA Boston',
+      address: '63 Western Avenue',
+      city: 'Framingham',
+      state: 'MA',
+      zip: '01702'
+    },
+    {
+      pattern: /\bAmerica'?s\s+(?:AA|Auto Auction)\s+Boston\b/i,
+      name: "America's AA Boston",
+      address: null,
+      city: 'North Billerica',
+      state: 'MA',
+      zip: null
+    }
+  ];
+
+  const known = knownAuctions.find((auction) => auction.pattern.test(fullText));
+  if (known) {
+    return clean({
+      purchasedFrom: known.name,
+      usedVehicleSourceAddress: known.address,
+      usedVehicleSourceCity: known.city,
+      usedVehicleSourceState: known.state,
+      usedVehicleSourceZipCode: known.zip,
+    });
+  }
+
+  const transactionLocation = fullText.match(/\b(?:Transaction Location|Auction Location|Facility|Remit Payment To)\s*[:#-]?\s*([A-Za-z0-9 .&'/-]*\b(?:ADESA|Manheim|Auction)\b[A-Za-z0-9 .&'/-]*)/i)?.[1];
+  const name = cleanRoleName(transactionLocation);
+  if (!name || !AUCTION_NAME_PATTERN.test(name)) return {};
+
+  const labelIndex = lines.findIndex((line) => /\b(Transaction Location|Auction Location|Facility|Remit Payment To)\b/i.test(line));
+  const address = labelIndex >= 0 ? findAddressNear(lines, labelIndex, 1, 5) : null;
+  return clean({
+    purchasedFrom: name,
+    usedVehicleSourceAddress: address?.address,
+    usedVehicleSourceCity: address?.city,
+    usedVehicleSourceState: address?.state,
+    usedVehicleSourceZipCode: address?.zip,
+  });
+}
+
 export function extractDispositionDetailsFromText(text) {
   const lines = normalizeDocumentLines(text);
   if (!lines.length) return {};
@@ -589,11 +693,11 @@ function extractMaTitleDispositionDetails(lines) {
   if (!/\bPrint Name\(s\) of Purchaser\(s\)/i.test(fullText)) return {};
 
   const labelIndex = lines.findIndex((line) => /\bPrint Name\(s\) of Purchaser\(s\)/i.test(line));
-  let name = cleanRoleName(
-    fullText.match(/\bPrint Name\(s\) of Purchaser\(s\)\s+(?:[A-Z]{2}\s+)?(?:State\s+)?(?:DL\s+Number\s+)?(.+?)\s+Address\s+City\s+State\s+Z(?:ip|p)\s+Code/i)?.[1]
-  );
+    let name = cleanDispositionName(
+      fullText.match(/\bPrint Name\(s\) of Purchaser\(s\)\s+(?:[A-Z]{2}\s+)?(?:State\s+)?(?:DL\s+Number\s+)?(.+?)\s+Address\s+City\s+State\s+Z(?:ip|p)\s+Code/i)?.[1]
+    );
   if (!name && labelIndex >= 0) {
-    name = cleanRoleName(lines[labelIndex + 1]);
+    name = cleanDispositionName(lines[labelIndex + 1]);
   }
 
   const streetSuffix = '(?:Street|St|Road|Rd|Avenue|Ave|Boulevard|Blvd|Drive|Dr|Turnpike|Tpke|Parkway|Pkwy|Way|Lane|Ln)';
@@ -604,7 +708,7 @@ function extractMaTitleDispositionDetails(lines) {
 
   if (!name && !addressMatch) return {};
   return {
-    disposedTo: name,
+    disposedTo: cleanDispositionName(name),
     disposedAddress: addressMatch?.[1]?.trim() || null,
     disposedCity: addressMatch?.[2]?.trim() || null,
     disposedState: addressMatch?.[3]?.toUpperCase() || null,
@@ -748,7 +852,9 @@ export function extractVehicleInfoFromText(text) {
     }
 
     if (/\bTitle\b/i.test(line) && !data.titleNumber) {
-      data.titleNumber = readValue(line, /Title\s*(?:No\.?|Number|#)?[:\s]*([A-Z0-9\-/]+)/i) || data.titleNumber;
+      data.titleNumber = normalizeTitleNumber(
+        readValue(line, /Title\s*(?:No\.?|Number|#|State\/Number)?[:\s]*([A-Z0-9\-/]+)/i)
+      ) || data.titleNumber;
     }
 
     if (/^Vehicle Ident|^VIN|Vehicle Identification Number/i.test(line) && !data.vin) {
@@ -1630,6 +1736,9 @@ function clean(d) {
       if (!raw) return null;
       
       // Strip label prefixes
+      const normalizedTitle = normalizeTitleNumber(raw);
+      if (normalizedTitle) return normalizedTitle;
+
       let cleaned = raw.trim()
         .replace(/^(title|cert(ificate)?|doc(ument)?|warranty|this|that|the|repairable|parts|prior|reconstructed|information|pending|salvage|see|check|none|not)[\s.:##-]*(no|number|num|id|#)?[\s.:##-]*/i, '')
         .replace(/^(no|number|num|#)[\s.:##-]*/i, '')
@@ -1645,7 +1754,7 @@ function clean(d) {
       const vinCandidate = cleaned.replace(/[^A-Z0-9]/gi, '');
       if (vinCandidate.length === 17 && vin && vinCandidate === vin) return null;
       
-      return cleaned.toUpperCase();
+      return normalizeTitleNumber(cleaned);
     })(),
     stockNumber: s(d.stockNumber) || null,
     purchasedFrom: cleanSourceName(s(d.purchasedFrom)),
@@ -1655,7 +1764,7 @@ function clean(d) {
     usedVehicleSourceCity: isBroadwayAddr(acq.a) ? null : (acq.c || null),
     usedVehicleSourceState: isBroadwayAddr(acq.a) ? null : st(acq.s, acq.z),
     usedVehicleSourceZipCode: isBroadwayAddr(acq.a) ? null : (s(acq.z) || null),
-    disposedTo: s(d.disposedTo) || null,
+    disposedTo: cleanDispositionName(d.disposedTo) || null,
     disposedAddress: isBroadwayAddr(disp.a) ? null : (disp.a || null),
     disposedCity: isBroadwayAddr(disp.a) ? null : (disp.c || null),
     disposedState: isBroadwayAddr(disp.a) ? null : st(disp.s, disp.z),

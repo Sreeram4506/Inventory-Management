@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cleanDispositionName,
   extractAcquisitionDetailsFromText,
   extractDispositionDetailsFromText,
+  extractTitleFromText,
   extractVehicleInfoFromText
 } from '../../server/services/documentParser.js';
 
@@ -149,6 +151,25 @@ describe('document parser fallback extraction', () => {
     expect(info.usedVehicleSourceZipCode).toBe('01540');
   });
 
+  it('uses known auction details instead of seller details on ADESA documents', () => {
+    const text = `
+      Invoice to Buyer from ADESA Boston
+      Buyer: Broadway Used Auto Sales Inc
+      Seller: Bernardi Toyota-Scion
+      Seller Address: 500 Worcester Road
+      Framingham, MA 01702
+      VIN 1HGCM82633A004352
+    `;
+
+    const info = extractAcquisitionDetailsFromText(text);
+
+    expect(info.purchasedFrom).toBe('ADESA Boston');
+    expect(info.usedVehicleSourceAddress).toBe('63 Western Avenue');
+    expect(info.usedVehicleSourceCity).toBe('Framingham');
+    expect(info.usedVehicleSourceState).toBe('MA');
+    expect(info.usedVehicleSourceZipCode).toBe('01702');
+  });
+
   it('extracts MA title transfer buyer details only when sale labels are present', () => {
     const text = `
       Print Name(s) of Purchaser(s) OL State DL Number
@@ -164,5 +185,27 @@ describe('document parser fallback extraction', () => {
     expect(info.disposedCity).toBe('Boston');
     expect(info.disposedState).toBe('MA');
     expect(info.disposedZip).toBe('02125');
+  });
+
+  it('removes customer, license, phone, and date numbers from disposition names', () => {
+    expect(cleanDispositionName('Nathaniel Eli Kianovsky 1/31/26 AHTL # 12345')).toBe('Nathaniel Eli Kianovsky');
+    expect(cleanDispositionName('Buyer Name: Jane Customer DL Number S12345678 Phone 617-555-1212')).toBe('Jane Customer');
+  });
+
+  it('extracts ADESA title state/number without returning title heading words', () => {
+    expect(extractTitleFromText('TITLE INFORMATION\nTitle State/Number: MA/BN355731 Certificate of Origin: No')).toBe('BN355731');
+    expect(extractTitleFromText('TITLE INFORMATION\nTitle State/Number: MABT686155 Certificate of Origin: No')).toBe('BT686155');
+    expect(extractTitleFromText('TITLE INFORMATION\nVehicle Information')).toBeNull();
+  });
+
+  it('extracts CMAA title numbers from State / Title # / VIN layouts', () => {
+    expect(extractTitleFromText('State Title # V.I.N. No.\nMA CK320305 2T1BU4EEXCC883365')).toBe('CK320305');
+    expect(extractTitleFromText('State | Title # | V.I.N. No.\nCT | AA2606042 1FMCU9JXXGUB02440')).toBe('AA2606042');
+  });
+
+  it('rejects title announcement words and warranty headings', () => {
+    expect(extractTitleFromText('CMAA BILL OF SALE AND TITLE WARRANTY')).toBeNull();
+    expect(extractTitleFromText('Announcements: TITLE ATTACHED')).toBeNull();
+    expect(extractTitleFromText('Announcements: TITLE ABSENT STRUCTURAL DAMAGE')).toBeNull();
   });
 });

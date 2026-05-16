@@ -3,6 +3,7 @@ import multer from 'multer';
 import { readFile } from 'fs/promises';
 import { authenticateToken } from '../middlewares/authMiddleware.js';
 import {
+  cleanDispositionName,
   extractAcquisitionDetailsFromText,
   extractDispositionDetailsFromText,
   extractVehicleInfo,
@@ -60,6 +61,10 @@ function clearDispositionInfo(info = {}) {
     disposedDlNumber: '',
     disposedDlState: '',
   };
+}
+
+function isAuctionSourceName(value) {
+  return /\b(ADESA|MANHEIM|CARMAX|CMAA|CENTRAL MASS|AMERICA'?S\s+(?:AA|AUTO AUCTION)|ACV|COPART|IAAI|AUCTION)\b/i.test(String(value || ''));
 }
 
 // Attempt to parse a simple US street address block from OCR/text
@@ -244,27 +249,34 @@ router.post(
         });
       }
 
-      // If still missing address, try extracting raw text and parsing an address block
+      // Prefer deterministic auction/facility details over AI seller/consignor guesses.
       const warnings = {};
-      if (!info.usedVehicleSourceAddress) {
-        try {
-          const rawText = await extractText(sourceFile.buffer, sourceFile.mimetype);
-          const parsed = extractAcquisitionDetailsFromText(rawText);
-          if (parsed && Object.keys(parsed).length) {
-            info.usedVehicleSourceAddress = parsed.usedVehicleSourceAddress || info.usedVehicleSourceAddress;
-            info.usedVehicleSourceCity = parsed.usedVehicleSourceCity || info.usedVehicleSourceCity;
-            info.usedVehicleSourceState = parsed.usedVehicleSourceState || info.usedVehicleSourceState;
-            info.usedVehicleSourceZipCode = parsed.usedVehicleSourceZipCode || info.usedVehicleSourceZipCode;
-            if (!info.purchasedFrom) info.purchasedFrom = parsed.purchasedFrom || info.purchasedFrom;
-            console.log('[DocumentRoute] Parsed address from text fallback:', parsed);
-          } else {
-            warnings.addressMissing = true;
-            console.log('[DocumentRoute] Address missing after text fallback');
+      try {
+        const rawText = await extractText(sourceFile.buffer, sourceFile.mimetype);
+        const parsed = extractAcquisitionDetailsFromText(rawText);
+        if (parsed && Object.keys(parsed).length) {
+          info.purchasedFrom = parsed.purchasedFrom || info.purchasedFrom;
+          if (parsed.usedVehicleSourceAddress) {
+            info.usedVehicleSourceAddress = parsed.usedVehicleSourceAddress;
+            info.usedVehicleSourceCity = parsed.usedVehicleSourceCity || '';
+            info.usedVehicleSourceState = parsed.usedVehicleSourceState || '';
+            info.usedVehicleSourceZipCode = parsed.usedVehicleSourceZipCode || '';
+          } else if (isAuctionSourceName(parsed.purchasedFrom)) {
+            info.usedVehicleSourceAddress = '';
+            info.usedVehicleSourceCity = '';
+            info.usedVehicleSourceState = '';
+            info.usedVehicleSourceZipCode = '';
           }
-        } catch (err) {
-          warnings.addressMissing = true;
-          console.warn('[DocumentRoute] Text fallback failed:', err?.message || err);
+          console.log('[DocumentRoute] Applied auction acquisition details from text:', parsed);
         }
+
+        if (!info.usedVehicleSourceAddress) {
+          warnings.addressMissing = true;
+          console.log('[DocumentRoute] Address missing after text fallback');
+        }
+      } catch (err) {
+        if (!info.usedVehicleSourceAddress) warnings.addressMissing = true;
+        console.warn('[DocumentRoute] Text fallback failed:', err?.message || err);
       }
 
       // ── Generate PDF AFTER all data corrections ──
@@ -473,7 +485,8 @@ router.post('/upload-bill-of-sale', upload.single('file'), async (req, res, next
     }
 
     // Use manual customer name fallback if AI didn't extract it
-    const customerName = billOfSaleInfo.disposedTo || req.body.customerName || 'Unknown Customer';
+    const customerName = cleanDispositionName(billOfSaleInfo.disposedTo || req.body.customerName) || 'Unknown Customer';
+    billOfSaleInfo.disposedTo = customerName !== 'Unknown Customer' ? customerName : '';
 
     // ── Step 3: VIN match in inventory ──
     let vehicle = await prisma.vehicle.findFirst({
