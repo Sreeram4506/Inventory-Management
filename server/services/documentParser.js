@@ -371,14 +371,23 @@ function isBroadwayValue(value) {
   return BROADWAY_PATTERN.test(String(value || ''));
 }
 
+function isHeaderishAddress(value) {
+  const text = String(value || '').trim();
+  if (!text) return true;
+  if (/^(address|city|state|zip|zip code|city state|city state zip|city state zp code)$/i.test(text)) return true;
+  if (!/\d/.test(text) && /\b(city|state|zip|address)\b/i.test(text)) return true;
+  return false;
+}
+
 function cleanRoleName(value) {
   if (!value) return null;
   const cleaned = String(value)
     .replace(/^\s*(?:BUYER|PURCHASER|SOLD TO|CUSTOMER|SELLER|DEALER|CONSIGNOR|FACILITY|AUCTION|REMIT PAYMENT TO|TRANSACTION LOCATION|BILL TO|SHIP TO)\b\s*[:#-]*/i, '')
     .replace(/\b(?:ADDRESS|ADDR|CITY|STATE|ZIP|DATE|VIN|STOCK|LOT|INVOICE|TOTAL)\b.*$/i, '')
     .replace(/\s{2,}/g, ' ')
+    .replace(/[.,;:\s]+$/g, '')
     .trim();
-  if (!cleaned || isBroadwayValue(cleaned)) return null;
+  if (!cleaned || cleaned.length < 3 || /^'?s$/i.test(cleaned) || isBroadwayValue(cleaned)) return null;
   return cleaned;
 }
 
@@ -406,7 +415,7 @@ function findAddressNear(lines, startIndex, direction = 1, window = 8) {
     const line = lines[i] || '';
     const inline = line.match(/(?:^|\s)Address(?!\()(?: \(number and street\))?\s*[:#-]?\s*(.+?)(?=\s+City\b|\s+State\b|\s+Zip\b|$)/i);
     const street = inline?.[1]?.trim() || (STREET_PATTERN.test(line) ? line : null);
-    if (!street || isBroadwayValue(street)) continue;
+    if (!street || isHeaderishAddress(street) || isBroadwayValue(street)) continue;
 
     const sameLineGeo = line.match(CITY_STATE_ZIP_PATTERN)?.[0] || '';
     const nextGeoLine = [lines[i + 1] || '', lines[i + 2] || ''].find((candidate) => CITY_STATE_ZIP_PATTERN.test(candidate)) || '';
@@ -449,6 +458,12 @@ export function extractAcquisitionDetailsFromText(text) {
   const lines = normalizeDocumentLines(text);
   if (!lines.length) return {};
 
+  const carMax = extractCarMaxAcquisitionDetails(lines);
+  if (Object.keys(carMax).length) return carMax;
+
+  const cmaa = extractCmaaAcquisitionDetails(lines);
+  if (Object.keys(cmaa).length) return cmaa;
+
   const candidates = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -482,13 +497,67 @@ export function extractAcquisitionDetailsFromText(text) {
   });
 }
 
+function extractCarMaxAcquisitionDetails(lines) {
+  const fullText = lines.join(' ');
+  if (!/\bCarMax\b/i.test(fullText)) return {};
+
+  let name = fullText.match(/\bSeller\s*:\s*(CarMax\s*[-–]\s*[A-Za-z .'-]+)/i)?.[1]
+    || fullText.match(/\b(CarMax\s*[-–]\s*[A-Za-z .'-]+)\s*,?\s*\(transferor'?s name\)/i)?.[1]
+    || fullText.match(/\b(CarMax\s*[-–]\s*[A-Za-z .'-]+)/i)?.[1]
+    || 'CarMax';
+  name = name.replace(/\s+/g, ' ').replace(/[.,;:\s]+$/g, '').trim();
+
+  let address = null;
+  const sellerIndex = lines.findIndex((line) => /\bSeller\s*:\s*CarMax\b/i.test(line));
+  if (sellerIndex >= 0) {
+    address = findAddressNear(lines, sellerIndex, 1, 5);
+  }
+
+  if (!address?.address) {
+    const addressMatch = fullText.match(/\b(\d{1,6}\s+[^,]{3,80}?\b(?:St|Street|Rd|Road|Ave|Avenue|Blvd|Drive|Dr|Tpke|Turnpike|Pkwy|Parkway|Way|Ln|Lane))\s+([A-Za-z .'-]+),?\s+(MA|CT|RI|NH|NY|NJ)\s+(\d{5}(?:-\d{4})?)/i);
+    if (addressMatch) {
+      address = {
+        address: addressMatch[1].trim(),
+        city: addressMatch[2].trim(),
+        state: addressMatch[3].toUpperCase(),
+        zip: addressMatch[4]
+      };
+    }
+  }
+
+  return clean({
+    purchasedFrom: name,
+    usedVehicleSourceAddress: address?.address,
+    usedVehicleSourceCity: address?.city,
+    usedVehicleSourceState: address?.state,
+    usedVehicleSourceZipCode: address?.zip,
+  });
+}
+
+function extractCmaaAcquisitionDetails(lines) {
+  const fullText = lines.join(' ');
+  if (!/\b(CMAA|Central Mass\.? Auto Auction)\b/i.test(fullText)) return {};
+
+  const addressMatch = fullText.match(/\b(12\s+Industrial\s+Park\s+East)\s*[-»]?\s*(Oxford),?\s*(MA)\s+(\d{5})/i);
+  return clean({
+    purchasedFrom: 'Central Mass. Auto Auction',
+    usedVehicleSourceAddress: addressMatch?.[1] || '12 Industrial Park East',
+    usedVehicleSourceCity: addressMatch?.[2] || 'Oxford',
+    usedVehicleSourceState: addressMatch?.[3] || 'MA',
+    usedVehicleSourceZipCode: addressMatch?.[4] || '01540',
+  });
+}
+
 export function extractDispositionDetailsFromText(text) {
   const lines = normalizeDocumentLines(text);
   if (!lines.length) return {};
 
+  const maTitleDisposition = extractMaTitleDispositionDetails(lines);
+  if (Object.keys(maTitleDisposition).length) return maTitleDisposition;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (!/\b(PURCHASER|BUYER|SOLD TO|CUSTOMER|TRANSFERRED TO)\b/i.test(line) || isBroadwayValue(line)) continue;
+    if (!hasDispositionLabel(line) || isBroadwayValue(line)) continue;
 
     const name = findNameNear(
       lines,
@@ -509,6 +578,38 @@ export function extractDispositionDetailsFromText(text) {
   }
 
   return {};
+}
+
+function hasDispositionLabel(line) {
+  return /(?:^|\s)(Print Name\(s\) of Purchaser\(s\)|Purchaser\(s\)? Name\(s\)|Buyer Name|Sold To\s*:|Customer\s*:|Transferred To\s*:)/i.test(line);
+}
+
+function extractMaTitleDispositionDetails(lines) {
+  const fullText = lines.join(' ');
+  if (!/\bPrint Name\(s\) of Purchaser\(s\)/i.test(fullText)) return {};
+
+  const labelIndex = lines.findIndex((line) => /\bPrint Name\(s\) of Purchaser\(s\)/i.test(line));
+  let name = cleanRoleName(
+    fullText.match(/\bPrint Name\(s\) of Purchaser\(s\)\s+(?:[A-Z]{2}\s+)?(?:State\s+)?(?:DL\s+Number\s+)?(.+?)\s+Address\s+City\s+State\s+Z(?:ip|p)\s+Code/i)?.[1]
+  );
+  if (!name && labelIndex >= 0) {
+    name = cleanRoleName(lines[labelIndex + 1]);
+  }
+
+  const streetSuffix = '(?:Street|St|Road|Rd|Avenue|Ave|Boulevard|Blvd|Drive|Dr|Turnpike|Tpke|Parkway|Pkwy|Way|Lane|Ln)';
+  const addressPattern = new RegExp(`\\bAddress\\s+City\\s+State\\s+Z(?:ip|p)\\s+Code\\s+(\\d{1,6}\\s+.+?\\b${streetSuffix}\\b)\\s+([A-Za-z .'-]+?)\\s+([A-Z]{2})\\s+(\\d{5}(?:-\\d{4})?)`, 'i');
+  const nearbyAddressPattern = new RegExp(`\\b(\\d{1,6}\\s+.+?\\b${streetSuffix}\\b)\\s+([A-Za-z .'-]+?)\\s+([A-Z]{2})\\s+(\\d{5}(?:-\\d{4})?)`, 'i');
+  const addressMatch = fullText.match(addressPattern)
+    || (labelIndex >= 0 ? lines.slice(labelIndex + 1, labelIndex + 6).join(' ').match(nearbyAddressPattern) : null);
+
+  if (!name && !addressMatch) return {};
+  return {
+    disposedTo: name,
+    disposedAddress: addressMatch?.[1]?.trim() || null,
+    disposedCity: addressMatch?.[2]?.trim() || null,
+    disposedState: addressMatch?.[3]?.toUpperCase() || null,
+    disposedZip: addressMatch?.[4] || null,
+  };
 }
 
 function extractFallbackInfo(text, purpose) {

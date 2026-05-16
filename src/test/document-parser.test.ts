@@ -107,4 +107,62 @@ describe('document parser fallback extraction', () => {
     expect(info.disposedState).toBe('MA');
     expect(info.disposedZip).toBe('02169');
   });
+
+  it('extracts CarMax auction acquisition details without treating boilerplate purchaser text as disposition', () => {
+    const text = `
+      Wholesale Bill of Sale
+      CarMax ("Seller") agrees to sell and Purchaser agrees to buy the vehicle identified below.
+      Seller: CarMax - Westborough
+      170 Turnpike Rd
+      Westborough, MA 01581
+      Purchaser hereby acknowledges that Purchaser has read the terms.
+    `;
+
+    const acquisition = extractAcquisitionDetailsFromText(text);
+    const disposition = extractDispositionDetailsFromText(text);
+
+    expect(acquisition.purchasedFrom).toBe('CarMax - Westborough');
+    expect(acquisition.usedVehicleSourceAddress).toBe('170 Turnpike Rd');
+    expect(acquisition.usedVehicleSourceCity).toBe('Westborough');
+    expect(acquisition.usedVehicleSourceState).toBe('MA');
+    expect(acquisition.usedVehicleSourceZipCode).toBe('01581');
+    expect(disposition).toEqual({});
+  });
+
+  it('extracts CMAA facility details for acquisition', () => {
+    const text = `
+      CMAA BILL OF SALE AND TITLE WARRANTY
+      Central Mass. Auto Auction
+      12 Industrial Park East - Oxford, MA 01540
+      Buyer Fee
+      BROADWAY USED AUTO SALES INC
+      100 BROADWAY
+      NORWOOD, MA 02062
+    `;
+
+    const info = extractAcquisitionDetailsFromText(text);
+
+    expect(info.purchasedFrom).toBe('Central Mass. Auto Auction');
+    expect(info.usedVehicleSourceAddress).toBe('12 Industrial Park East');
+    expect(info.usedVehicleSourceCity).toBe('Oxford');
+    expect(info.usedVehicleSourceState).toBe('MA');
+    expect(info.usedVehicleSourceZipCode).toBe('01540');
+  });
+
+  it('extracts MA title transfer buyer details only when sale labels are present', () => {
+    const text = `
+      Print Name(s) of Purchaser(s) OL State DL Number
+      Nathaniel Eli Kianovsky
+      Address City State Zip Code
+      127 Sydney Street Boston MA 02125
+    `;
+
+    const info = extractDispositionDetailsFromText(text);
+
+    expect(info.disposedTo).toBe('Nathaniel Eli Kianovsky');
+    expect(info.disposedAddress).toBe('127 Sydney Street');
+    expect(info.disposedCity).toBe('Boston');
+    expect(info.disposedState).toBe('MA');
+    expect(info.disposedZip).toBe('02125');
+  });
 });

@@ -46,6 +46,22 @@ function mergeExtractionInfo(baseInfo, fallbackInfo) {
   return merged;
 }
 
+function clearDispositionInfo(info = {}) {
+  return {
+    ...info,
+    disposedTo: '',
+    disposedAddress: '',
+    disposedCity: '',
+    disposedState: '',
+    disposedZip: '',
+    disposedDate: null,
+    disposedPrice: 0,
+    disposedOdometer: 0,
+    disposedDlNumber: '',
+    disposedDlState: '',
+  };
+}
+
 // Attempt to parse a simple US street address block from OCR/text
 function parseAddressFromText(text) {
   if (!text || !text.trim()) return null;
@@ -202,17 +218,13 @@ router.post(
         });
       }
 
-      // ── Extract data from document (purpose: auto) ──
+      // ── Extract acquisition data only. Disposition is filled later from a sale bill of sale. ──
       info = await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype, '');
-      if (!info || !info.vin || !info.make || !info.model) {
-        const saleFallback = await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype, 'sale');
-        info = mergeExtractionInfo(info, saleFallback);
-      }
       if (!info || !info.vin || !info.make || !info.model) {
         const acquisitionFallback = await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype, 'acquisition');
         info = mergeExtractionInfo(info, acquisitionFallback);
       }
-      info = info || {};
+      info = clearDispositionInfo(info || {});
       console.log(`[UserForm] Extracted VIN: ${info.vin}, Make: ${info.make}, Model: ${info.model}`);
 
       // ── Generate PDF ──
@@ -230,17 +242,6 @@ router.post(
           status: 'error',
           message: 'Could not extract a valid VIN from the document. Please ensure the image is clear and try again.'
         });
-      }
-
-      // If source address is missing but a disposed address was found, 
-      // it means the AI likely flipped the roles. Use the found address as a fallback.
-      if (!info.usedVehicleSourceAddress && info.disposedAddress) {
-        console.log(`[DocumentRoute] Falling back to disposedAddress for sourceAddress extraction`);
-        info.usedVehicleSourceAddress = info.disposedAddress;
-        info.usedVehicleSourceCity = info.disposedCity;
-        info.usedVehicleSourceState = info.disposedState;
-        info.usedVehicleSourceZipCode = info.disposedZip;
-        if (!info.purchasedFrom) info.purchasedFrom = info.disposedTo;
       }
 
       // If still missing address, try extracting raw text and parsing an address block
@@ -283,8 +284,18 @@ router.post(
           sellerAddress: info.usedVehicleSourceAddress || null,
           sellerCity: info.usedVehicleSourceCity || null,
           sellerState: info.usedVehicleSourceState || null,
-          sellerZip: info.usedVehicleSourceZipCode || null,
-          documentType: 'Used Vehicle Record',
+            sellerZip: info.usedVehicleSourceZipCode || null,
+            disposedTo: null,
+            disposedAddress: null,
+            disposedCity: null,
+            disposedState: null,
+            disposedZip: null,
+            disposedDate: null,
+            disposedPrice: null,
+            disposedOdometer: null,
+            disposedDlNumber: null,
+            disposedDlState: null,
+            documentType: 'Used Vehicle Record',
           documentBase64: pdfBase64Str,
           sourceFileName: sourceFile.originalname || null,
           sourceDocumentBase64: sourceFile.buffer.toString('base64'),
