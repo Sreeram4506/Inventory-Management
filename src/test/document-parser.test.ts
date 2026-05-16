@@ -5,6 +5,7 @@ import {
   extractDispositionDetailsFromText,
   extractTitleFromText,
   extractTotalFromText,
+  extractVinFromText,
   extractVehicleInfoFromText
 } from '../../server/services/documentParser.js';
 
@@ -65,6 +66,14 @@ describe('document parser fallback extraction', () => {
     expect(info.disposedZip).toBe('02169');
   });
 
+  it('extracts a VIN from OCR text with spaces and punctuation between characters', () => {
+    const text = `
+      Vehicle Ident. No. 1 H G C M 8 2 6 3 3 A 0 0 4 3 5 2
+    `;
+
+    expect(extractVinFromText(text)).toBe('1HGCM82633A004352');
+  });
+
   it('parses acquisition total due and ignores sale price lines', () => {
     const text = `
       Motor Vehicle Purchase Contract
@@ -74,6 +83,22 @@ describe('document parser fallback extraction', () => {
     `;
 
     expect(extractTotalFromText(text, 'acquisition')).toBe(24200);
+  });
+
+  it('extracts disposition sale price and acquisition purchase total from raw text', () => {
+    const text = `
+      SALE PRICE: $12,500
+      Purchase Price: $11,800
+      Total Due: $11,800
+    `;
+
+    const info = extractVehicleInfoFromText(text);
+    expect(info.disposedPrice).toBe(12500);
+    expect(info.purchasePrice).toBe(11800);
+  });
+
+  it('does not accept an obviously low acquisition total as a valid vehicle price', () => {
+    expect(extractTotalFromText('Total Due: $11.00', 'acquisition')).toBeNull();
   });
 
   it('prefers auction facility details over Broadway buyer details for acquisitions', () => {

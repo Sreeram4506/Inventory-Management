@@ -57,6 +57,25 @@ function isPdfBuffer(fileBuffer) {
   return header === '%PDF-';
 }
 
+function determineDocumentPurpose(text) {
+  if (!text) return null;
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  let score = 0;
+
+  const scoreMatch = (regex, points) => {
+    if (regex.test(normalized)) score += points;
+  };
+
+  scoreMatch(/\b(?:Sale Price|Vehicle Sales Price|Vehicle Sales Amount|Sold Price|Sold To|Purchaser\(s\)?|Purchaser|Buyer Name|Buyer:|Purchaser:|Transferred To|Disposition of Motor Vehicle|Vehicle Sales Price)\b/i, 2);
+  scoreMatch(/\b(?:Purchase Price|Total Due|Amount Due|Balance Due|Buyer Fee|Obtained From|Purchased From|Seller:|Consignor|Auction Location|Facility|Remit Payment To|Acquisition of Motor Vehicle)\b/i, -2);
+  scoreMatch(/\b(?:Bill of Sale|Motor Vehicle Purchase Contract|Wholesale Bill of Sale|Buyers Receipt|Purchaser\(s\) Name\(s\))\b/i, 1);
+  scoreMatch(/\b(?:Auction Bill of Sale|Invoice to Buyer from|Buyer Fee)\b/i, -1);
+
+  if (score > 0) return 'sale';
+  if (score < 0) return 'acquisition';
+  return null;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // POST-PROCESSING: Deterministic price & title extraction from raw text
 // These run AFTER AI extraction and OVERRIDE the AI if they find better data
@@ -76,6 +95,7 @@ function extractTotalFromText(text, purpose = '') {
   const saleMarkers = /\b(?:SALE\s*PRICE|SELLING\s*PRICE|VEHICLE\s*SALES\s*PRICE|SOLD\s*PRICE|SALE\s*AMOUNT|SELLING\s*AMOUNT)\b/i;
   const skipMarkers = /\bSUBTOTAL\b/i;
   const excludeSaleMarkers = /\bTOTAL\s+(?:SALE|SELLING)\s+PRICE\b/i;
+  const minValue = purpose === 'acquisition' || purpose === 'sale' ? 50 : 10;
   const candidates = [];
 
   const extractAmounts = (source) => {
@@ -100,7 +120,7 @@ function extractTotalFromText(text, purpose = '') {
       (saleMarkers.test(line) ? 20 : 0);
 
     for (const value of values) {
-      if (value >= 10) candidates.push({ value, weight });
+      if (value >= minValue) candidates.push({ value, weight });
     }
   }
 
@@ -108,7 +128,7 @@ function extractTotalFromText(text, purpose = '') {
     const footerLines = lines.slice(-12).join(' ');
     const values = extractAmounts(footerLines);
     for (const value of values) {
-      if (value >= 10) candidates.push({ value, weight: 1 });
+      if (value >= minValue) candidates.push({ value, weight: 1 });
     }
   }
 
@@ -126,7 +146,7 @@ function extractTotalFromText(text, purpose = '') {
     while ((match = broadRegex.exec(text)) !== null) {
       const values = extractAmounts(match[1]);
       for (const value of values) {
-        if (value >= 10) candidates.push({ value, weight: 1 });
+        if (value >= minValue) candidates.push({ value, weight: 1 });
       }
     }
     if (candidates.length) {
@@ -146,20 +166,45 @@ function extractTotalFromText(text, purpose = '') {
 function extractVinFromText(text) {
   if (!text) return null;
 
-  const normalizedText = text.replace(/[^A-Z0-9\n]/gi, ' ').toUpperCase();
-  const rawCandidates = new Set(normalizedText.match(/\b[A-HJ-NPR-Z0-9]{17}\b/g) || []);
   const normalizeVin = (vin) => vin.replace(/[IOQ]/g, (char) => (char === 'I' ? '1' : '0'));
+  const candidates = new Set();
 
-  for (const candidate of rawCandidates) {
+  const normalizedText = text.replace(/[^A-Z0-9\n]/gi, ' ').toUpperCase();
+  for (const match of normalizedText.match(/\b[A-HJ-NPR-Z0-9]{17}\b/g) || []) {
+    candidates.add(match);
+  }
+
+  const flatten = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  for (let i = 0; i + 17 <= flatten.length; i++) {
+    const candidate = flatten.slice(i, i + 17);
+    if (/^[A-HJ-NPR-Z0-9]{17}$/.test(candidate)) {
+      candidates.add(candidate);
+    }
+  }
+
+  const vinLabelPattern = /\bVIN\b[:\s]*([A-Z0-9\s-]{17,40})/i;
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(vinLabelPattern);
+    if (!match) continue;
+    const condensed = match[1].replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    for (let i = 0; i + 17 <= condensed.length; i++) {
+      const candidate = condensed.slice(i, i + 17);
+      if (/^[A-HJ-NPR-Z0-9]{17}$/.test(candidate)) {
+        candidates.add(candidate);
+      }
+    }
+  }
+
+  for (const candidate of candidates) {
     if (isValidVin(candidate)) return candidate;
   }
 
-  for (const candidate of rawCandidates) {
+  for (const candidate of candidates) {
     const fixed = normalizeVin(candidate);
     if (fixed !== candidate && isValidVin(fixed)) return fixed;
   }
 
-  return rawCandidates.values().next().value || null;
+  return candidates.values().next().value || null;
 }
 
 /**
@@ -299,8 +344,8 @@ function isReasonableTotal(value) {
   if (!Number.isFinite(num)) return false;
   // Reject obviously OCR-misread huge values
   if (num > 100000) return false;
-  // Reject negative, zero, or tiny cents-only values
-  if (num <= 0) return false;
+  // Reject negative, zero, or tiny values that are unlikely to be vehicle totals
+  if (num < 50) return false;
   return true;
 }
 
@@ -333,6 +378,19 @@ function postProcessResult(result, rawText, purpose) {
         result[f] = parsed[f];
       }
     }
+
+    const mergeParsedPrice = (field) => {
+      const parsedValue = parsed[field];
+      if (Number.isFinite(parsedValue) && isReasonableTotal(parsedValue)) {
+        const existing = Number(result[field] || 0);
+        if (!isReasonableTotal(existing) || existing === 0) {
+          result[field] = parsedValue;
+        }
+      }
+    };
+    mergeParsedPrice('purchasePrice');
+    mergeParsedPrice('disposedPrice');
+
     // If document contains explicit 'auction' markers, prefer that as purchasedFrom
     const auction = inferAuctionFromText(rawText || '');
     if ((purpose === 'acquisition' || /\bauction\b/i.test(rawText)) && auction) {
@@ -822,6 +880,8 @@ export function extractVehicleInfoFromText(text) {
     color: null,
     titleNumber: null,
     mileage: null,
+    purchasePrice: null,
+    disposedPrice: null,
     purchasedFrom: null,
     usedVehicleSourceAddress: null,
     usedVehicleSourceCity: null,
@@ -839,6 +899,13 @@ export function extractVehicleInfoFromText(text) {
   const readValue = (line, regex) => {
     const match = line.match(regex);
     return match ? match[1].trim() : '';
+  };
+
+  const parseCurrencyValue = (value) => {
+    if (!value) return null;
+    const sanitized = String(value).replace(/[^0-9.]/g, '');
+    const parsed = Number(sanitized);
+    return Number.isFinite(parsed) ? parsed : null;
   };
 
   const addAddress = (line) => {
@@ -929,6 +996,19 @@ export function extractVehicleInfoFromText(text) {
       ) || data.titleNumber;
     }
 
+    if (!data.disposedPrice) {
+      const priceMatch = line.match(/(?:Sale Price|Vehicle Sales Price|Sale Amount|Sold Price|Vehicle Sales Amount)\s*[:\-\s]*\$?([\d,]+(?:\.\d{1,2})?)/i);
+      if (priceMatch) {
+        data.disposedPrice = parseCurrencyValue(priceMatch[1]);
+      }
+    }
+    if (!data.purchasePrice) {
+      const purchaseMatch = line.match(/(?:Purchase Price|Total Due|Amount Due|Balance Due|Amount Payable|Net Amount|Invoice Total|Bill Total|Total Amount)\s*[:\-\s]*\$?([\d,]+(?:\.\d{1,2})?)/i);
+      if (purchaseMatch) {
+        data.purchasePrice = parseCurrencyValue(purchaseMatch[1]);
+      }
+    }
+
     if (/^Vehicle Ident|^VIN|Vehicle Identification Number/i.test(line) && !data.vin) {
       const condensed = line.toUpperCase().replace(/[^A-Z0-9]/g, '');
       const tailMatch = condensed.match(/([A-Z0-9]{17})$/);
@@ -963,6 +1043,8 @@ export function extractVehicleInfoFromText(text) {
     color: data.color,
     titleNumber: data.titleNumber,
     mileage: data.mileage,
+    purchasePrice: data.purchasePrice,
+    disposedPrice: data.disposedPrice,
     purchasedFrom: data.purchasedFrom,
     usedVehicleSourceAddress: data.usedVehicleSourceAddress,
     usedVehicleSourceCity: data.usedVehicleSourceCity,
@@ -1015,9 +1097,10 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
   if (mimetype.startsWith('image/')) {
     // Always run OCR so we have raw text for post-processing
     const ocrText = await ocrImage(fileBuffer);
+    const effectivePurpose = purpose || determineDocumentPurpose(ocrText) || '';
     
     try {
-      const visionResult = await visionExtract(fileBuffer, mimetype, purpose);
+      const visionResult = await visionExtract(fileBuffer, mimetype, effectivePurpose);
       if (visionResult && (visionResult.vin || visionResult.make || visionResult.disposedTo)) {
         // Post-process: fix price and title using OCR text
         // If vision misses make/model/year, try heuristic on OCR text
@@ -1029,7 +1112,7 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
             visionResult.year = visionResult.year || heuristic.year;
           }
         }
-        return postProcessResult(visionResult, ocrText, purpose);
+        return postProcessResult(visionResult, ocrText, effectivePurpose);
       }
     } catch (err) {
       console.warn(`[Parser] Vision AI failed, falling back to OCR: ${err.message}`);
@@ -1038,9 +1121,9 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
     // Fallback: OCR text to LLM
     if (hasNvidiaKey && ocrText.length > 30) {
       try {
-        const textResult = await textExtract(ocrText, purpose);
+        const textResult = await textExtract(ocrText, effectivePurpose);
         if (textResult && (textResult.vin || textResult.make || textResult.disposedTo)) {
-          return postProcessResult(textResult, ocrText, purpose);
+          return postProcessResult(textResult, ocrText, effectivePurpose);
         }
       } catch (err) {
         console.warn(`[Parser] Text LLM failed after OCR: ${err.message}`);
@@ -1048,7 +1131,7 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
     }
 
     // RETRY: If purpose was 'auto' or empty and we got nothing, retry with 'acquisition' prompt
-    if (purpose !== 'acquisition' && hasNvidiaKey) {
+    if (effectivePurpose !== 'acquisition' && hasNvidiaKey) {
       console.log(`[Parser] Auto-detect returned empty. Retrying with acquisition prompt...`);
       try {
         const retryVision = await visionExtract(fileBuffer, mimetype, 'acquisition');
@@ -1080,7 +1163,7 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
       }
     }
 
-    const fallbackResult = extractFallbackInfo(ocrText, purpose);
+    const fallbackResult = extractFallbackInfo(ocrText, effectivePurpose);
     if (fallbackResult) return fallbackResult;
 
     return {};
@@ -1090,11 +1173,12 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
   if (isPdfMimeType(mimetype) || isPdfBuffer(fileBuffer)) {
     const { pages, combinedText } = await extractPdfTextPages(fileBuffer);
     console.log(`[Parser] PDF native text: ${combinedText.length} chars`);
+    const effectivePurpose = purpose || determineDocumentPurpose(combinedText) || '';
 
     // If PDF has native text, use text LLM
     if (combinedText.replace(/\s/g, '').length > 30 && hasNvidiaKey) {
       try {
-        const textResult = await textExtract(combinedText, purpose);
+        const textResult = await textExtract(combinedText, effectivePurpose);
         if (textResult && (textResult.vin || textResult.make || textResult.disposedTo)) {
           // Heuristic fill for missing make/model/year
           if ((!textResult.make || !textResult.model || !textResult.year) && combinedText) {
@@ -1105,7 +1189,7 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
               textResult.year = textResult.year || heuristic.year;
             }
           }
-          return postProcessResult(textResult, combinedText, purpose);
+          return postProcessResult(textResult, combinedText, effectivePurpose);
         }
       } catch (err) {
         console.warn(`[Parser] Text LLM failed on native PDF text: ${err.message}`);
@@ -1114,14 +1198,14 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
 
     // Scanned PDF or text extraction failed — render to image, use vision
     try {
-      const visionResult = await visionExtract(fileBuffer, mimetype, purpose);
-      if (visionResult) return postProcessResult(visionResult, combinedText, purpose);
+      const visionResult = await visionExtract(fileBuffer, mimetype, effectivePurpose);
+      if (visionResult) return postProcessResult(visionResult, combinedText, effectivePurpose);
     } catch (err) {
       console.warn(`[Parser] Vision AI failed on PDF render: ${err.message}`);
     }
 
     // RETRY: If purpose was 'auto' or empty and we got nothing, retry with 'acquisition' prompt
-    if (purpose !== 'acquisition' && hasNvidiaKey) {
+    if (effectivePurpose !== 'acquisition' && hasNvidiaKey) {
       console.log(`[Parser] Auto-detect for PDF returned empty. Retrying with acquisition prompt...`);
       if (combinedText.replace(/\s/g, '').length > 30) {
         try {
@@ -1155,7 +1239,7 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
     // If Vision AI is unavailable or fails, OCR the PDF to salvage VIN/total/title data
     const pdfOcrText = await ocrPdf(fileBuffer, 2);
     if (pdfOcrText && pdfOcrText.replace(/\s/g, '').length > 30) {
-      const fallbackResult = extractFallbackInfo(pdfOcrText, purpose);
+      const fallbackResult = extractFallbackInfo(pdfOcrText, effectivePurpose);
       // supplement fallback with heuristic make/model/year
       if (fallbackResult) {
         if ((!fallbackResult.make || !fallbackResult.model || !fallbackResult.year) && pdfOcrText) {
@@ -1170,7 +1254,7 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
       }
     }
 
-    const fallbackResult = extractFallbackInfo(combinedText, purpose);
+    const fallbackResult = extractFallbackInfo(combinedText, effectivePurpose);
     if (fallbackResult) return fallbackResult;
 
     return {};
@@ -1178,16 +1262,17 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
 
   // Word docs and other text
   const text = await extractText(fileBuffer, mimetype);
+  const effectivePurpose = purpose || determineDocumentPurpose(text) || '';
   if (hasNvidiaKey && text.length > 30) {
     try {
-      const textResult = await textExtract(text, purpose);
-      if (textResult) return postProcessResult(textResult, text, purpose);
+      const textResult = await textExtract(text, effectivePurpose);
+      if (textResult) return postProcessResult(textResult, text, effectivePurpose);
     } catch (err) {
       console.warn(`[Parser] Text LLM failed on Word/Other: ${err.message}`);
     }
   }
 
-  const fallbackResult = extractFallbackInfo(text, purpose);
+  const fallbackResult = extractFallbackInfo(text, effectivePurpose);
   if (fallbackResult) return fallbackResult;
 
   return {};
