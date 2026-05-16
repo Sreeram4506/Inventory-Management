@@ -4,6 +4,7 @@ import {
   extractAcquisitionDetailsFromText,
   extractDispositionDetailsFromText,
   extractTitleFromText,
+  extractTotalFromText,
   extractVehicleInfoFromText
 } from '../../server/services/documentParser.js';
 
@@ -62,6 +63,17 @@ describe('document parser fallback extraction', () => {
     expect(info.vin).toBe('104RJEAG0PC123456');
     expect(info.usedVehicleSourceZipCode).toBe('02118');
     expect(info.disposedZip).toBe('02169');
+  });
+
+  it('parses acquisition total due and ignores sale price lines', () => {
+    const text = `
+      Motor Vehicle Purchase Contract
+      Sale Price: $23,000
+      Buyer Fee: $1,200
+      Total Due: $24,200
+    `;
+
+    expect(extractTotalFromText(text, 'acquisition')).toBe(24200);
   });
 
   it('prefers auction facility details over Broadway buyer details for acquisitions', () => {

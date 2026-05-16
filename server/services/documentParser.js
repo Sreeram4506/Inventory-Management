@@ -66,12 +66,14 @@ function isPdfBuffer(fileBuffer) {
  * Scans raw OCR/PDF text for a "TOTAL" line and extracts the dollar amount.
  * Returns the total price if found, or null if not found.
  */
-function extractTotalFromText(text) {
+function extractTotalFromText(text, purpose = '') {
   if (!text) return null;
 
   const lines = text.split(/\r?\n/);
   const amountRegex = /(\$|USD)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)/g;
-  const totalMarkers = /\b(?:TOTAL\s*(?:AMOUNT|DUE|PAYABLE)?|BALANCE\s+DUE|AMOUNT\s+DUE|TOTAL\s+DUE|DUE\s+NOW|AMOUNT\s+PAYABLE|NET\s+AMOUNT|BALANCE)(?!\s*FORWARD)\b/i;
+  const totalMarkers = /\b(?:TOTAL\s*(?:AMOUNT|DUE|PAYABLE)?|BALANCE\s+DUE|AMOUNT\s+DUE|TOTAL\s+DUE|DUE\s+NOW|AMOUNT\s+PAYABLE|NET\s+AMOUNT|BALANCE|INVOICE\s+TOTAL|BILL\s+TOTAL)\b(?!\s*FORWARD)/i;
+  const purchaseMarkers = /\b(?:PURCHASE\s*PRICE|AMOUNT\s*DUE|BALANCE\s*DUE|TOTAL\s*DUE|TOTAL\s*AMOUNT|AMOUNT\s*PAYABLE|NET\s*AMOUNT|INVOICE\s*TOTAL|BILL\s*TOTAL|BUYER\s*FEE)\b/i;
+  const saleMarkers = /\b(?:SALE\s*PRICE|SELLING\s*PRICE|VEHICLE\s*SALES\s*PRICE|SOLD\s*PRICE|SALE\s*AMOUNT|SELLING\s*AMOUNT)\b/i;
   const skipMarkers = /\bSUBTOTAL\b/i;
   const excludeSaleMarkers = /\bTOTAL\s+(?:SALE|SELLING)\s+PRICE\b/i;
   const candidates = [];
@@ -83,13 +85,22 @@ function extractTotalFromText(text) {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (!totalMarkers.test(line) || skipMarkers.test(line)) continue;
+    if (skipMarkers.test(line)) continue;
+    if (purpose === 'acquisition' && saleMarkers.test(line)) continue;
+    if (!totalMarkers.test(line) && !purchaseMarkers.test(line)) continue;
     if (excludeSaleMarkers.test(line)) continue;
 
     const combined = [line, lines[i + 1] || '', lines[i - 1] || ''].join(' ');
     const values = extractAmounts(combined);
+    if (!values.length) continue;
+
+    const weight =
+      (totalMarkers.test(line) ? 10 : 0) +
+      (purchaseMarkers.test(line) ? 8 : 0) -
+      (saleMarkers.test(line) ? 20 : 0);
+
     for (const value of values) {
-      if (value >= 10) candidates.push(value);
+      if (value >= 10) candidates.push({ value, weight });
     }
   }
 
@@ -97,11 +108,17 @@ function extractTotalFromText(text) {
     const footerLines = lines.slice(-12).join(' ');
     const values = extractAmounts(footerLines);
     for (const value of values) {
-      if (value >= 10) candidates.push(value);
+      if (value >= 10) candidates.push({ value, weight: 1 });
     }
   }
 
-  let totalPrice = candidates.length ? Math.max(...candidates) : null;
+  let totalPrice = null;
+  if (candidates.length) {
+    const sorted = candidates
+      .map((candidate) => (typeof candidate === 'number' ? { value: candidate, weight: 1 } : candidate))
+      .sort((a, b) => b.weight - a.weight || b.value - a.value);
+    totalPrice = sorted[0]?.value || null;
+  }
 
   if (!totalPrice) {
     const broadRegex = /\b(?:TOTAL\s*(?:AMOUNT|DUE|PAYABLE)?|BALANCE\s+DUE|AMOUNT\s+DUE|TOTAL\s+DUE|DUE\s+NOW|AMOUNT\s+PAYABLE|NET\s+AMOUNT|BALANCE)(?!\s*FORWARD)\b[\s:\-]*([^\n]*)/gi;
@@ -109,10 +126,15 @@ function extractTotalFromText(text) {
     while ((match = broadRegex.exec(text)) !== null) {
       const values = extractAmounts(match[1]);
       for (const value of values) {
-        if (value >= 10) candidates.push(value);
+        if (value >= 10) candidates.push({ value, weight: 1 });
       }
     }
-    if (candidates.length) totalPrice = Math.max(...candidates);
+    if (candidates.length) {
+      const sorted = candidates
+        .map((candidate) => (typeof candidate === 'number' ? { value: candidate, weight: 1 } : candidate))
+        .sort((a, b) => b.weight - a.weight || b.value - a.value);
+      totalPrice = sorted[0]?.value || null;
+    }
   }
 
   if (totalPrice) {
@@ -237,6 +259,10 @@ function mergeFallbackResult(result, fallback) {
     if (value === undefined || value === null || value === '') continue;
     const target = merged[key];
     if (target === undefined || target === null || target === '' || target === 0) {
+      // Do not accept unreasonable numeric totals from fallback
+      if ((key === 'purchasePrice' || key === 'disposedPrice') && !isReasonableTotal(value)) {
+        continue;
+      }
       merged[key] = value;
       continue;
     }
@@ -244,8 +270,38 @@ function mergeFallbackResult(result, fallback) {
     if (isSuspiciousValue(target) && !isSuspiciousValue(value)) {
       merged[key] = value;
     }
+    // If existing numeric price looks unreasonable, prefer a reasonable fallback
+    if ((key === 'purchasePrice' || key === 'disposedPrice')) {
+      const parseNum = (v) => {
+        if (v === undefined || v === null) return NaN;
+        const n = Number(String(v).replace(/[^0-9.-]+/g, ''));
+        return Number.isFinite(n) ? n : NaN;
+      };
+      const targetNum = parseNum(target);
+      const valueNum = parseNum(value);
+      const targetBad = !isReasonableTotal(targetNum);
+      const valueGood = isReasonableTotal(valueNum);
+      if (targetBad && valueGood) {
+        merged[key] = valueNum;
+      } else if (targetBad && !valueGood) {
+        // remove obviously bad numeric value if no good fallback
+        delete merged[key];
+      }
+    }
   }
   return merged;
+}
+
+// Basic sanity checks for numeric totals/prices
+function isReasonableTotal(value) {
+  if (value === undefined || value === null) return false;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return false;
+  // Reject obviously OCR-misread huge values
+  if (num > 100000) return false;
+  // Reject negative, zero, or tiny cents-only values
+  if (num <= 0) return false;
+  return true;
 }
 
 function postProcessResult(result, rawText, purpose) {
@@ -321,25 +377,36 @@ function postProcessResult(result, rawText, purpose) {
     }
   }
 
-  // Fix price: override AI's sale values with the actual TOTAL.
+  // Fix price: override AI's sale values with the actual TOTAL if reasonable.
   const totalFromText = extractTotalFromText(rawText);
   if (totalFromText) {
     const total = Number(totalFromText);
-    if (purpose === 'acquisition' || purpose === '') {
-      const priceField = 'purchasePrice';
-      const currentPrice = Number(result[priceField] || 0);
-      if (!currentPrice || total > currentPrice) {
-        console.log(`[Parser:PostProcess] Overriding ${priceField}: ${currentPrice} → ${total} (TOTAL from document text)`);
-        result[priceField] = total;
+    if (!isReasonableTotal(total)) {
+      console.log(`[Parser:PostProcess] Skipping TOTAL override: ${total} flagged as unreasonable`);
+    } else {
+      // Accept both 'sale' and legacy 'disposition' for sale-purpose
+      const isSalePurpose = purpose === 'sale' || purpose === 'disposition';
+      if (purpose === 'acquisition' || purpose === '') {
+        const priceField = 'purchasePrice';
+        const currentPrice = Number(result[priceField] || 0);
+        // Only override if we don't have a price or the extracted total is clearly the document total
+        if (!currentPrice || (total > currentPrice && total <= currentPrice * 20)) {
+          console.log(`[Parser:PostProcess] Overriding ${priceField}: ${currentPrice} → ${total} (TOTAL from document text)`);
+          result[priceField] = total;
+        } else {
+          console.log(`[Parser:PostProcess] Not overriding ${priceField}: current=${currentPrice} total=${total}`);
+        }
       }
-    }
 
-    if (purpose === 'sale') {
-      const priceField = 'disposedPrice';
-      const currentPrice = Number(result[priceField] || 0);
-      if (!currentPrice || total > currentPrice) {
-        console.log(`[Parser:PostProcess] Overriding ${priceField}: ${currentPrice} → ${total} (TOTAL from document text)`);
-        result[priceField] = total;
+      if (isSalePurpose) {
+        const priceField = 'disposedPrice';
+        const currentPrice = Number(result[priceField] || 0);
+        if (!currentPrice || (total > currentPrice && total <= currentPrice * 20)) {
+          console.log(`[Parser:PostProcess] Overriding ${priceField}: ${currentPrice} → ${total} (TOTAL from document text)`);
+          result[priceField] = total;
+        } else {
+          console.log(`[Parser:PostProcess] Not overriding ${priceField}: current=${currentPrice} total=${total}`);
+        }
       }
     }
   }
@@ -723,12 +790,17 @@ function extractFallbackInfo(text, purpose) {
   if (vin) fallback.vin = vin;
   const titleNumber = extractTitleFromText(text);
   if (titleNumber) fallback.titleNumber = titleNumber;
-  const totalValue = extractTotalFromText(text);
+  const totalValue = extractTotalFromText(text, purpose);
   if (totalValue) {
-    if (purpose === 'sale') {
-      fallback.disposedPrice = totalValue;
+    // Only include totals discovered by fallback if they pass basic sanity checks
+    if (isReasonableTotal(totalValue)) {
+      if (purpose === 'sale') {
+        fallback.disposedPrice = totalValue;
+      } else {
+        fallback.purchasePrice = totalValue;
+      }
     } else {
-      fallback.purchasePrice = totalValue;
+      console.log(`[Parser:PostProcess] extractFallbackInfo skipped unreasonable total: ${totalValue}`);
     }
   }
   return Object.keys(fallback).length ? fallback : null;
