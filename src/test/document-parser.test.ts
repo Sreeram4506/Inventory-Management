@@ -66,6 +66,53 @@ describe('document parser fallback extraction', () => {
     expect(info.disposedZip).toBe('02169');
   });
 
+  it('parses generated used vehicle record form fields for Mfrs. Model Year, Make, and Model', () => {
+    const text = `
+      Mfrs. Model Year 2014 Make Toyota Model Camry Color White
+      Vehicle Ident. No. 1 H G C M 8 2 6 3 3 A 0 0 4 3 5 2
+    `;
+
+    const info = extractVehicleInfoFromText(text);
+
+    expect(info.year).toBe(2014);
+    expect(info.make).toBe('Toyota');
+    expect(info.model).toBe('Camry');
+    expect(info.color).toBe('White');
+  });
+
+  it('extracts buyer name and address from sale documents using Buyer: label', () => {
+    const text = `
+      Buyer: Broadway Used Auto Sales Inc
+      Address: 100 Broadway
+      City or Town: NORWOOD State: MA Zip Code: 02062
+    `;
+
+    const info = extractDispositionDetailsFromText(text);
+
+    expect(info.disposedTo).toBe('Broadway Used Auto Sales Inc');
+    expect(info.disposedAddress).toBe('100 Broadway');
+    expect(info.disposedCity).toBe('NORWOOD');
+    expect(info.disposedState).toBe('MA');
+    expect(info.disposedZip).toBe('02062');
+  });
+
+  it('ignores boilerplate headers and legal sections that contain years', () => {
+    const text = `
+      2015 Any Legally Required Repairs Prior To Sale. Co Inc Buyer
+      
+      Actual Vehicle Information:
+      Year: 2010 Make: Honda Model: Civic
+      VIN: 1HGCM82633A004352
+    `;
+
+    const info = extractVehicleInfoFromText(text);
+
+    // Should extract the explicitly labeled 2010, not the boilerplate 2015
+    expect(info.year).toBe(2010);
+    expect(info.make).toBe('Honda');
+    expect(info.model).toBe('Civic');
+  });
+
   it('extracts a VIN from OCR text with spaces and punctuation between characters', () => {
     const text = `
       Vehicle Ident. No. 1 H G C M 8 2 6 3 3 A 0 0 4 3 5 2
@@ -164,7 +211,7 @@ describe('document parser fallback extraction', () => {
     expect(acquisition.usedVehicleSourceAddress).toBe('170 Turnpike Rd');
     expect(acquisition.usedVehicleSourceCity).toBe('Westborough');
     expect(acquisition.usedVehicleSourceState).toBe('MA');
-    expect(acquisition.usedVehicleSourceZipCode).toBe('01581');
+    expect(acquisition.usedVehicleSourceZipCode).toBe('01581-2806');
     expect(disposition).toEqual({});
   });
 
@@ -186,6 +233,192 @@ describe('document parser fallback extraction', () => {
     expect(info.usedVehicleSourceCity).toBe('Oxford');
     expect(info.usedVehicleSourceState).toBe('MA');
     expect(info.usedVehicleSourceZipCode).toBe('01540');
+  });
+
+  it("detects America's AA Boston as an acquisition source and parses the total price", () => {
+    const text = `
+      AMERICA'S AA BOSTON
+      400 Charter Way
+      NORTH BILLERICA, MA 01862
+      2010 TOYOTA PRIUS II
+      VIN: JTDKN3DU2A5220561
+      Sale Price: $4,300.00
+      Buyer's Fee: $465.00
+      Total: $4,765.00
+    `;
+
+    const info = extractVehicleInfoFromText(text);
+    expect(info.year).toBe(2010);
+    expect(info.make).toBe('Toyota');
+    expect(info.model).toBe('Prius II');
+
+    const acquisition = extractAcquisitionDetailsFromText(text);
+    expect(acquisition.purchasedFrom).toBe("America's AA Boston");
+    expect(acquisition.usedVehicleSourceAddress).toBe('400 Charter Way');
+    expect(acquisition.usedVehicleSourceCity).toBe('North Billerica');
+    expect(acquisition.usedVehicleSourceState).toBe('MA');
+    expect(acquisition.usedVehicleSourceZipCode).toBe('01862');
+    expect(extractTotalFromText(text, 'acquisition')).toBe(4765);
+  });
+
+  it('prioritizes TOTAL price over Vehicle Sales Price in CMAA/CarMax acquisition documents', () => {
+    const text = `
+      CMAA BILL OF SALE
+      Central Mass. Auto Auction
+      Vehicle Sales Price: $8,500
+      Buyer Fee: $250
+      Total Due: $8,750
+    `;
+
+    expect(extractTotalFromText(text, 'acquisition')).toBe(8750);
+  });
+
+  it('ignores total payments lines and keeps the actual invoice total', () => {
+    const text = `
+      CHARGE DATE DESCRIPTION PRICE LINE TOTAL
+      2013 Ford Fiesta $1,800.00 $1,800.00
+      BUY FEE $265.00 $265.00
+      SUB TOTAL $2,065.00
+      TOTAL BEFORE PAYMENTS $2,065.00
+      TOTAL PAYMENTS ($2,065.00)
+      OUTSTANDING BALANCE $0.00
+    `;
+
+    expect(extractTotalFromText(text, 'acquisition')).toBe(2065);
+  });
+
+  it('prefers the largest footer amount when OCR injects an address number near the total row', () => {
+    const text = `
+      BROADWAY USED AUTO SALES INC 3,990.00
+      100 BROADWAY TOTALS
+      NORWOOD, MA 02062
+    `;
+
+    expect(extractTotalFromText(text, 'acquisition')).toBe(3990);
+  });
+
+  it('keeps the acquisition total above nearby fee lines and OCR street numbers', () => {
+    const text = `
+      BROADWAY USED AUTO SALES INC 3,990.00
+      BUYER FEE $375.00
+      100 BROADWAY TOTALS
+      NORWOOD, MA 02062
+    `;
+
+    expect(extractTotalFromText(text, 'acquisition')).toBe(3990);
+  });
+
+  it('parses OCR-spaced total amounts instead of returning a fragment or zero', () => {
+    const text = `
+      SALE PRICE S 3,800.00
+      BUYER FEE S 395.00
+      TOTAL >S 4 195.00
+    `;
+
+    expect(extractTotalFromText(text, 'acquisition')).toBe(4195);
+  });
+
+  it('does not use legal boilerplate as vehicle make or model when no vehicle line exists', () => {
+    const text = `
+      2015 Any Legally Required Repairs Prior To Sale. Co Inc Buyer
+      Purchaser acknowledges all terms and conditions.
+    `;
+
+    const info = extractVehicleInfoFromText(text);
+    expect(info.make).toBeNull();
+    expect(info.model).toBeNull();
+    expect(info.year).toBeNull();
+    expect(info.purchasePrice).toBeNull();
+    expect(info.disposedPrice).toBeNull();
+  });
+
+  it('does not turn VIN, odometer, or date footer numbers into a price', () => {
+    const text = `
+      Vehicle Ident. No. 1 H G C M 8 2 6 3 3 A 0 0 4 3 5 2
+      Odometer: 133,713 Miles
+      Reprinted: 9/29/2025 12:03:40 PM
+      Page 1 of 1
+    `;
+
+    expect(extractTotalFromText(text, 'acquisition')).toBeNull();
+  });
+
+  it('prefers the actual total over an address number on a contaminated total row', () => {
+    const text = `
+      BROADWAY USED AUTO SALES INC
+      100 BROADWAY
+      TOTAL $ 5,415.00
+    `;
+
+    expect(extractTotalFromText(text, 'acquisition')).toBe(5415);
+  });
+
+  it('uses the fallback CarMax Westborough address when OCR drops the street line', () => {
+    const text = `
+      Wholesale Bill of Sale
+      Seller: CarMax - Westborough Purchaser's Name
+      170 Turnpike Rd
+      Westborough, MA 01581
+    `;
+    const info = extractAcquisitionDetailsFromText(text);
+
+    expect(info.purchasedFrom).toBe('CarMax - Westborough');
+    expect(info.usedVehicleSourceAddress).toBe('170 Turnpike Rd');
+    expect(info.usedVehicleSourceCity).toBe('Westborough');
+    expect(info.usedVehicleSourceState).toBe('MA');
+    expect(info.usedVehicleSourceZipCode).toBe('01581-2806');
+  });
+
+  it('strips dealer-name noise and standalone trailing numbers from model names', () => {
+    const text = `
+      2016 Honda Odyssey 18 = ~~
+      VIN: 5FNRL5H26GB066677
+    `;
+
+    const info = extractVehicleInfoFromText(text);
+    expect(info.year).toBe(2016);
+    expect(info.make).toBe('Honda');
+    expect(info.model).toBe('Odyssey');
+  });
+
+  it('prefers the vehicle row over sale dates when extracting year make and model', () => {
+    const text = `
+      Date 8/29/2024
+      Year Make Model
+      2014 Toyota Camry LE
+      Sale Date 8/29/2024
+    `;
+
+    const info = extractVehicleInfoFromText(text);
+    expect(info.year).toBe(2014);
+    expect(info.make).toBe('Toyota');
+    expect(info.model).toBe('Camry LE');
+  });
+
+  it('ignores body type and color words when extracting model from OCR text', () => {
+    const text = `
+      2008 Honda Hatchback Fit Blue
+      VIN: JHMGD386585066717
+    `;
+
+    const info = extractVehicleInfoFromText(text);
+    expect(info.year).toBe(2008);
+    expect(info.make).toBe('Honda');
+    expect(info.model).toBe('Fit');
+  });
+
+  it('ignores date-like years when a vehicle year is present on a Manheim-style bill of sale', () => {
+    const text = `
+      Printed on: 15-May-2026
+      Vehicle Information
+      2011 Toyota Prius
+      Mileage: 99515 Miles
+    `;
+
+    const info = extractVehicleInfoFromText(text);
+    expect(info.year).toBe(2011);
+    expect(info.make).toBe('Toyota');
+    expect(info.model).toBe('Prius');
   });
 
   it('uses known auction details instead of seller details on ADESA documents', () => {
@@ -244,5 +477,26 @@ describe('document parser fallback extraction', () => {
     expect(extractTitleFromText('CMAA BILL OF SALE AND TITLE WARRANTY')).toBeNull();
     expect(extractTitleFromText('Announcements: TITLE ATTACHED')).toBeNull();
     expect(extractTitleFromText('Announcements: TITLE ABSENT STRUCTURAL DAMAGE')).toBeNull();
+  });
+
+  it('cleans CarMax acquisition names and picks known Manheim acquisition details', () => {
+    const carmax = extractAcquisitionDetailsFromText(`
+      Seller: CarMax - Westborough Purchaser's Name
+      170 Turnpike Rd
+      Westborough, MA 01581
+    `);
+    expect(carmax.purchasedFrom).toBe('CarMax - Westborough');
+    expect(carmax.usedVehicleSourceAddress).toBe('170 Turnpike Rd');
+
+    const manheim = extractAcquisitionDetailsFromText(`
+      Manheim New England
+      123 Williams St
+      North Dighton, MA 02764
+    `);
+    expect(manheim.purchasedFrom).toBe('Manheim New England');
+    expect(manheim.usedVehicleSourceAddress).toBe('123 Williams St');
+    expect(manheim.usedVehicleSourceCity).toBe('North Dighton');
+    expect(manheim.usedVehicleSourceState).toBe('MA');
+    expect(manheim.usedVehicleSourceZipCode).toBe('02764');
   });
 });

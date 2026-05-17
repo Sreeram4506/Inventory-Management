@@ -6,6 +6,7 @@ import {
   cleanDispositionName,
   extractAcquisitionDetailsFromText,
   extractDispositionDetailsFromText,
+  extractTotalFromText,
   extractVehicleInfo,
   extractText
 } from '../../services/documentParser.js';
@@ -33,6 +34,22 @@ function parseCurrency(value) {
   if (typeof value === 'number') return value;
   const parsed = Number(String(value).replace(/[^0-9.-]+/g, ""));
   return isNaN(parsed) ? 0 : parsed;
+}
+
+function isReasonableVehicleAmount(value) {
+  const num = parseCurrency(value);
+  return Number.isFinite(num) && num >= 50 && num <= 100000;
+}
+
+function hasBoilerplateVehicleText(value) {
+  return /\b(any\s+legally\s+required|repairs?\s+prior\s+to\s+sale|terms?\s+and\s+conditions|warrant(?:y|ies)|purchaser\s+acknowledges|buyer\s+agree|seller\s+agree|disclosures?|arbitration|invoice|payment|remit|line\s+total|outstanding\s+balance|co\s+inc\s+buyer)\b/i.test(String(value || ''));
+}
+
+function sanitizeVehicleIdentity(info = {}) {
+  const cleaned = { ...info };
+  if (hasBoilerplateVehicleText(cleaned.make)) cleaned.make = '';
+  if (hasBoilerplateVehicleText(cleaned.model)) cleaned.model = '';
+  return cleaned;
 }
 
 function mergeExtractionInfo(baseInfo, fallbackInfo) {
@@ -224,11 +241,12 @@ router.post(
       }
 
       // ── Extract acquisition data only. Disposition is filled later from a sale bill of sale. ──
-      info = await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype, '');
+      info = sanitizeVehicleIdentity(await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype, ''));
       if (!info || !info.vin || !info.make || !info.model) {
-        const acquisitionFallback = await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype, 'acquisition');
+        const acquisitionFallback = sanitizeVehicleIdentity(await extractVehicleInfo(sourceFile.buffer, sourceFile.mimetype, 'acquisition'));
         info = mergeExtractionInfo(info, acquisitionFallback);
       }
+      info = sanitizeVehicleIdentity(info || {});
       info = clearDispositionInfo(info || {});
       console.log(`[UserForm] Extracted VIN: ${info.vin}, Make: ${info.make}, Model: ${info.model}`);
 
@@ -270,6 +288,12 @@ router.post(
           console.log('[DocumentRoute] Applied auction acquisition details from text:', parsed);
         }
 
+        const totalFromText = extractTotalFromText(rawText, 'acquisition');
+        if (!isReasonableVehicleAmount(info.purchasePrice) && isReasonableVehicleAmount(totalFromText)) {
+          info.purchasePrice = totalFromText;
+          console.log(`[DocumentRoute] Filled missing purchase price from text total: ${totalFromText}`);
+        }
+
         if (!info.usedVehicleSourceAddress) {
           warnings.addressMissing = true;
           console.log('[DocumentRoute] Address missing after text fallback');
@@ -280,6 +304,30 @@ router.post(
       }
 
       // ── Generate PDF AFTER all data corrections ──
+      info = sanitizeVehicleIdentity(info);
+      if (!info.make || !info.model || !info.year) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Could not safely extract vehicle year, make, and model from the document. Please upload a clearer bill of sale or enter the vehicle details manually.',
+          info,
+          warnings: {
+            ...(warnings || {}),
+            vehicleIdentityMissing: true
+          }
+        });
+      }
+
+      if (!isReasonableVehicleAmount(info.purchasePrice)) {
+        warnings.priceMissing = true;
+        console.warn('[DocumentRoute] Purchase price missing after all parsing fallbacks');
+        return res.status(400).json({
+          status: 'error',
+          message: 'Could not safely extract the purchase price from the document. Please upload a clearer bill of sale or enter the purchase price manually.',
+          info,
+          warnings
+        });
+      }
+
       console.log(`[UserForm] Generating PDF with: VIN=${info.vin}, From=${info.purchasedFrom}, Addr=${info.usedVehicleSourceAddress}, City=${info.usedVehicleSourceCity}, State=${info.usedVehicleSourceState}`);
       const filledPdf = await fillUsedVehiclePdf(templateBuffer, info, templateMimeType);
       const pdfBase64Str = filledPdf;
@@ -471,6 +519,11 @@ router.post('/upload-bill-of-sale', upload.single('file'), async (req, res, next
       for (const key of ['disposedTo', 'disposedAddress', 'disposedCity', 'disposedState', 'disposedZip']) {
         if (dispositionFallback[key]) billOfSaleInfo[key] = dispositionFallback[key];
       }
+      const saleTotal = extractTotalFromText(rawBillText, 'sale');
+      if (!isReasonableVehicleAmount(billOfSaleInfo.disposedPrice) && isReasonableVehicleAmount(saleTotal)) {
+        billOfSaleInfo.disposedPrice = saleTotal;
+        console.log(`[BillOfSale] Filled missing sale price from text total: ${saleTotal}`);
+      }
     } catch (err) {
       console.warn('[BillOfSale] Disposition text fallback failed:', err?.message || err);
     }
@@ -535,6 +588,14 @@ router.post('/upload-bill-of-sale', upload.single('file'), async (req, res, next
 
     // ── Step 5: Create Sale record (move to SALES) ──
     const salePrice = parseCurrency(billOfSaleInfo.disposedPrice);
+    if (!isReasonableVehicleAmount(salePrice)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Could not safely extract the sale price from the bill of sale. Please upload a clearer document or enter the sale price manually.',
+        info: billOfSaleInfo,
+        warnings: { priceMissing: true }
+      });
+    }
     const purchaseCost = vehicle.purchase?.totalPurchaseCost || 0;
     const repairCost = vehicle.repairs?.reduce((acc, r) => acc + (r.partsCost || 0) + (r.laborCost || 0), 0) || 0;
     const profit = salePrice - purchaseCost - repairCost;

@@ -60,6 +60,12 @@ function isPdfBuffer(fileBuffer) {
 function determineDocumentPurpose(text) {
   if (!text) return null;
   const normalized = text.replace(/\s+/g, ' ').trim();
+  
+  // CMAA and CarMax are ALWAYS acquisition documents (we buy from them)
+  if (/\b(?:CMAA|Central Mass(?:achusetts)? Auto Auction|CarMax|America'?s\s+(?:AA|Auto Auction))\b/i.test(normalized)) {
+    return 'acquisition';
+  }
+
   let score = 0;
 
   const scoreMatch = (regex, points) => {
@@ -76,6 +82,24 @@ function determineDocumentPurpose(text) {
   return null;
 }
 
+function inferDocumentDirection(text, purpose = '') {
+  if (!text) return purpose;
+  if (purpose === 'sale' || purpose === 'disposition' || purpose === 'acquisition') return purpose;
+
+  const saleSignal = /\b(?:Buyer|Purchaser(?:\(s\))?|Sold To|Transferred To|Purchaser\(s\)? Name\(s\)?|Buyer Name|Vehicle Sales Price|Selling Price|Sale Price)\b/i;
+  const acquisitionSignal = /\b(?:Obtained From|Seller|Consignor|Auction|Bill of Sale|Invoice to Buyer|Facility|Remit Payment To|Auction Location|Purchase Price|Total Due)\b/i;
+  const hasSale = saleSignal.test(text);
+  const hasAcquisition = acquisitionSignal.test(text);
+
+  if (hasAcquisition && !hasSale) return 'acquisition';
+  if (hasSale && !hasAcquisition) return 'sale';
+  if (/\b(?:ADESA|CMAA|Central Mass(?:achusetts)? Auto Auction|CarMax|America'?s\s+(?:AA|Auto Auction)|Manheim|Auction|Buyer Fee|Total Due|Balance Due|Purchase Price)\b/i.test(text)) {
+    return 'acquisition';
+  }
+  if (hasAcquisition && hasSale) return 'acquisition';
+  return purpose;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // POST-PROCESSING: Deterministic price & title extraction from raw text
 // These run AFTER AI extraction and OVERRIDE the AI if they find better data
@@ -84,83 +108,131 @@ function determineDocumentPurpose(text) {
 /**
  * Scans raw OCR/PDF text for a "TOTAL" line and extracts the dollar amount.
  * Returns the total price if found, or null if not found.
+ * Prioritizes TOTAL lines over SALE PRICE lines.
  */
 function extractTotalFromText(text, purpose = '') {
   if (!text) return null;
 
-  const lines = text.split(/\r?\n/);
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const amountRegex = /(\$|USD)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)/g;
-  const totalMarkers = /\b(?:TOTAL\s*(?:AMOUNT|DUE|PAYABLE)?|BALANCE\s+DUE|AMOUNT\s+DUE|TOTAL\s+DUE|DUE\s+NOW|AMOUNT\s+PAYABLE|NET\s+AMOUNT|BALANCE|INVOICE\s+TOTAL|BILL\s+TOTAL)\b(?!\s*FORWARD)/i;
-  const purchaseMarkers = /\b(?:PURCHASE\s*PRICE|AMOUNT\s*DUE|BALANCE\s*DUE|TOTAL\s*DUE|TOTAL\s*AMOUNT|AMOUNT\s*PAYABLE|NET\s*AMOUNT|INVOICE\s*TOTAL|BILL\s*TOTAL|BUYER\s*FEE)\b/i;
-  const saleMarkers = /\b(?:SALE\s*PRICE|SELLING\s*PRICE|VEHICLE\s*SALES\s*PRICE|SOLD\s*PRICE|SALE\s*AMOUNT|SELLING\s*AMOUNT)\b/i;
+  const totalMarkers = /\b(?:TOTAL(?:[^A-Z0-9]{0,3}S)?(?:\s*(?:AMOUNT|DUE|PAYABLE|PRICE|OWING|BALANCE|FEE)?)|BALANCE\s+DUE|AMOUNT\s+DUE|AMOUNT\s+PAYABLE|NET\s+AMOUNT|NET\s+DUE|INVOICE\s+TOTAL|BILL\s+TOTAL|TOTAL\s+PAYABLE|AMOUNT\s+OWED|TOTAL\s+BALANCE)\b(?!\s*FORWARD)/i;
+  const purchaseMarkers = /\b(?:PURCHASE\s*PRICE|AMOUNT\s*DUE|BALANCE\s*DUE|TOTAL\s*DUE|TOTAL\s*AMOUNT|AMOUNT\s*PAYABLE|NET\s*AMOUNT|INVOICE\s*TOTAL|BILL\s*TOTAL|BUYER\s*FEE|TOTAL\s*PRICE)\b/i;
+  const saleMarkers = /\b(?:SALE\s*PRICE|SELLING\s*PRICE|VEHICLE\s*SALES?\s*PRICE|SOLD\s*PRICE|SALE\s*AMOUNT|SELLING\s*AMOUNT)\b/i;
+  const paymentSummaryMarkers = /\bTOTAL\s+PAYMENTS?\b/i;
   const skipMarkers = /\bSUBTOTAL\b/i;
   const excludeSaleMarkers = /\bTOTAL\s+(?:SALE|SELLING)\s+PRICE\b/i;
-  const minValue = purpose === 'acquisition' || purpose === 'sale' ? 50 : 10;
+  const minValue = purpose === 'acquisition' ? 500 : purpose === 'sale' ? 50 : 10;
   const candidates = [];
 
   const extractAmounts = (source) => {
-    const matches = [...source.matchAll(amountRegex)];
-    return matches.map(match => parseFloat(match[2].replace(/,/g, ''))).filter(value => Number.isFinite(value));
+    const normalized = String(source || '').replace(/[Oo](?=\d)/g, '0');
+    const values = [];
+    const addValue = (raw) => {
+      const value = parseFloat(String(raw).replace(/[\s,]/g, ''));
+      if (Number.isFinite(value)) values.push(value);
+    };
+
+    for (const match of normalized.matchAll(/(?:\$|USD|US\$|>\$|>S|S)\s*([0-9]{1,3}(?:[\s,][0-9]{3})+(?:\.\d{1,2})?|\d{4,6}(?:\.\d{1,2})?)/gi)) {
+      addValue(match[1]);
+    }
+    if (values.length) return values.filter(value => Number.isFinite(value));
+
+    const matches = [...normalized.matchAll(amountRegex)];
+    for (const match of matches) addValue(match[2]);
+
+    return values.filter(value => Number.isFinite(value));
   };
 
-  for (let i = 0; i < lines.length; i++) {
+  const pickBestAmount = (values) => {
+    const valid = values.filter((value) => Number.isFinite(value) && value >= minValue);
+    if (!valid.length) return null;
+    return valid.sort((a, b) => b - a)[0];
+  };
+
+  const isLikelyContaminatedAddressRow = (line, amount) => {
+    if (!isAddressLikeLine(line)) return false;
+    if (/[$]|USD|US\$|>\$|>S/i.test(line)) return false;
+    return Number.isFinite(amount) && amount < 500;
+  };
+
+  const addCandidate = (value, score) => {
+    if (Number.isFinite(value) && value >= minValue) {
+      candidates.push({ value, score });
+    }
+  };
+
+  // FIRST PASS: Bottom-up explicit TOTAL lines (prefer the last/bottom-most total.)
+  for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i];
     if (skipMarkers.test(line)) continue;
-    if (purpose === 'acquisition' && saleMarkers.test(line)) continue;
-    if (!totalMarkers.test(line) && !purchaseMarkers.test(line)) continue;
-    if (excludeSaleMarkers.test(line)) continue;
+    if (paymentSummaryMarkers.test(line)) continue;
+    if (excludeSaleMarkers.test(line)) continue;  // Skip "TOTAL SALE PRICE"
+    if (!totalMarkers.test(line)) continue;
 
-    const combined = [line, lines[i + 1] || '', lines[i - 1] || ''].join(' ');
-    const values = extractAmounts(combined);
-    if (!values.length) continue;
-
-    const weight =
-      (totalMarkers.test(line) ? 10 : 0) +
-      (purchaseMarkers.test(line) ? 8 : 0) -
-      (saleMarkers.test(line) ? 20 : 0);
-
-    for (const value of values) {
-      if (value >= minValue) candidates.push({ value, weight });
-    }
-  }
-
-  if (!candidates.length) {
-    const footerLines = lines.slice(-12).join(' ');
-    const values = extractAmounts(footerLines);
-    for (const value of values) {
-      if (value >= minValue) candidates.push({ value, weight: 1 });
-    }
-  }
-
-  let totalPrice = null;
-  if (candidates.length) {
-    const sorted = candidates
-      .map((candidate) => (typeof candidate === 'number' ? { value: candidate, weight: 1 } : candidate))
-      .sort((a, b) => b.weight - a.weight || b.value - a.value);
-    totalPrice = sorted[0]?.value || null;
-  }
-
-  if (!totalPrice) {
-    const broadRegex = /\b(?:TOTAL\s*(?:AMOUNT|DUE|PAYABLE)?|BALANCE\s+DUE|AMOUNT\s+DUE|TOTAL\s+DUE|DUE\s+NOW|AMOUNT\s+PAYABLE|NET\s+AMOUNT|BALANCE)(?!\s*FORWARD)\b[\s:\-]*([^\n]*)/gi;
-    let match;
-    while ((match = broadRegex.exec(text)) !== null) {
-      const values = extractAmounts(match[1]);
-      for (const value of values) {
-        if (value >= minValue) candidates.push({ value, weight: 1 });
+    const directValues = extractAmounts(line);
+    const bestDirect = pickBestAmount(directValues);
+    if (bestDirect !== null) {
+      if (isLikelyContaminatedAddressRow(line, bestDirect)) {
+        // Address-like total rows are often OCR-contaminated with a street number.
+      } else {
+        addCandidate(bestDirect, 10);
       }
     }
-    if (candidates.length) {
-      const sorted = candidates
-        .map((candidate) => (typeof candidate === 'number' ? { value: candidate, weight: 1 } : candidate))
-        .sort((a, b) => b.weight - a.weight || b.value - a.value);
-      totalPrice = sorted[0]?.value || null;
+
+    const peer = [line, lines[i + 1] || '', lines[i - 1] || ''].join(' ');
+    const bestPeer = pickBestAmount(extractAmounts(peer));
+    if (bestPeer !== null) {
+      addCandidate(bestPeer, 9);
     }
   }
 
-  if (totalPrice) {
-    console.log(`[Parser:PostProcess] Found TOTAL price from text: $${totalPrice}`);
+  // SECOND PASS: Bottom-up purchase/balance markers (medium priority)
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i];
+    if (skipMarkers.test(line)) continue;
+    if (paymentSummaryMarkers.test(line)) continue;
+    if (purpose === 'acquisition' && saleMarkers.test(line)) continue;  // Skip sale prices for acquisitions
+    if (!purchaseMarkers.test(line)) continue;
+    if (excludeSaleMarkers.test(line)) continue;
+
+    const directValues = extractAmounts(line);
+    const bestDirect = pickBestAmount(directValues);
+    if (bestDirect !== null) {
+      if (isLikelyContaminatedAddressRow(line, bestDirect)) {
+        // Same contamination protection as the TOTAL pass.
+      } else {
+        addCandidate(bestDirect, 8);
+      }
+    }
+
+    const peer = [line, lines[i + 1] || '', lines[i - 1] || ''].join(' ');
+    const bestPeer = pickBestAmount(extractAmounts(peer));
+    if (bestPeer !== null) {
+      addCandidate(bestPeer, 7);
+    }
   }
-  return totalPrice;
+
+  // FALLBACK: Use the last valid amount in the footer region, but only from
+  // rows that look like actual money/price rows. This avoids VIN fragments,
+  // odometers, dates, and boilerplate numbers becoming fake prices.
+  const footerLines = lines
+    .slice(-16)
+    .filter((line) => /(?:\$|USD|US\$|>\$|>S|\b(?:PRICE|FEE|TOTAL|AMOUNT|DUE|BALANCE|PAYMENTS?|NET)\b)/i.test(line) && !paymentSummaryMarkers.test(line))
+    .join(' ');
+  const footerValues = extractAmounts(footerLines);
+  if (footerValues.length > 0) {
+    const validValues = footerValues.filter(v => v >= minValue);
+    if (validValues.length > 0) {
+      const footerValue = validValues.sort((a, b) => b - a)[0];
+      addCandidate(footerValue, 1);
+    }
+  }
+
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => b.score - a.score || b.value - a.value);
+  const best = candidates[0]?.value || null;
+  if (best) console.log(`[Parser:PostProcess] Found ${purpose === 'sale' ? 'sale' : 'TOTAL'} price from text: $${best}`);
+  return best;
 }
 
 function extractVinFromText(text) {
@@ -349,6 +421,10 @@ function isReasonableTotal(value) {
   return true;
 }
 
+function isVehicleBoilerplateText(value) {
+  return /\b(any\s+legally\s+required|repairs?\s+prior\s+to\s+sale|terms?\s+and\s+conditions|warrant(?:y|ies)|purchaser\s+acknowledges|buyer\s+agree|seller\s+agree|disclosures?|arbitration|remit|payment|invoice|line\s+total|outstanding\s+balance|co\s+inc\s+buyer)\b/i.test(String(value || ''));
+}
+
 function postProcessResult(result, rawText, purpose) {
   if (!result || !rawText) return result;
 
@@ -435,35 +511,55 @@ function postProcessResult(result, rawText, purpose) {
     }
   }
 
-  // Fix price: override AI's sale values with the actual TOTAL if reasonable.
-  const totalFromText = extractTotalFromText(rawText);
+  // Fix price: prefer explicit TOTAL values from the document whenever they
+  // pass basic sanity checks. TOTAL lines are authoritative — overwrite any
+  // existing sale/purchase price so long as the found TOTAL looks reasonable.
+  const totalFromText = extractTotalFromText(rawText, purpose || determineDocumentPurpose(rawText) || '');
   if (totalFromText) {
     const total = Number(totalFromText);
     if (!isReasonableTotal(total)) {
       console.log(`[Parser:PostProcess] Skipping TOTAL override: ${total} flagged as unreasonable`);
     } else {
-      // Accept both 'sale' and legacy 'disposition' for sale-purpose
-      const isSalePurpose = purpose === 'sale' || purpose === 'disposition';
-      if (purpose === 'acquisition' || purpose === '') {
-        const priceField = 'purchasePrice';
-        const currentPrice = Number(result[priceField] || 0);
-        // Only override if we don't have a price or the extracted total is clearly the document total
-        if (!currentPrice || (total > currentPrice && total <= currentPrice * 20)) {
-          console.log(`[Parser:PostProcess] Overriding ${priceField}: ${currentPrice} → ${total} (TOTAL from document text)`);
-          result[priceField] = total;
-        } else {
-          console.log(`[Parser:PostProcess] Not overriding ${priceField}: current=${currentPrice} total=${total}`);
-        }
-      }
+      const inferredPurpose = determineDocumentPurpose(rawText) || inferDocumentDirection(rawText, purpose);
+      const hasAcquisitionFacility = /\b(?:ADESA|MANHEIM|CMAA|CENTRAL MASS(?:ACHUSETTS)? AUTO AUCTION|CARMAX|AMERICA'?S\s+(?:AA|AUTO AUCTION))\b/i.test(rawText || '');
+      const hasDispositionLanguage = /\b(?:DISPOSITION OF MOTOR VEHICLE|TRANSFERRED TO|PURCHASER(?:'S)?\s+NAME|PURCHASER\(S\)|BUYER\s+NAME|SOLD\s+TO|SELLING\s+PRICE)\b/i.test(rawText || '');
+      const isAcquisitionDocument =
+        hasAcquisitionFacility ||
+        inferredPurpose === 'acquisition' ||
+        (result.purchasedFrom && !hasDispositionLanguage);
+      const isSaleDocument =
+        !isAcquisitionDocument &&
+        (inferredPurpose === 'sale' || inferredPurpose === 'disposition' || result.disposedTo || result.disposedAddress);
 
-      if (isSalePurpose) {
+      if (isSaleDocument) {
         const priceField = 'disposedPrice';
         const currentPrice = Number(result[priceField] || 0);
-        if (!currentPrice || (total > currentPrice && total <= currentPrice * 20)) {
+        if (currentPrice !== total) {
           console.log(`[Parser:PostProcess] Overriding ${priceField}: ${currentPrice} → ${total} (TOTAL from document text)`);
+        }
+        result[priceField] = total;
+      } else if (isAcquisitionDocument) {
+        const priceField = 'purchasePrice';
+        const currentPrice = Number(result[priceField] || 0);
+        if (currentPrice !== total) {
+          console.log(`[Parser:PostProcess] Overriding ${priceField}: ${currentPrice} → ${total} (TOTAL from document text)`);
+        }
+        result[priceField] = total;
+      } else {
+        if (result.disposedPrice) {
+          const priceField = 'disposedPrice';
+          const currentPrice = Number(result[priceField] || 0);
+          if (currentPrice !== total) {
+            console.log(`[Parser:PostProcess] Overriding ${priceField}: ${currentPrice} → ${total} (TOTAL from document text)`);
+          }
           result[priceField] = total;
         } else {
-          console.log(`[Parser:PostProcess] Not overriding ${priceField}: current=${currentPrice} total=${total}`);
+          const priceField = 'purchasePrice';
+          const currentPrice = Number(result[priceField] || 0);
+          if (currentPrice !== total) {
+            console.log(`[Parser:PostProcess] Overriding ${priceField}: ${currentPrice} → ${total} (TOTAL from document text)`);
+          }
+          result[priceField] = total;
         }
       }
     }
@@ -495,6 +591,10 @@ function inferAuctionFromText(text) {
   if (m) return m[1].trim();
   const m2 = text.match(/Auction[:\s-]+(.+?)(?:\r?\n|$)/i);
   if (m2) return m2[1].trim();
+
+  const m3 = text.match(/\bAmerica'?s\s+(?:AA|Auto Auction)(?:\s+Boston)?\b/i);
+  if (m3) return m3[0].trim();
+
   return null;
 }
 
@@ -532,10 +632,16 @@ function isHeaderishAddress(value) {
   return false;
 }
 
+function isAddressLikeLine(line) {
+  const text = String(line || '');
+  return /\b(?:street|st\b|road|rd\b|avenue|ave\b|boulevard|blvd\b|drive|dr\b|lane|ln\b|turnpike|tpke\b|parkway|pkwy\b|way|city|state|zip|zp\b|address)\b/i.test(text);
+}
+
 function cleanRoleName(value) {
   if (!value) return null;
   const cleaned = String(value)
     .replace(/^\s*(?:BUYER|PURCHASER|SOLD TO|CUSTOMER|SELLER|DEALER|CONSIGNOR|FACILITY|AUCTION|REMIT PAYMENT TO|TRANSACTION LOCATION|BILL TO|SHIP TO)\b\s*[:#-]*/i, '')
+    .replace(/\b(?:PURCHASER'?S?\s+NAME|BUYER'?S?\s+NAME)\b.*$/i, '')
     .replace(/\b(?:ADDRESS|ADDR|CITY|STATE|ZIP|DATE|VIN|STOCK|LOT|INVOICE|TOTAL)\b.*$/i, '')
     .replace(/\s{2,}/g, ' ')
     .replace(/[.,;:\s]+$/g, '')
@@ -594,16 +700,31 @@ function findAddressNear(lines, startIndex, direction = 1, window = 8) {
     const line = lines[i] || '';
     const inline = line.match(/(?:^|\s)Address(?!\()(?: \(number and street\))?\s*[:#-]?\s*(.+?)(?=\s+City\b|\s+State\b|\s+Zip\b|$)/i);
     const street = inline?.[1]?.trim() || (STREET_PATTERN.test(line) ? line : null);
-    if (!street || isHeaderishAddress(street) || isBroadwayValue(street)) continue;
+    if (!street || isHeaderishAddress(street)) continue;
 
     const sameLineGeo = line.match(CITY_STATE_ZIP_PATTERN)?.[0] || '';
     const nextGeoLine = [lines[i + 1] || '', lines[i + 2] || ''].find((candidate) => CITY_STATE_ZIP_PATTERN.test(candidate)) || '';
     const parts = splitAddressParts(street, sameLineGeo || nextGeoLine);
 
     if (!parts.city) {
-      const city = line.match(/\bCity(?: or Town)?\s*[:#-]?\s*([A-Za-z .'-]+?)(?=\s+State\b|\s+Zip\b|$)/i)?.[1]?.trim();
-      const state = line.match(/\bState\s*[:#-]?\s*([A-Z]{2})\b/i)?.[1]?.toUpperCase();
-      const zip = line.match(/\bZip(?: Code)?\s*[:#-]?\s*(\d{5}(?:-\d{4})?)/i)?.[1];
+      const parseGeo = (sourceLine) => {
+        if (!sourceLine) return {};
+        return {
+          city: sourceLine.match(/\bCity(?: or Town)?\s*[:#-]?\s*([A-Za-z .'-]+?)(?=\s+State\b|\s+Zip\b|$)/i)?.[1]?.trim(),
+          state: sourceLine.match(/\bState\s*[:#-]?\s*([A-Z]{2})\b/i)?.[1]?.toUpperCase(),
+          zip: sourceLine.match(/\bZip(?: Code)?\s*[:#-]?\s*(\d{5}(?:-\d{4})?)/i)?.[1]
+        };
+      };
+
+      const geoFromLine = parseGeo(line);
+      let geoFromNext = {};
+      if (!geoFromLine.city || !geoFromLine.state || !geoFromLine.zip) {
+        geoFromNext = parseGeo(lines[i + 1] || lines[i + 2] || '');
+      }
+
+      const city = geoFromLine.city || geoFromNext.city;
+      const state = geoFromLine.state || geoFromNext.state;
+      const zip = geoFromLine.zip || geoFromNext.zip;
       if (city || state || zip) {
         parts.city = city || parts.city;
         parts.state = state || parts.state;
@@ -631,6 +752,12 @@ function findNameNear(lines, startIndex, labelRegex, window = 5) {
     }
   }
   return null;
+}
+
+function isBoilerplateDispositionLine(line) {
+  if (!line) return false;
+  return /\b(?:agrees?|hereby|acknowledges?|acknowledge|terms?|contains|acknowledged|shall|will|hereby)\b/i.test(line)
+    && !/\b(?:Buyer|Purchaser|Customer|Transferred To|Print Name\(s\)|Purchaser\(s\)? Name\(s\))\b/i.test(line);
 }
 
 export function extractAcquisitionDetailsFromText(text) {
@@ -687,12 +814,31 @@ function extractCarMaxAcquisitionDetails(lines) {
     || fullText.match(/\b(CarMax\s*[-–]\s*[A-Za-z .'-]+)\s*,?\s*\(transferor'?s name\)/i)?.[1]
     || fullText.match(/\b(CarMax\s*[-–]\s*[A-Za-z .'-]+)/i)?.[1]
     || 'CarMax';
-  name = name.replace(/\s+/g, ' ').replace(/[.,;:\s]+$/g, '').trim();
+  name = name
+    .replace(/\bPurchaser'?s?\s+Name\b.*$/i, '')
+    .replace(/\s+/g, ' ')
+    .replace(/[.,;:\s]+$/g, '')
+    .trim();
 
   let address = null;
   const sellerIndex = lines.findIndex((line) => /\bSeller\s*:\s*CarMax\b/i.test(line));
   if (sellerIndex >= 0) {
     address = findAddressNear(lines, sellerIndex, 1, 5);
+  }
+
+  if (!address?.address) {
+    if (/Westborough/i.test(name)) {
+      address = {
+        address: '170 Turnpike Rd',
+        city: 'Westborough',
+        state: 'MA',
+        zip: '01581-2806'
+      };
+    }
+  }
+
+  if (address?.address && /Westborough/i.test(name) && (!address.zip || /^\d{5}$/.test(address.zip))) {
+    address.zip = '01581-2806';
   }
 
   if (!address?.address) {
@@ -742,12 +888,28 @@ function extractKnownAuctionAcquisitionDetails(lines) {
       zip: '01702'
     },
     {
-      pattern: /\bAmerica'?s\s+(?:AA|Auto Auction)\s+Boston\b/i,
+      pattern: /\bADESA\s+Concord\b/i,
+      name: 'ADESA Concord',
+      address: '77 Hosmer Street',
+      city: 'Acton',
+      state: 'MA',
+      zip: '01720-0257'
+    },
+    {
+      pattern: /\bAmerica'?s\s+(?:AA|Auto Auction)\b/i,
       name: "America's AA Boston",
-      address: null,
+      address: '400 Charter Way',
       city: 'North Billerica',
       state: 'MA',
-      zip: null
+      zip: '01862'
+    },
+    {
+      pattern: /\bManheim\s+New\s+England\b/i,
+      name: 'Manheim New England',
+      address: '123 Williams St',
+      city: 'North Dighton',
+      state: 'MA',
+      zip: '02764'
     }
   ];
 
@@ -786,7 +948,11 @@ export function extractDispositionDetailsFromText(text) {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (!hasDispositionLabel(line) || isBroadwayValue(line)) continue;
+    if (!hasDispositionLabel(line)) continue;
+
+    const isBuyerLine = /\b(?:Buyer|Purchaser|Customer|Transferred To|Print Name\(s\)|Purchaser\(s\)? Name\(s\))\b/i.test(line);
+    if (isBoilerplateDispositionLine(line)) continue;
+    if (isBroadwayValue(line) && !isBuyerLine) continue;
 
     const name = findNameNear(
       lines,
@@ -810,7 +976,7 @@ export function extractDispositionDetailsFromText(text) {
 }
 
 function hasDispositionLabel(line) {
-  return /(?:^|\s)(Print Name\(s\) of Purchaser\(s\)|Purchaser\(s\)? Name\(s\)|Buyer Name|Sold To\s*:|Customer\s*:|Transferred To\s*:)/i.test(line);
+  return /(?:^|\s)(Print Name\(s\) of Purchaser\(s\)|Purchaser\(s\)? Name\(s\)|Buyer Name|Buyer|Sold To|Customer|Transferred To)\s*[:#-]?/i.test(line);
 }
 
 function extractMaTitleDispositionDetails(lines) {
@@ -848,11 +1014,12 @@ function extractFallbackInfo(text, purpose) {
   if (vin) fallback.vin = vin;
   const titleNumber = extractTitleFromText(text);
   if (titleNumber) fallback.titleNumber = titleNumber;
-  const totalValue = extractTotalFromText(text, purpose);
+  const inferredPurpose = purpose || inferDocumentDirection(text, purpose);
+  const totalValue = extractTotalFromText(text, inferredPurpose);
   if (totalValue) {
     // Only include totals discovered by fallback if they pass basic sanity checks
     if (isReasonableTotal(totalValue)) {
-      if (purpose === 'sale') {
+      if (inferredPurpose === 'sale') {
         fallback.disposedPrice = totalValue;
       } else {
         fallback.purchasePrice = totalValue;
@@ -899,6 +1066,21 @@ export function extractVehicleInfoFromText(text) {
   const readValue = (line, regex) => {
     const match = line.match(regex);
     return match ? match[1].trim() : '';
+  };
+
+  const parseFieldPairs = (line) => {
+    const pairs = {};
+    const labelRegex = /\b(Mfrs\.?\s*Model\s*Year|Year|Make|Model|Color|Vehicle\s+Identification\s+Number|Vehicle\s+Ident(?:ification)?(?:\.|\s)*No\.?)\b\s*[:\-]?\s*([^\r\n]+?)(?=(?:\s+\b(?:Mfrs\.?\s*Model\s*Year|Year|Make|Model|Color|Vehicle\s+Identification\s+Number|Vehicle\s+Ident(?:ification)?(?:\.|\s)*No\.?)\b\s*[:\-]?)|$)/gi;
+    let match;
+    while ((match = labelRegex.exec(line)) !== null) {
+      const label = match[1].replace(/\s+/g, ' ').toLowerCase();
+      const val = match[2].trim().replace(/\s+/g, ' ');
+      if (/^(year|make|model|color|vin|mfrs\.?\s*model\s*year|vehicle\s+identification\s+number|vehicle\s+ident(?:ification)?(?:\.|\s)*No\.?)$/i.test(val)) {
+        continue;
+      }
+      pairs[label] = val;
+    }
+    return pairs;
   };
 
   const parseCurrencyValue = (value) => {
@@ -973,20 +1155,32 @@ export function extractVehicleInfoFromText(text) {
       continue;
     }
 
+    const fieldPairs = parseFieldPairs(line);
+    if (fieldPairs['mfrs. model year'] && !data.year) {
+      const value = fieldPairs['mfrs. model year'].match(/(19|20)\d{2}/);
+      if (value) data.year = Number(value[0]);
+    }
+
     if (/\bYear\b/i.test(line) && !data.year) {
       const value = readValue(line, /Year[:\s]+((?:19|20)\d{2})/i);
       if (value) data.year = Number(value);
     }
 
-    if (/\bMake\b/i.test(line) && !data.make) {
+    if (fieldPairs['make'] && !data.make) {
+      data.make = fieldPairs['make'];
+    } else if (/\bMake\b/i.test(line) && !data.make) {
       data.make = readValue(line, /Make[:\s]+([A-Za-z0-9 &\-/]+?)(?=\s+Model|\s+Color|\s+Year|$)/i) || data.make;
     }
 
-    if (/\bModel(?!\s+Year)\b/i.test(line) && !data.model) {
+    if (fieldPairs['model'] && !data.model) {
+      data.model = fieldPairs['model'];
+    } else if (/\bModel(?!\s+Year)\b/i.test(line) && !data.model) {
       data.model = readValue(line, /Model(?!\s+Year)[:\s]+([A-Za-z0-9 &\-/]+?)(?=\s+Color|\s+Year|\s+Title|\s+Vehicle|\s+Stock|\s+Address|\s+City|\s+State|\s+Zip|\s+Odometer|\s+Transaction Date|$)/i) || data.model;
     }
 
-    if (/\bColor\b/i.test(line) && !data.color) {
+    if (fieldPairs['color'] && !data.color) {
+      data.color = fieldPairs['color'];
+    } else if (/\bColor\b/i.test(line) && !data.color) {
       data.color = readValue(line, /Color[:\s]+([A-Za-z0-9 &\-/]+)/i) || data.color;
     }
 
@@ -1009,15 +1203,30 @@ export function extractVehicleInfoFromText(text) {
       }
     }
 
-    if (/^Vehicle Ident|^VIN|Vehicle Identification Number/i.test(line) && !data.vin) {
-      const condensed = line.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      const tailMatch = condensed.match(/([A-Z0-9]{17})$/);
-      if (tailMatch) {
-        const normalized = tailMatch[1].replace(/[IOQ]/g, (char) => (char === 'I' ? '1' : '0'));
-        data.vin = normalized;
+    const vinLabelMatch = line.match(/\b(?:Vehicle\s+Ident(?:ification)?(?:\.|\s)*No\.?|Vehicle\s+Identification\s+Number|VIN)\b/i);
+    if (!data.vin && vinLabelMatch) {
+      const afterLabel = line.slice(vinLabelMatch.index + vinLabelMatch[0].length);
+      const condensed = afterLabel.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const candidates = condensed.match(/[A-Z0-9]{17}/g) || [];
+      let fallbackVin = null;
+      for (const candidate of candidates) {
+        const normalized = candidate.replace(/[IOQ]/g, (char) => (char === 'I' ? '1' : '0'));
+        if (isValidVin(normalized)) {
+          data.vin = normalized;
+          break;
+        }
+        fallbackVin = fallbackVin || normalized;
+      }
+      if (!data.vin && fallbackVin) {
+        data.vin = fallbackVin;
       }
     }
   }
+
+  const junkRegex = /^(year|make|model|color|vin|mfrs\.?\s*model\s*year|vehicle\s+identification\s+number|vehicle\s+ident(?:ification)?(?:\.|\s)*No\.?)$/i;
+  if (data.make && junkRegex.test(data.make)) data.make = null;
+  if (data.model && junkRegex.test(data.model)) data.model = null;
+  if (data.color && junkRegex.test(data.color)) data.color = null;
 
   const findVinCandidate = (source) => {
     const normalized = String(source).toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -1033,6 +1242,29 @@ export function extractVehicleInfoFromText(text) {
   if (!data.vin) {
     const fallbackVin = findVinCandidate(text);
     if (fallbackVin) data.vin = fallbackVin;
+  }
+
+  if ((!data.year || !data.make || !data.model) && text) {
+    const heuristic = parseMakeModelYearFromText(text);
+    if (heuristic) {
+      data.year = data.year || heuristic.year;
+      data.make = data.make || heuristic.make;
+      data.model = data.model || heuristic.model;
+    }
+  }
+
+  const inferredDirection = inferDocumentDirection(text, '');
+  const totalValue = extractTotalFromText(text, inferredDirection);
+  const hasDispositionSignal = data.disposedTo || data.disposedAddress || /\b(?:Buyer|Purchaser(?:\(s\))?|Sold To|Transferred To|Purchaser\(s\)? Name\(s\)?|Buyer Name)\b/i.test(text);
+  const hasAcquisitionSignal = /\b(?:Obtained From|Auction|Facility|Remit Payment To|Purchase Price|Buyer Fee|Total Due|Balance Due|Invoice to Buyer|Consignor)\b/i.test(text);
+  if (isReasonableTotal(totalValue)) {
+    if (inferredDirection === 'sale' && !data.disposedPrice) {
+      data.disposedPrice = totalValue;
+    } else if ((inferredDirection === 'acquisition' || hasAcquisitionSignal || !hasDispositionSignal) && !data.purchasePrice) {
+      data.purchasePrice = totalValue;
+    } else if (hasDispositionSignal && !data.disposedPrice) {
+      data.disposedPrice = totalValue;
+    }
   }
 
   const result = clean({
@@ -1174,6 +1406,8 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
     const { pages, combinedText } = await extractPdfTextPages(fileBuffer);
     console.log(`[Parser] PDF native text: ${combinedText.length} chars`);
     const effectivePurpose = purpose || determineDocumentPurpose(combinedText) || '';
+    const pdfSupportText = combinedText.replace(/\s/g, '').length > 30 ? combinedText : await ocrPdf(fileBuffer, 2);
+    const postProcessText = pdfSupportText || combinedText;
 
     // If PDF has native text, use text LLM
     if (combinedText.replace(/\s/g, '').length > 30 && hasNvidiaKey) {
@@ -1189,7 +1423,7 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
               textResult.year = textResult.year || heuristic.year;
             }
           }
-          return postProcessResult(textResult, combinedText, effectivePurpose);
+          return postProcessResult(textResult, postProcessText, effectivePurpose);
         }
       } catch (err) {
         console.warn(`[Parser] Text LLM failed on native PDF text: ${err.message}`);
@@ -1199,7 +1433,7 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
     // Scanned PDF or text extraction failed — render to image, use vision
     try {
       const visionResult = await visionExtract(fileBuffer, mimetype, effectivePurpose);
-      if (visionResult) return postProcessResult(visionResult, combinedText, effectivePurpose);
+      if (visionResult) return postProcessResult(visionResult, postProcessText, effectivePurpose);
     } catch (err) {
       console.warn(`[Parser] Vision AI failed on PDF render: ${err.message}`);
     }
@@ -1219,7 +1453,7 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
                 retryText.year = retryText.year || heuristic.year;
               }
             }
-            return postProcessResult(retryText, combinedText, 'acquisition');
+            return postProcessResult(retryText, postProcessText, 'acquisition');
           }
         } catch (err) {
           console.warn(`[Parser] PDF text Acquisition retry failed: ${err.message}`);
@@ -1229,7 +1463,7 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
       try {
         const retryVision = await visionExtract(fileBuffer, mimetype, 'acquisition');
         if (retryVision && (retryVision.vin || retryVision.make)) {
-          return postProcessResult(retryVision, combinedText, 'acquisition');
+          return postProcessResult(retryVision, postProcessText, 'acquisition');
         }
       } catch (err) {
         console.warn(`[Parser] PDF vision Acquisition retry failed: ${err.message}`);
@@ -1237,13 +1471,12 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
     }
 
     // If Vision AI is unavailable or fails, OCR the PDF to salvage VIN/total/title data
-    const pdfOcrText = await ocrPdf(fileBuffer, 2);
-    if (pdfOcrText && pdfOcrText.replace(/\s/g, '').length > 30) {
-      const fallbackResult = extractFallbackInfo(pdfOcrText, effectivePurpose);
+    if (postProcessText && postProcessText.replace(/\s/g, '').length > 30) {
+      const fallbackResult = extractFallbackInfo(postProcessText, effectivePurpose);
       // supplement fallback with heuristic make/model/year
       if (fallbackResult) {
-        if ((!fallbackResult.make || !fallbackResult.model || !fallbackResult.year) && pdfOcrText) {
-          const heuristic = parseMakeModelYearFromText(pdfOcrText);
+        if ((!fallbackResult.make || !fallbackResult.model || !fallbackResult.year) && postProcessText) {
+          const heuristic = parseMakeModelYearFromText(postProcessText);
           if (heuristic) {
             fallbackResult.make = fallbackResult.make || heuristic.make;
             fallbackResult.model = fallbackResult.model || heuristic.model;
@@ -1254,7 +1487,7 @@ export async function extractVehicleInfo(fileBuffer, mimetype, purpose = "") {
       }
     }
 
-    const fallbackResult = extractFallbackInfo(combinedText, effectivePurpose);
+    const fallbackResult = extractFallbackInfo(postProcessText, effectivePurpose);
     if (fallbackResult) return fallbackResult;
 
     return {};
@@ -1653,13 +1886,15 @@ function clean(d) {
     return str;
   };
   const n = v => {
+    if (v === undefined || v === null || v === '') return null;
     if (typeof v === 'number') return v;
-    const cleanStr = String(v || '0').trim();
+    const cleanStr = String(v).trim();
+    if (!cleanStr) return null;
     const matches = cleanStr.replace(/[$,]/g, '').match(/-?\d+(\.\d+)?/g);
-    if (!matches) return 0;
+    if (!matches) return null;
     
     const numericMatches = matches.map(m => parseFloat(m)).filter(num => Number.isFinite(num));
-    if (numericMatches.length === 0) return 0;
+    if (numericMatches.length === 0) return null;
     
     // User wants the "belowest" (last) one. 
     // We'll filter out years (1900-2026) to avoid model years.
@@ -1793,6 +2028,7 @@ function clean(d) {
   const isValidModel = (val) => {
     if (!val || val.length < 2) return false;
     const u = val.toUpperCase();
+    if (isVehicleBoilerplateText(u)) return false;
     // A valid model should be short (1-4 words max) and NOT look like:
     // - An address (contains road/street/avenue/pkwy/blvd/drive etc.)
     // - A business entity (contains inc/llc/corp/sales/buyer/seller/dealer etc.)
@@ -1802,6 +2038,7 @@ function clean(d) {
     if (words.length > 5) return false;
     if (/\b(road|rd|street|st|avenue|ave|blvd|boulevard|drive|dr|lane|ln|pkwy|parkway|highway|hwy|way|circle|court|ct|place|pl)\b/i.test(u)) return false;
     if (/\b(inc|llc|corp|ltd|co\b|sales|buyer|seller|dealer|auction|broadway|remit|payment|purchaser|transferee|clerk|unit|block|announcement|mats|fear|warehouse)\b/i.test(u)) return false;
+    if (/\bof\b/i.test(u)) return false;
     if (/\b(of\s+[a-z]+town|of\s+[a-z]+ford|of\s+[a-z]+bury|of\s+[a-z]+ham)\b/i.test(u)) return false;
     // Should not be a state name or zip code
     if (/^\d{5}(-\d{4})?$/.test(u)) return false;
@@ -1853,6 +2090,7 @@ function clean(d) {
     make: (() => {
       const raw = s(d.make);
       if (!raw) return null;
+      if (isVehicleBoilerplateText(raw)) return null;
       // Strip label prefixes
       let cleaned = raw.replace(/^(make|manufacturer|mfr)[\s.:##-]*/i, '')
         .replace(/\b(sedan|suv|coupe|truck|van|wagon|hatchback|convertible|sport\s*utility)\b/gi, '')
@@ -1874,11 +2112,16 @@ function clean(d) {
     model: (() => {
       const raw = s(d.model);
       if (!raw) return null;
+      if (isVehicleBoilerplateText(raw)) return null;
       // Strip body types
       const bodyTypes = /\b(sedan|suv|coupe|truck|van|wagon|hatchback|convertible|sport\s*utility\s*v?)\b/gi;
       let cleaned = raw.replace(bodyTypes, '')
         // Strip stock/trim/package noise generically
         .replace(/\b(stock|base|trim|package|edition|standard|premium)\b.*/gi, '')
+        .replace(/^\d{4}\s+/,'')
+        .replace(/\b(?:of|inc|llc|corp|dealer|seller|buyer)\b.*$/i, '')
+        .replace(/\s+[=~_+\-–—|]+\s*.*$/g, '')
+        .replace(/\s+\d{1,4}\s*$/g, '')
         .replace(/\s+/g, ' ').trim();
       if (!cleaned) return null;
       // Universal validation
@@ -1922,10 +2165,10 @@ function clean(d) {
     usedVehicleSourceState: isBroadwayAddr(acq.a) ? null : st(acq.s, acq.z),
     usedVehicleSourceZipCode: isBroadwayAddr(acq.a) ? null : (s(acq.z) || null),
     disposedTo: cleanDispositionName(d.disposedTo) || null,
-    disposedAddress: isBroadwayAddr(disp.a) ? null : (disp.a || null),
-    disposedCity: isBroadwayAddr(disp.a) ? null : (disp.c || null),
-    disposedState: isBroadwayAddr(disp.a) ? null : st(disp.s, disp.z),
-    disposedZip: isBroadwayAddr(disp.a) ? null : (s(disp.z) || null),
+    disposedAddress: (disp.a || null),
+    disposedCity: (disp.c || null),
+    disposedState: st(disp.s, disp.z),
+    disposedZip: (s(disp.z) || null),
     disposedDate: dt(d.disposedDate),
     disposedPrice: n(d.disposedPrice),
     disposedOdometer: i(d.disposedOdometer),
@@ -2007,7 +2250,7 @@ async function ocrImage(fileBuffer) {
 // Heuristic: parse Make, Model, Year from raw text when AI misses them
 function parseMakeModelYearFromText(text) {
   if (!text) return null;
-  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (!lines.length) return null;
 
   let year = null;
@@ -2017,41 +2260,108 @@ function parseMakeModelYearFromText(text) {
   const makes = [
     'toyota','honda','ford','chevrolet','nissan','bmw','mercedes','audi','hyundai','kia','subaru','mazda','dodge','jeep','volkswagen','lexus','cadillac','infiniti','acura','chrysler','ram','gmc','buick','mitsubishi','porsche','jaguar','land rover','tesla'
   ];
+  const bodyTypes = [
+    'sedan','suv','hatchback','wagon','van','coupe','convertible','truck','pickup','minivan','crossover',
+    'sport utility v','sport utility','sport utility vehicle','utility vehicle'
+  ];
+  const colorWords = [
+    'black','white','gray','grey','silver','red','blue','green','gold','golden','brown','tan','beige',
+    'charcoal','purple','orange','yellow','maroon','burgundy','teal','navy'
+  ];
   const makeRegex = new RegExp('\\b(' + makes.join('|') + ')\\b', 'i');
-  const cleanToken = (value) => value
+  const bodyTypeRegex = new RegExp('\\b(?:' + bodyTypes.map((value) => value.replace(/\s+/g, '\\s+')).join('|') + ')\\b', 'i');
+  const colorRegex = new RegExp('\\b(?:' + colorWords.join('|') + ')\\b', 'i');
+  const isDateishLine = (line) => /\b(date|reprinted|printed on|print date|sale date|date of sale|stock|lot|invoice|payment|odometer|title|certification|seller|buyer|purchaser|remit)\b/i.test(line);
+  const isVehicleHintLine = (line) => /\b(year|make|model|body type|vehicle|vin|color)\b/i.test(line);
+
+  const cleanToken = (value) => String(value || '')
     .replace(/\b(make|model)\b/gi, '')
-    .replace(/[:\/\\]+/g, ' ')
+    .replace(/[:\/\\\\]+/g, ' ')
+    .replace(/[|]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
   const normalizeMake = (value) => {
     if (!value) return value;
-    let clean = cleanToken(value);
+    const clean = cleanToken(value);
     if (!clean) return clean;
     const tokens = clean.split(' ').filter(Boolean);
+    if (!tokens.length) return '';
     if (tokens.length > 1 && makes.includes(tokens[0].toLowerCase())) {
       return tokens[0][0].toUpperCase() + tokens[0].slice(1).toLowerCase();
     }
-    return tokens.map(w => w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : '').join(' ').trim();
+    const known = tokens.find((token) => makes.includes(token.toLowerCase()));
+    if (known) return known[0].toUpperCase() + known.slice(1).toLowerCase();
+    return tokens.map((word) => word ? word[0].toUpperCase() + word.slice(1).toLowerCase() : '').join(' ').trim();
   };
+
   const normalizeModel = (value, currentMake) => {
     if (!value) return value;
+    if (isVehicleBoilerplateText(value)) return '';
     let clean = cleanToken(value);
+    if (isVehicleBoilerplateText(clean)) return '';
     if (currentMake) {
       const makeToken = currentMake.split(' ')[0];
-      const prefix = new RegExp('^' + makeToken + '\s+', 'i');
+      const prefix = new RegExp('^' + makeToken + '\\s+', 'i');
       clean = clean.replace(prefix, '').trim();
     }
-    return clean.replace(/\s+/g, ' ').trim();
+    clean = clean.replace(/^\d{4}\s+/, '').trim();
+    clean = clean.replace(/\b(?:of|inc|llc|corp|dealer|seller|buyer)\b.*$/i, '').trim();
+    clean = clean.replace(/\s+[=~_+\-–—]+\s*.*$/g, '').trim();
+    clean = clean.replace(/\s+\d{1,4}\s*$/g, '').trim();
+    clean = clean.replace(/\s+/g, ' ').trim();
+    const tokens = clean
+      .split(' ')
+      .filter(Boolean)
+      .filter((token) => !/^\d+$/.test(token))
+      .filter((token) => !bodyTypeRegex.test(token))
+      .filter((token) => !colorRegex.test(token))
+      .filter((token) => !/^manufacturer$/i.test(token));
+    if (!tokens.length) return '';
+    const TRIM_CODES = new Set(['LE', 'SE', 'XLE', 'XSE', 'GT', 'LX', 'EX', 'DX', 'RT', 'ST', 'SL', 'LT', 'LS', 'LTZ', 'SS', 'RS', 'SV', 'SR5', 'AWD', 'FWD', '4WD']);
+    return tokens
+      .map((word) => {
+        const upper = word.toUpperCase();
+        if (TRIM_CODES.has(upper)) return upper;
+        if (/^[IVXLCDM]+$/i.test(word)) return word.toUpperCase();
+        if (/^[A-Z]{2,}$/.test(word)) return word[0] + word.slice(1).toLowerCase();
+        return word[0].toUpperCase() + word.slice(1).toLowerCase();
+      })
+      .join(' ')
+      .trim();
   };
 
-  for (const l of lines) {
-    const ym = l.match(/year[:\s]*([0-9]{4})/i);
-    if (ym && !year) year = ym[1];
+  const parseModelTail = (line, foundMake) => {
+    const match = line.match(makeRegex);
+    if (!match) return null;
+    const after = line.slice(match.index + match[0].length).trim();
+    if (!after) return null;
+    const tokens = after.split(/[,\/\\\-\s]+/).filter(Boolean);
+    while (tokens.length && /^(model|make|manufacturer|body|type|color)$/i.test(tokens[0])) tokens.shift();
+    while (tokens.length && /^(sedan|suv|hatchback|wagon|van|coupe|convertible|truck|pickup|minivan|crossover)$/i.test(tokens[0])) tokens.shift();
+    while (tokens.length && colorWords.includes(tokens[tokens.length - 1].toLowerCase())) tokens.pop();
+    const candidate = tokens.filter((token) => !/^\d{4}$/.test(token)).slice(0, 4).join(' ');
+    return candidate ? normalizeModel(candidate, foundMake) : null;
+  };
 
-    const makeModelLine = l.match(/(?:make\s*\/\s*model|model\s*\/\s*make)[:\s-]*(.+)/i);
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/[|]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const isBoilerplate = /\b(?:Any\s+Legally\s+Required|Repairs?|Prior\s+To\s+Sale|Warranty|Disclosure|Bill\s+of\s+Sale|Title|Transfer|Certificate|Notice|Lien|Odometer|Exempt|Salvage|Rebuilt|Flood|Branded)\b/i.test(line);
+    if (isBoilerplate || isVehicleBoilerplateText(line)) continue;
+
+    const labeledYear = line.match(/(?:Mfrs?\.?\s*Model\s*Year|Year)\s*[:\-]?\s*((?:19|20)\d{2})/i);
+    if (labeledYear && !year) year = labeledYear[1];
+
+    if (!year && !isDateishLine(line)) {
+      const leadingYear = line.match(/^\s*((?:19|20)\d{2})\b/);
+      if (leadingYear && (isVehicleHintLine(line) || makeRegex.test(line))) {
+        year = leadingYear[1];
+      }
+    }
+
+    const makeModelLine = line.match(/(?:make\s*\/\s*model|model\s*\/\s*make)\s*[:\-]?\s*(.+)/i);
     if (makeModelLine) {
-      const value = makeModelLine[1].trim();
-      const parts = value.split(/[,\/]+/).map(p => p.trim()).filter(Boolean);
+      const parts = makeModelLine[1].split(/[,\/]+/).map((p) => p.trim()).filter(Boolean);
       if (parts.length >= 2) {
         if (!make) make = normalizeMake(parts[0]);
         if (!model) model = normalizeModel(parts.slice(1).join(' '), make);
@@ -2064,47 +2374,73 @@ function parseMakeModelYearFromText(text) {
       }
     }
 
-    const mm = l.match(/make[:\s]*([A-Za-z0-9 &\-\.\/]+)/i);
-    if (mm && !make) make = normalizeMake(mm[1]);
-    const md = l.match(/model[:\s]*([A-Za-z0-9 &\-\.\/]+)/i);
-    if (md && !model) model = normalizeModel(md[1], make);
+    const makeLabel = line.match(new RegExp('\\bmake(?:\\/manufacturer)?\\b\\s*[:\\-]\\s*([A-Za-z0-9 &\\-\\.\\/]+)', 'i'));
+    if (makeLabel && !make) make = normalizeMake(makeLabel[1]);
+    const modelLabel = line.match(new RegExp('\\bmodel\\b\\s*[:\\-]\\s*([A-Za-z0-9 &\\-\\.\\/]+)', 'i'));
+    if (modelLabel && !model) model = normalizeModel(modelLabel[1], make);
+
+    if (!isDateishLine(line)) {
+      const makeMatch = line.match(makeRegex);
+      if (makeMatch) {
+        if (!make) make = normalizeMake(makeMatch[1]);
+        if (!model) {
+          const tail = parseModelTail(line, make);
+          if (tail) model = tail;
+        }
+        if (!year) {
+          const yearMatch = line.match(/\b((?:19|20)\d{2})\b/);
+          if (yearMatch) year = yearMatch[1];
+        }
+      }
+    }
+
+    const leading = line.match(/^\s*((?:19|20)\d{2})\s+([A-Za-z0-9&']+)\s+(.+)$/);
+    if (leading) {
+      if (!year) year = leading[1];
+      if (!make) make = normalizeMake(leading[2]);
+      if (!model) model = normalizeModel(leading[3], make);
+    }
+
+    if (make && model && year) break;
   }
 
   if ((!make || !model || !year) && lines.length) {
-    for (const l of lines) {
-      const ymatch = l.match(/\b(19|20)\d{2}\b/);
-      if (ymatch && !year) year = ymatch[0];
+    for (const rawLine of lines) {
+      const line = rawLine.replace(/[|]+/g, ' ').replace(/\s+/g, ' ').trim();
+      const isBoilerplate = /\b(?:Any\s+Legally\s+Required|Repairs?|Prior\s+To\s+Sale|Warranty|Disclosure|Bill\s+of\s+Sale|Title|Transfer|Certificate|Notice|Lien|Odometer|Exempt|Salvage|Rebuilt|Flood|Branded)\b/i.test(line);
+      if (isBoilerplate || isVehicleBoilerplateText(line)) continue;
 
-      const m = l.match(makeRegex);
-      if (m) {
-        if (!make) make = normalizeMake(m[1]);
-        const after = l.slice(m.index + m[0].length).trim();
-        if (after) {
-          const tokens = after.split(/[,\/\\\-\s]+/).filter(Boolean);
-          while (tokens.length && /^(model|make)$/i.test(tokens[0])) tokens.shift();
-          const candidate = tokens.filter(t => !/^\d{4}$/.test(t)).slice(0, 3).join(' ');
-          if (candidate) model = model || normalizeModel(candidate, make);
+      const yearMatch = line.match(/\b((?:19|20)\d{2})\b/);
+      if (yearMatch && !year && !isDateishLine(line) && (isVehicleHintLine(line) || makeRegex.test(line))) {
+        year = yearMatch[1];
+      }
+
+      const makeMatch = !isDateishLine(line) ? line.match(makeRegex) : null;
+      if (makeMatch) {
+        if (!make) make = normalizeMake(makeMatch[1]);
+        if (!model) {
+          const tail = parseModelTail(line, make);
+          if (tail) model = tail;
         }
       }
 
-      const makeModelLine = l.match(/(?:make\s*\/\s*model|model\s*\/\s*make)[:\s-]*(.+)/i);
+      const makeModelLine = line.match(/(?:make\s*\/\s*model|model\s*\/\s*make)\s*[:\-]?\s*(.+)/i);
       if (makeModelLine) {
-        const value = makeModelLine[1].trim();
-        const parts = value.split(/[,\/]+/).map(p => p.trim()).filter(Boolean);
+        const parts = makeModelLine[1].split(/[,\/]+/).map((p) => p.trim()).filter(Boolean);
         if (parts.length >= 2) {
           if (!make) make = normalizeMake(parts[0]);
           if (!model) model = normalizeModel(parts.slice(1).join(' '), make);
         }
       }
 
-      const modelOnlyMatch = l.match(/model[:\s-]*([A-Za-z0-9 &\-\.\/]+)/i);
+      const modelOnlyMatch = line.match(/\bmodel\b\s*[:\-]\s*([A-Za-z0-9 &\-\.\/]+)/i);
       if (modelOnlyMatch && !model) {
         model = normalizeModel(modelOnlyMatch[1], make);
       }
 
-      const leading = l.match(/^\s*(19|20)\d{2}\s+([A-Za-z0-9]+)\s+([A-Za-z0-9]+)/);
+      const leading = line.match(/^\s*((?:19|20)\d{2})\s+([A-Za-z0-9&']+)\s+(.+)$/);
       if (leading) {
-        if (!year) year = leading[0].match(/(19|20)\d{2}/)[0];
+        if (!year) year = leading[1];
         if (!make) make = normalizeMake(leading[2]);
         if (!model) model = normalizeModel(leading[3], make);
       }
@@ -2120,7 +2456,6 @@ function parseMakeModelYearFromText(text) {
   if (make || model || year) return { make, model, year };
   return null;
 }
-
 async function resizeImageIfNeeded(fileBuffer) {
   try {
     const img = await loadImage(fileBuffer);
